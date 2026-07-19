@@ -1,0 +1,119 @@
+{
+    "name": "fluxa-platform",
+    "version": "0.1.0",
+    "description": "Fluxa POS and fiscal platform backend",
+    "author": "",
+    "license": "UNLICENSED",
+    "dependencies": {
+        "@nestjs/bullmq": "11.0.4",
+        "@nestjs/common": "11.1.28",
+        "@nestjs/config": "4.0.4",
+        "@nestjs/core": "11.1.28",
+        "@nestjs/platform-express": "11.1.28",
+        "@nestjs/swagger": "11.4.6",
+        "@nestjs/throttler": "6.5.0",
+        "bullmq": "5.80.7",
+        "compression": "1.8.1",
+        "drizzle-orm": "0.45.2",
+        "helmet": "8.3.0",
+        "ioredis": "5.11.1",
+        "nestjs-pino": "4.6.1",
+        "pg": "8.22.0",
+        "pino": "10.3.1",
+        "pino-http": "11.0.0",
+        "reflect-metadata": "0.2.2",
+        "rxjs": "7.8.2",
+        "zod": "4.4.3"
+    },
+    "devDependencies": {
+        "@eslint/eslintrc": "^3.2.0",
+        "@eslint/js": "^9.18.0",
+        "@nestjs/cli": "11.0.24",
+        "@nestjs/schematics": "^11.0.0",
+        "@nestjs/testing": "11.1.28",
+        "@types/compression": "1.8.1",
+        "@types/express": "^5.0.0",
+        "@types/jest": "^30.0.0",
+        "@types/node": "^24.0.0",
+        "@types/pg": "8.20.0",
+        "@types/supertest": "^7.0.0",
+        "concurrently": "10.0.3",
+        "drizzle-kit": "0.31.10",
+        "eslint": "^9.18.0",
+        "eslint-config-prettier": "^10.0.1",
+        "eslint-plugin-prettier": "^5.2.2",
+        "globals": "^17.0.0",
+        "jest": "^30.0.0",
+        "prettier": "^3.4.2",
+        "source-map-support": "^0.5.21",
+        "supertest": "^7.0.0",
+        "ts-jest": "^29.2.5",
+        "ts-loader": "^9.5.2",
+        "ts-node": "^10.9.2",
+        "tsconfig-paths": "^4.2.0",
+        "typescript": "^5.7.3",
+        "typescript-eslint": "^8.20.0"
+    },
+    "private": true,
+    "engines": {
+        "node": ">=22 <25",
+        "npm": ">=10"
+    },
+    "scripts": {
+        "build": "nest build --all",
+        "build:api": "nest build api",
+        "build:fiscal-worker": "nest build fiscal-worker",
+        "build:background-worker": "nest build background-worker",
+        "start:dev": "concurrently -k -n API,FISCAL,BACKGROUND -c blue,magenta,green \"npm:start:dev:api\" \"npm:start:dev:fiscal\" \"npm:start:dev:background\"",
+        "start:dev:api": "nest start api --watch",
+        "start:dev:fiscal": "nest start fiscal-worker --watch",
+        "start:dev:background": "nest start background-worker --watch",
+        "start:prod:api": "node dist/apps/api/main.js",
+        "start:prod:fiscal": "node dist/apps/fiscal-worker/main.js",
+        "start:prod:background": "node dist/apps/background-worker/main.js",
+        "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"*.ts\"",
+        "lint": "eslint \"{apps,libs}/**/*.ts\" --max-warnings=0",
+        "test": "jest --runInBand",
+        "test:watch": "jest --watch",
+        "test:cov": "jest --coverage",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate": "drizzle-kit migrate",
+        "db:studio": "drizzle-kit studio",
+        "infra:up": "docker compose up -d postgres redis",
+        "infra:down": "docker compose down",
+        "infra:reset": "docker compose down -v --remove-orphans",
+        "verify": "npm run lint && npm test && npm run build"
+    },
+    "jest": {
+        "moduleFileExtensions": [
+            "js",
+            "json",
+            "ts"
+        ],
+        "rootDir": ".",
+        "testRegex": ".*\\.spec\\.ts$",
+        "transform": {
+            "^.+\\.(t|j)s$": "ts-jest"
+        },
+        "collectCoverageFrom": [
+            "apps/**/*.ts",
+            "libs/**/*.ts",
+            "!**/*.module.ts",
+            "!**/main.ts"
+        ],
+        "coverageDirectory": "./coverage",
+        "testEnvironment": "node",
+        "roots": [
+            "<rootDir>/apps/",
+            "<rootDir>/libs/"
+        ],
+        "moduleNameMapper": {
+            "^@fluxa/config$": "<rootDir>/libs/config/src",
+            "^@fluxa/config/(.*)$": "<rootDir>/libs/config/src/$1",
+            "^@fluxa/database$": "<rootDir>/libs/database/src",
+            "^@fluxa/database/(.*)$": "<rootDir>/libs/database/src/$1",
+            "^@fluxa/queue$": "<rootDir>/libs/queue/src",
+            "^@fluxa/queue/(.*)$": "<rootDir>/libs/queue/src/$1"
+        }
+    }
+}

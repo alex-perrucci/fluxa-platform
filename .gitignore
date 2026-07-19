@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build
+dist/
+coverage/
+*.tsbuildinfo
+
+# environment and secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+.bootstrap-*
+
+# editor and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# temporary
+.tmp/
+temp/

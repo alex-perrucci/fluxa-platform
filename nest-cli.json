@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "apps/api/src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "builder": "webpack",
+    "tsConfigPath": "apps/api/tsconfig.app.json"
+  },
+  "monorepo": true,
+  "root": "apps/api",
+  "projects": {
+    "api": {
+      "type": "application",
+      "root": "apps/api",
+      "entryFile": "main",
+      "sourceRoot": "apps/api/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api/tsconfig.app.json"
+      }
+    },
+    "fiscal-worker": {
+      "type": "application",
+      "root": "apps/fiscal-worker",
+      "entryFile": "main",
+      "sourceRoot": "apps/fiscal-worker/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/fiscal-worker/tsconfig.app.json"
+      }
+    },
+    "background-worker": {
+      "type": "application",
+      "root": "apps/background-worker",
+      "entryFile": "main",
+      "sourceRoot": "apps/background-worker/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/background-worker/tsconfig.app.json"
+      }
+    }
+  }
+}
