@@ -63,6 +63,18 @@ function exceptionCode(error: unknown): string | undefined {
     : undefined;
 }
 
+async function expectRejectCode(
+  promise: Promise<unknown>,
+  expectedCode: string,
+): Promise<void> {
+  try {
+    await promise;
+    throw new Error(`Expected rejection with code ${expectedCode}.`);
+  } catch (error) {
+    expect(exceptionCode(error)).toBe(expectedCode);
+  }
+}
+
 describe('CurrentDeviceAssignmentService', () => {
   it('returns READY for the current CASHIER device and active tenant location', async () => {
     const { service, query } = serviceWithRows([row()]);
@@ -134,9 +146,7 @@ describe('CurrentDeviceAssignmentService', () => {
   it('does not expose another user device or a missing device', async () => {
     const { service } = serviceWithRows([]);
     await expect(service.get(auth)).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service.get(auth)).rejects.toSatisfy(
-      (error: unknown) => exceptionCode(error) === 'DEVICE_NOT_FOUND',
-    );
+    await expectRejectCode(service.get(auth), 'DEVICE_NOT_FOUND');
   });
 
   it('returns a stable error when no assignment exists for the active tenant', async () => {
@@ -156,10 +166,7 @@ describe('CurrentDeviceAssignmentService', () => {
     ]);
 
     await expect(service.get(auth)).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service.get(auth)).rejects.toSatisfy(
-      (error: unknown) =>
-        exceptionCode(error) === 'DEVICE_ASSIGNMENT_NOT_FOUND',
-    );
+    await expectRejectCode(service.get(auth), 'DEVICE_ASSIGNMENT_NOT_FOUND');
   });
 
   it('requires an active tenant context', async () => {
