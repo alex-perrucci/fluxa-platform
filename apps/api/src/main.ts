@@ -8,10 +8,7 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
-  });
-
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
   app.use(helmet());
@@ -41,7 +38,6 @@ async function bootstrap(): Promise<void> {
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-
       return callback(
         new Error('Origin not allowed by Fluxa CORS policy'),
         false,
@@ -52,7 +48,7 @@ async function bootstrap(): Promise<void> {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Fluxa Platform API')
     .setDescription('API della piattaforma POS e fiscale Fluxa')
-    .setVersion('0.1.0')
+    .setVersion('0.2.0')
     .addBearerAuth()
     .build();
 
