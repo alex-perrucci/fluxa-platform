@@ -20,6 +20,16 @@ const environmentSchema = z.object({
     .default('info'),
   ACCESS_TOKEN_SECRET: z.string().min(32),
   REFRESH_TOKEN_SECRET: z.string().min(32),
+  SESSION_IP_HASH_SECRET: z.string().min(32),
+  ACCESS_TOKEN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .max(3600)
+    .default(900),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  JWT_ISSUER: z.string().min(3).default('fluxa-platform'),
+  JWT_AUDIENCE: z.string().min(3).default('fluxa-pos'),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;

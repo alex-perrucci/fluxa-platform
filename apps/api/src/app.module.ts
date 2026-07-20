@@ -7,7 +7,15 @@ import { LoggerModule } from 'nestjs-pino';
 import { validateEnvironment } from '@fluxa/config';
 import { DatabaseModule } from '@fluxa/database';
 import { QueueModule } from '@fluxa/queue';
+import { AuthModule } from './auth/auth.module';
+import { AuthorizationGuard } from './auth/guards/authorization.guard';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { TenantContextGuard } from './auth/guards/tenant-context.guard';
+import { DevicesModule } from './devices/devices.module';
 import { HealthModule } from './health/health.module';
+import { LocationsModule } from './locations/locations.module';
+import { MerchantsModule } from './merchants/merchants.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 import { RootController } from './root.controller';
 
 @Module({
@@ -26,6 +34,9 @@ import { RootController } from './root.controller';
           paths: [
             'req.headers.authorization',
             'req.headers.cookie',
+            'req.body.password',
+            'req.body.temporaryPassword',
+            'req.body.refreshToken',
             'res.headers.set-cookie',
           ],
           censor: '[REDACTED]',
@@ -41,13 +52,30 @@ import { RootController } from './root.controller';
     ]),
     DatabaseModule,
     QueueModule,
+    AuthModule,
     HealthModule,
+    OrganizationsModule,
+    MerchantsModule,
+    LocationsModule,
+    DevicesModule,
   ],
   controllers: [RootController],
   providers: [
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: TenantContextGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AuthorizationGuard,
     },
   ],
 })
