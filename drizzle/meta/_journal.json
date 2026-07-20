@@ -43,6 +43,13 @@
       "when": 1784583046812,
       "tag": "0005_busy_vanisher",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784584880911,
+      "tag": "0006_previous_shaman",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import type { PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
 import { assertOrganizationScope } from '../auth/tenant-scope';
+import { PrintProducerService } from '../printing/print-producer.service';
 import type { CreateKitchenStationDto } from './dto/create-kitchen-station.dto';
 import type { DispatchKitchenTicketDto } from './dto/dispatch-kitchen-ticket.dto';
 import type { KitchenTicketListQueryDto } from './dto/kitchen-ticket-list-query.dto';
@@ -102,6 +103,7 @@ export class KitchenService {
   constructor(
     private readonly database: DatabaseService,
     private readonly access: HospitalityAccessService,
+    private readonly printProducer: PrintProducerService,
   ) {}
 
   async listStations(auth: AuthContext, locationId: string) {
@@ -360,6 +362,13 @@ export class KitchenService {
           orderId,
           stationId,
           number,
+        });
+        await this.printProducer.enqueueKitchenTicket(client, {
+          organizationId: org,
+          locationId: order.locationId,
+          ticketId,
+          requestedByUserId: auth.userId,
+          requestedByDeviceId: auth.deviceId,
         });
       }
       await this.audit(
