@@ -58,6 +58,26 @@ export const catalogStatus = pgEnum('catalog_status', ['ACTIVE', 'INACTIVE']);
 
 export const productUnit = pgEnum('product_unit', ['EACH', 'WEIGHT', 'VOLUME']);
 
+export const orderStatus = pgEnum('order_status', [
+  'OPEN',
+  'HELD',
+  'AWAITING_PAYMENT',
+  'PAID',
+  'CANCELLED',
+]);
+
+export const orderServiceMode = pgEnum('order_service_mode', [
+  'COUNTER',
+  'TAKEAWAY',
+  'DELIVERY',
+  'TABLE',
+]);
+
+export const orderAdjustmentType = pgEnum('order_adjustment_type', [
+  'FIXED',
+  'PERCENTAGE',
+]);
+
 export const outboxStatus = pgEnum('outbox_status', [
   'PENDING',
   'PROCESSING',
@@ -622,6 +642,263 @@ export const productPrices = pgTable(
   ],
 );
 
+export const locationOrderSequences = pgTable(
+  'location_order_sequences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    businessDate: char('business_date', { length: 10 }).notNull(),
+    lastValue: integer('last_value').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('location_order_sequences_org_location_date_uq').on(
+      table.organizationId,
+      table.locationId,
+      table.businessDate,
+    ),
+  ],
+);
+
+export const orders = pgTable(
+  'orders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    clientOrderId: uuid('client_order_id').notNull(),
+    number: varchar('number', { length: 40 }).notNull(),
+    businessDate: char('business_date', { length: 10 }).notNull(),
+    status: orderStatus('status').notNull().default('OPEN'),
+    serviceMode: orderServiceMode('service_mode').notNull(),
+    customerNote: text('customer_note'),
+    currency: char('currency', { length: 3 }).notNull().default('EUR'),
+    version: integer('version').notNull().default(1),
+    subtotalCents: integer('subtotal_cents').notNull().default(0),
+    discountCents: integer('discount_cents').notNull().default(0),
+    totalCents: integer('total_cents').notNull().default(0),
+    netTotalCents: integer('net_total_cents').notNull().default(0),
+    taxTotalCents: integer('tax_total_cents').notNull().default(0),
+    heldAt: timestamp('held_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    cancelledByUserId: uuid('cancelled_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    cancelReason: varchar('cancel_reason', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('orders_org_device_client_uq').on(
+      table.organizationId,
+      table.deviceId,
+      table.clientOrderId,
+    ),
+    uniqueIndex('orders_location_number_uq').on(table.locationId, table.number),
+    index('orders_org_location_status_created_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.status,
+      table.createdAt,
+    ),
+    index('orders_created_by_idx').on(table.createdByUserId, table.createdAt),
+  ],
+);
+
+export const orderItems = pgTable(
+  'order_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    clientItemId: uuid('client_item_id').notNull(),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'restrict' }),
+    variantId: uuid('variant_id').references(() => productVariants.id, {
+      onDelete: 'restrict',
+    }),
+    productCodeSnapshot: varchar('product_code_snapshot', {
+      length: 50,
+    }).notNull(),
+    productNameSnapshot: varchar('product_name_snapshot', {
+      length: 180,
+    }).notNull(),
+    variantCodeSnapshot: varchar('variant_code_snapshot', { length: 50 }),
+    variantNameSnapshot: varchar('variant_name_snapshot', { length: 120 }),
+    skuSnapshot: varchar('sku_snapshot', { length: 80 }),
+    barcodeSnapshot: varchar('barcode_snapshot', { length: 80 }),
+    categoryIdSnapshot: uuid('category_id_snapshot').notNull(),
+    categoryCodeSnapshot: varchar('category_code_snapshot', {
+      length: 40,
+    }).notNull(),
+    categoryNameSnapshot: varchar('category_name_snapshot', {
+      length: 120,
+    }).notNull(),
+    unitSnapshot: productUnit('unit_snapshot').notNull(),
+    quantityAmount: integer('quantity_amount').notNull(),
+    quantityScale: integer('quantity_scale').notNull(),
+    unitPriceCents: integer('unit_price_cents').notNull(),
+    grossTotalCents: integer('gross_total_cents').notNull(),
+    allocatedDiscountCents: integer('allocated_discount_cents')
+      .notNull()
+      .default(0),
+    finalGrossCents: integer('final_gross_cents').notNull(),
+    finalNetCents: integer('final_net_cents').notNull(),
+    finalTaxCents: integer('final_tax_cents').notNull(),
+    vatRateIdSnapshot: uuid('vat_rate_id_snapshot').notNull(),
+    vatCodeSnapshot: varchar('vat_code_snapshot', { length: 40 }).notNull(),
+    vatRateBasisPointsSnapshot: integer(
+      'vat_rate_basis_points_snapshot',
+    ).notNull(),
+    vatNatureCodeSnapshot: varchar('vat_nature_code_snapshot', { length: 8 }),
+    priceListIdSnapshot: uuid('price_list_id_snapshot').notNull(),
+    note: varchar('note', { length: 500 }),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('order_items_order_client_uq').on(
+      table.orderId,
+      table.clientItemId,
+    ),
+    index('order_items_org_order_sort_idx').on(
+      table.organizationId,
+      table.orderId,
+      table.sortOrder,
+    ),
+    index('order_items_product_idx').on(table.productId),
+  ],
+);
+
+export const orderAdjustments = pgTable(
+  'order_adjustments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    clientAdjustmentId: uuid('client_adjustment_id').notNull(),
+    type: orderAdjustmentType('type').notNull(),
+    value: integer('value').notNull(),
+    reason: varchar('reason', { length: 300 }).notNull(),
+    appliedCents: integer('applied_cents').notNull().default(0),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('order_adjustments_order_client_uq').on(
+      table.orderId,
+      table.clientAdjustmentId,
+    ),
+    index('order_adjustments_org_order_idx').on(
+      table.organizationId,
+      table.orderId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const orderVatSummaries = pgTable(
+  'order_vat_summaries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    vatKey: varchar('vat_key', { length: 32 }).notNull(),
+    vatRateBasisPoints: integer('vat_rate_basis_points').notNull(),
+    vatNatureCode: varchar('vat_nature_code', { length: 8 }),
+    grossCents: integer('gross_cents').notNull(),
+    netCents: integer('net_cents').notNull(),
+    taxCents: integer('tax_cents').notNull(),
+  },
+  (table) => [
+    uniqueIndex('order_vat_summaries_order_key_uq').on(
+      table.orderId,
+      table.vatKey,
+    ),
+    index('order_vat_summaries_org_order_idx').on(
+      table.organizationId,
+      table.orderId,
+    ),
+  ],
+);
+
+export const orderMutations = pgTable(
+  'order_mutations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    mutationId: uuid('mutation_id').notNull(),
+    operation: varchar('operation', { length: 80 }).notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    responseVersion: integer('response_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('order_mutations_order_device_mutation_uq').on(
+      table.orderId,
+      table.deviceId,
+      table.mutationId,
+    ),
+    index('order_mutations_org_created_idx').on(
+      table.organizationId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const auditEvents = pgTable(
   'audit_events',
   {
@@ -683,6 +960,11 @@ export const outboxEvents = pgTable(
     ),
   ],
 );
+
+export type OrderStatus = (typeof orderStatus.enumValues)[number];
+export type OrderServiceMode = (typeof orderServiceMode.enumValues)[number];
+export type OrderAdjustmentType =
+  (typeof orderAdjustmentType.enumValues)[number];
 
 export type CatalogStatus = (typeof catalogStatus.enumValues)[number];
 export type ProductUnit = (typeof productUnit.enumValues)[number];

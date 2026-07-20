@@ -16,6 +16,7 @@ import { DevicesModule } from './devices/devices.module';
 import { HealthModule } from './health/health.module';
 import { LocationsModule } from './locations/locations.module';
 import { MerchantsModule } from './merchants/merchants.module';
+import { OrdersModule } from './orders/orders.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { RootController } from './root.controller';
 
@@ -55,6 +56,7 @@ import { RootController } from './root.controller';
     QueueModule,
     AuthModule,
     HealthModule,
+    OrdersModule,
     OrganizationsModule,
     MerchantsModule,
     LocationsModule,
