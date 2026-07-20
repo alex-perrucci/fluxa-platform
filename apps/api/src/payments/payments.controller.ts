@@ -1,0 +1,58 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
+import type { AuthContext } from '../auth/auth.types';
+import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CapturePaymentDto } from './dto/capture-payment.dto';
+import { FailPaymentDto } from './dto/fail-payment.dto';
+import { PaymentMutationDto } from './dto/payment-mutation.dto';
+import { PaymentsService } from './payments.service';
+
+@Controller('payments')
+export class PaymentsController {
+  constructor(private readonly paymentsService: PaymentsService) {}
+
+  @Get(':paymentId')
+  get(
+    @CurrentAuth() auth: AuthContext,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+  ) {
+    return this.paymentsService.getPayment(auth, paymentId);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')
+  @Post(':paymentId/capture')
+  capture(
+    @CurrentAuth() auth: AuthContext,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @Body() dto: CapturePaymentDto,
+  ) {
+    return this.paymentsService.capturePayment(auth, paymentId, dto);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')
+  @Post(':paymentId/fail')
+  fail(
+    @CurrentAuth() auth: AuthContext,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @Body() dto: FailPaymentDto,
+  ) {
+    return this.paymentsService.failPayment(auth, paymentId, dto);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')
+  @Post(':paymentId/cancel')
+  cancel(
+    @CurrentAuth() auth: AuthContext,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @Body() dto: PaymentMutationDto,
+  ) {
+    return this.paymentsService.cancelPayment(auth, paymentId, dto);
+  }
+}

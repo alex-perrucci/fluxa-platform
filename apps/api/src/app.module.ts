@@ -18,6 +18,7 @@ import { LocationsModule } from './locations/locations.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { OrdersModule } from './orders/orders.module';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { PaymentsModule } from './payments/payments.module';
 import { RootController } from './root.controller';
 
 @Module({
@@ -58,6 +59,7 @@ import { RootController } from './root.controller';
     HealthModule,
     OrdersModule,
     OrganizationsModule,
+    PaymentsModule,
     MerchantsModule,
     LocationsModule,
     CatalogModule,

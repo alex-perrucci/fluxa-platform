@@ -78,6 +78,38 @@ export const orderAdjustmentType = pgEnum('order_adjustment_type', [
   'PERCENTAGE',
 ]);
 
+export const checkoutStatus = pgEnum('checkout_status', [
+  'OPEN',
+  'COMPLETED',
+  'CANCELLED',
+]);
+
+export const paymentMethod = pgEnum('payment_method', [
+  'CASH',
+  'CARD',
+  'OTHER',
+]);
+
+export const paymentProvider = pgEnum('payment_provider', [
+  'CASH',
+  'MANUAL_TERMINAL',
+  'EXTERNAL_TERMINAL',
+]);
+
+export const paymentStatus = pgEnum('payment_status', [
+  'PENDING',
+  'CAPTURED',
+  'FAILED',
+  'CANCELLED',
+]);
+
+export const paymentEventType = pgEnum('payment_event_type', [
+  'CREATED',
+  'CAPTURED',
+  'FAILED',
+  'CANCELLED',
+]);
+
 export const outboxStatus = pgEnum('outbox_status', [
   'PENDING',
   'PROCESSING',
@@ -899,6 +931,197 @@ export const orderMutations = pgTable(
   ],
 );
 
+export const checkoutSessions = pgTable(
+  'checkout_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    clientCheckoutId: uuid('client_checkout_id').notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    status: checkoutStatus('status').notNull().default('OPEN'),
+    currency: char('currency', { length: 3 }).notNull(),
+    orderVersionSnapshot: integer('order_version_snapshot').notNull(),
+    orderTotalCents: integer('order_total_cents').notNull(),
+    paidCents: integer('paid_cents').notNull().default(0),
+    remainingCents: integer('remaining_cents').notNull(),
+    changeCents: integer('change_cents').notNull().default(0),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    cancelReason: varchar('cancel_reason', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('checkout_sessions_org_device_client_uq').on(
+      table.organizationId,
+      table.deviceId,
+      table.clientCheckoutId,
+    ),
+    index('checkout_sessions_org_location_status_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.status,
+      table.createdAt,
+    ),
+    index('checkout_sessions_org_order_status_idx').on(
+      table.organizationId,
+      table.orderId,
+      table.status,
+    ),
+  ],
+);
+
+export const paymentTransactions = pgTable(
+  'payment_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    checkoutSessionId: uuid('checkout_session_id')
+      .notNull()
+      .references(() => checkoutSessions.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    clientPaymentId: uuid('client_payment_id').notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    method: paymentMethod('method').notNull(),
+    provider: paymentProvider('provider').notNull(),
+    status: paymentStatus('status').notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    tenderedCents: integer('tendered_cents'),
+    changeCents: integer('change_cents').notNull().default(0),
+    providerReference: varchar('provider_reference', { length: 200 }),
+    failureCode: varchar('failure_code', { length: 80 }),
+    failureMessage: varchar('failure_message', { length: 500 }),
+    capturedAt: timestamp('captured_at', { withTimezone: true }),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('payment_transactions_org_device_client_uq').on(
+      table.organizationId,
+      table.deviceId,
+      table.clientPaymentId,
+    ),
+    uniqueIndex('payment_transactions_org_provider_ref_uq').on(
+      table.organizationId,
+      table.provider,
+      table.providerReference,
+    ),
+    index('payment_transactions_checkout_status_idx').on(
+      table.checkoutSessionId,
+      table.status,
+      table.createdAt,
+    ),
+    index('payment_transactions_org_order_idx').on(
+      table.organizationId,
+      table.orderId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const paymentEvents = pgTable(
+  'payment_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    paymentId: uuid('payment_id')
+      .notNull()
+      .references(() => paymentTransactions.id, { onDelete: 'cascade' }),
+    type: paymentEventType('type').notNull(),
+    providerEventId: varchar('provider_event_id', { length: 200 }),
+    payload: jsonb('payload')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('payment_events_org_provider_event_uq').on(
+      table.organizationId,
+      table.providerEventId,
+    ),
+    index('payment_events_payment_created_idx').on(
+      table.paymentId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const financialMutations = pgTable(
+  'financial_mutations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    mutationId: uuid('mutation_id').notNull(),
+    scopeType: varchar('scope_type', { length: 20 }).notNull(),
+    scopeId: uuid('scope_id').notNull(),
+    operation: varchar('operation', { length: 80 }).notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('financial_mutations_org_device_mutation_uq').on(
+      table.organizationId,
+      table.deviceId,
+      table.mutationId,
+    ),
+    index('financial_mutations_org_scope_idx').on(
+      table.organizationId,
+      table.scopeType,
+      table.scopeId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const auditEvents = pgTable(
   'audit_events',
   {
@@ -960,6 +1183,12 @@ export const outboxEvents = pgTable(
     ),
   ],
 );
+
+export type CheckoutStatus = (typeof checkoutStatus.enumValues)[number];
+export type PaymentMethod = (typeof paymentMethod.enumValues)[number];
+export type PaymentProvider = (typeof paymentProvider.enumValues)[number];
+export type PaymentStatus = (typeof paymentStatus.enumValues)[number];
+export type PaymentEventType = (typeof paymentEventType.enumValues)[number];
 
 export type OrderStatus = (typeof orderStatus.enumValues)[number];
 export type OrderServiceMode = (typeof orderServiceMode.enumValues)[number];
