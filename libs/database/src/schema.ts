@@ -129,6 +129,37 @@ export const paymentEventType = pgEnum('payment_event_type', [
   'CANCELLED',
 ]);
 
+export const printerStatus = pgEnum('printer_status', ['ACTIVE', 'DISABLED']);
+
+export const printerPurpose = pgEnum('printer_purpose', [
+  'RECEIPT',
+  'KITCHEN',
+  'LABEL',
+  'GENERIC',
+]);
+
+export const printDocumentType = pgEnum('print_document_type', [
+  'KITCHEN_TICKET',
+  'ORDER_RECEIPT',
+  'PAYMENT_RECEIPT',
+  'TEST_PAGE',
+]);
+
+export const printJobStatus = pgEnum('print_job_status', [
+  'QUEUED',
+  'CLAIMED',
+  'COMPLETED',
+  'FAILED',
+  'CANCELLED',
+]);
+
+export const printAttemptOutcome = pgEnum('print_attempt_outcome', [
+  'CLAIMED',
+  'COMPLETED',
+  'FAILED',
+  'EXPIRED',
+]);
+
 export const outboxStatus = pgEnum('outbox_status', [
   'PENDING',
   'PROCESSING',
@@ -1606,6 +1637,246 @@ export const kitchenMutations = pgTable(
   ],
 );
 
+export const printers = pgTable(
+  'printers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 40 }).notNull(),
+    name: varchar('name', { length: 160 }).notNull(),
+    purpose: printerPurpose('purpose').notNull(),
+    agentDeviceId: uuid('agent_device_id').references(() => devices.id, {
+      onDelete: 'set null',
+    }),
+    driver: varchar('driver', { length: 80 }).notNull().default('ESC_POS_TEXT'),
+    paperWidthMm: integer('paper_width_mm').notNull().default(80),
+    charactersPerLine: integer('characters_per_line').notNull().default(48),
+    supportsCut: boolean('supports_cut').notNull().default(true),
+    supportsDrawer: boolean('supports_drawer').notNull().default(false),
+    status: printerStatus('status').notNull().default('ACTIVE'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    agentVersion: varchar('agent_version', { length: 80 }),
+    statusMessage: varchar('status_message', { length: 160 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('printers_org_location_code_uq').on(
+      table.organizationId,
+      table.locationId,
+      table.code,
+    ),
+    index('printers_org_location_status_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.status,
+    ),
+    index('printers_agent_device_idx').on(table.agentDeviceId, table.status),
+  ],
+);
+
+export const printerRoutes = pgTable(
+  'printer_routes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    routeKey: varchar('route_key', { length: 180 }).notNull(),
+    documentType: printDocumentType('document_type').notNull(),
+    kitchenStationId: uuid('kitchen_station_id').references(
+      () => kitchenStations.id,
+      { onDelete: 'cascade' },
+    ),
+    printerId: uuid('printer_id')
+      .notNull()
+      .references(() => printers.id, { onDelete: 'cascade' }),
+    copies: integer('copies').notNull().default(1),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('printer_routes_location_key_printer_uq').on(
+      table.locationId,
+      table.routeKey,
+      table.printerId,
+    ),
+    index('printer_routes_org_location_active_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.active,
+    ),
+    index('printer_routes_station_idx').on(table.kitchenStationId),
+  ],
+);
+
+export const printJobs = pgTable(
+  'print_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    printerId: uuid('printer_id')
+      .notNull()
+      .references(() => printers.id, { onDelete: 'restrict' }),
+    documentType: printDocumentType('document_type').notNull(),
+    sourceEntityType: varchar('source_entity_type', { length: 80 }).notNull(),
+    sourceEntityId: uuid('source_entity_id'),
+    dedupeKey: varchar('dedupe_key', { length: 220 }).notNull(),
+    payload: jsonb('payload')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    renderedText: text('rendered_text').notNull(),
+    templateVersion: integer('template_version').notNull().default(1),
+    copies: integer('copies').notNull().default(1),
+    status: printJobStatus('status').notNull().default('QUEUED'),
+    priority: integer('priority').notNull().default(0),
+    attempts: integer('attempts').notNull().default(0),
+    maxAttempts: integer('max_attempts').notNull().default(5),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    claimedByDeviceId: uuid('claimed_by_device_id').references(
+      () => devices.id,
+      {
+        onDelete: 'set null',
+      },
+    ),
+    leaseToken: uuid('lease_token'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    version: integer('version').notNull().default(1),
+    requestedByUserId: uuid('requested_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    requestedByDeviceId: uuid('requested_by_device_id').references(
+      () => devices.id,
+      { onDelete: 'set null' },
+    ),
+    clientRequestId: uuid('client_request_id'),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    cancelReason: varchar('cancel_reason', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('print_jobs_org_printer_dedupe_uq').on(
+      table.organizationId,
+      table.printerId,
+      table.dedupeKey,
+    ),
+    index('print_jobs_claim_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.printerId,
+      table.status,
+      table.nextAttemptAt,
+      table.priority,
+    ),
+    index('print_jobs_source_idx').on(
+      table.organizationId,
+      table.sourceEntityType,
+      table.sourceEntityId,
+    ),
+  ],
+);
+
+export const printJobAttempts = pgTable(
+  'print_job_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    printJobId: uuid('print_job_id')
+      .notNull()
+      .references(() => printJobs.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    attemptNo: integer('attempt_no').notNull(),
+    leaseToken: uuid('lease_token').notNull(),
+    outcome: printAttemptOutcome('outcome').notNull(),
+    error: text('error'),
+    startedAt: timestamp('started_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('print_job_attempts_job_lease_uq').on(
+      table.printJobId,
+      table.leaseToken,
+    ),
+    index('print_job_attempts_org_job_idx').on(
+      table.organizationId,
+      table.printJobId,
+      table.attemptNo,
+    ),
+  ],
+);
+
+export const printJobMutations = pgTable(
+  'print_job_mutations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    printJobId: uuid('print_job_id')
+      .notNull()
+      .references(() => printJobs.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    mutationId: uuid('mutation_id').notNull(),
+    operation: varchar('operation', { length: 40 }).notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    responseVersion: integer('response_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('print_job_mutations_job_device_mutation_uq').on(
+      table.printJobId,
+      table.deviceId,
+      table.mutationId,
+    ),
+    index('print_job_mutations_org_created_idx').on(
+      table.organizationId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const auditEvents = pgTable(
   'audit_events',
   {
@@ -1670,6 +1941,13 @@ export const outboxEvents = pgTable(
 
 export type HospitalityStatus = (typeof hospitalityStatus.enumValues)[number];
 export type TableSessionStatus = (typeof tableSessionStatus.enumValues)[number];
+export type PrinterStatus = (typeof printerStatus.enumValues)[number];
+export type PrinterPurpose = (typeof printerPurpose.enumValues)[number];
+export type PrintDocumentType = (typeof printDocumentType.enumValues)[number];
+export type PrintJobStatus = (typeof printJobStatus.enumValues)[number];
+export type PrintAttemptOutcome =
+  (typeof printAttemptOutcome.enumValues)[number];
+
 export type KitchenTicketStatus =
   (typeof kitchenTicketStatus.enumValues)[number];
 

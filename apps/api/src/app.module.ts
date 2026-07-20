@@ -20,6 +20,7 @@ import { MerchantsModule } from './merchants/merchants.module';
 import { OrdersModule } from './orders/orders.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PaymentsModule } from './payments/payments.module';
+import { PrintingModule } from './printing/printing.module';
 import { RootController } from './root.controller';
 
 @Module({
@@ -62,6 +63,7 @@ import { RootController } from './root.controller';
     OrdersModule,
     OrganizationsModule,
     PaymentsModule,
+    PrintingModule,
     MerchantsModule,
     LocationsModule,
     CatalogModule,
