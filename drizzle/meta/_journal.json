@@ -15,6 +15,13 @@
       "when": 1784537427089,
       "tag": "0001_block_02_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784573632021,
+      "tag": "0002_real_ogun",
+      "breakpoints": true
     }
   ]
 }

@@ -54,6 +54,10 @@ export const authSessionStatus = pgEnum('auth_session_status', [
   'REVOKED',
 ]);
 
+export const catalogStatus = pgEnum('catalog_status', ['ACTIVE', 'INACTIVE']);
+
+export const productUnit = pgEnum('product_unit', ['EACH', 'WEIGHT', 'VOLUME']);
+
 export const outboxStatus = pgEnum('outbox_status', [
   'PENDING',
   'PROCESSING',
@@ -325,6 +329,299 @@ export const authSessions = pgTable(
   ],
 );
 
+export const vatRates = pgTable(
+  'vat_rates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 40 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    rateBasisPoints: integer('rate_basis_points').notNull(),
+    natureCode: varchar('nature_code', { length: 8 }),
+    fiscalDescription: varchar('fiscal_description', { length: 220 }),
+    isDefault: boolean('is_default').notNull().default(false),
+    status: catalogStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('vat_rates_org_code_uq').on(table.organizationId, table.code),
+    index('vat_rates_org_status_idx').on(table.organizationId, table.status),
+    index('vat_rates_org_default_idx').on(
+      table.organizationId,
+      table.isDefault,
+    ),
+  ],
+);
+
+export const categories = pgTable(
+  'categories',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 40 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    description: varchar('description', { length: 500 }),
+    colorHex: char('color_hex', { length: 7 }),
+    imageUrl: varchar('image_url', { length: 500 }),
+    sortOrder: integer('sort_order').notNull().default(0),
+    status: catalogStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('categories_org_code_uq').on(table.organizationId, table.code),
+    index('categories_org_status_sort_idx').on(
+      table.organizationId,
+      table.status,
+      table.sortOrder,
+    ),
+  ],
+);
+
+export const products = pgTable(
+  'products',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    categoryId: uuid('category_id')
+      .notNull()
+      .references(() => categories.id, { onDelete: 'restrict' }),
+    vatRateId: uuid('vat_rate_id')
+      .notNull()
+      .references(() => vatRates.id, { onDelete: 'restrict' }),
+    code: varchar('code', { length: 50 }).notNull(),
+    sku: varchar('sku', { length: 80 }),
+    barcode: varchar('barcode', { length: 80 }),
+    name: varchar('name', { length: 180 }).notNull(),
+    description: text('description'),
+    imageUrl: varchar('image_url', { length: 500 }),
+    unit: productUnit('unit').notNull().default('EACH'),
+    quantityScale: integer('quantity_scale').notNull().default(0),
+    trackAvailability: boolean('track_availability').notNull().default(false),
+    status: catalogStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('products_org_code_uq').on(table.organizationId, table.code),
+    uniqueIndex('products_org_sku_uq').on(table.organizationId, table.sku),
+    uniqueIndex('products_org_barcode_uq').on(
+      table.organizationId,
+      table.barcode,
+    ),
+    index('products_org_status_idx').on(table.organizationId, table.status),
+    index('products_category_idx').on(table.categoryId),
+    index('products_vat_rate_idx').on(table.vatRateId),
+  ],
+);
+
+export const productVariants = pgTable(
+  'product_variants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 50 }).notNull(),
+    sku: varchar('sku', { length: 80 }),
+    barcode: varchar('barcode', { length: 80 }),
+    name: varchar('name', { length: 120 }).notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    status: catalogStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('product_variants_product_code_uq').on(
+      table.productId,
+      table.code,
+    ),
+    uniqueIndex('product_variants_org_sku_uq').on(
+      table.organizationId,
+      table.sku,
+    ),
+    uniqueIndex('product_variants_org_barcode_uq').on(
+      table.organizationId,
+      table.barcode,
+    ),
+    index('product_variants_product_status_idx').on(
+      table.productId,
+      table.status,
+      table.sortOrder,
+    ),
+  ],
+);
+
+export const locationProducts = pgTable(
+  'location_products',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    enabled: boolean('enabled').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('location_products_location_product_uq').on(
+      table.locationId,
+      table.productId,
+    ),
+    index('location_products_org_location_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.enabled,
+    ),
+  ],
+);
+
+export const priceLists = pgTable(
+  'price_lists',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 40 }).notNull(),
+    name: varchar('name', { length: 140 }).notNull(),
+    currency: char('currency', { length: 3 }).notNull().default('EUR'),
+    priority: integer('priority').notNull().default(0),
+    startsAt: timestamp('starts_at', { withTimezone: true }),
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    status: catalogStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('price_lists_org_code_uq').on(table.organizationId, table.code),
+    index('price_lists_org_status_priority_idx').on(
+      table.organizationId,
+      table.status,
+      table.priority,
+    ),
+  ],
+);
+
+export const locationPriceLists = pgTable(
+  'location_price_lists',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    priceListId: uuid('price_list_id')
+      .notNull()
+      .references(() => priceLists.id, { onDelete: 'cascade' }),
+    priority: integer('priority').notNull().default(0),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('location_price_lists_location_list_uq').on(
+      table.locationId,
+      table.priceListId,
+    ),
+    index('location_price_lists_org_location_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.active,
+      table.priority,
+    ),
+  ],
+);
+
+export const productPrices = pgTable(
+  'product_prices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    priceListId: uuid('price_list_id')
+      .notNull()
+      .references(() => priceLists.id, { onDelete: 'cascade' }),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    variantId: uuid('variant_id').references(() => productVariants.id, {
+      onDelete: 'cascade',
+    }),
+    priceKey: varchar('price_key', { length: 160 }).notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    startsAt: timestamp('starts_at', { withTimezone: true }),
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    status: catalogStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('product_prices_list_key_uq').on(
+      table.priceListId,
+      table.priceKey,
+    ),
+    index('product_prices_org_product_idx').on(
+      table.organizationId,
+      table.productId,
+      table.status,
+    ),
+    index('product_prices_list_status_idx').on(table.priceListId, table.status),
+  ],
+);
+
 export const auditEvents = pgTable(
   'audit_events',
   {
@@ -387,6 +684,8 @@ export const outboxEvents = pgTable(
   ],
 );
 
+export type CatalogStatus = (typeof catalogStatus.enumValues)[number];
+export type ProductUnit = (typeof productUnit.enumValues)[number];
 export type MembershipRole = (typeof membershipRole.enumValues)[number];
 export type MembershipStatus = (typeof membershipStatus.enumValues)[number];
 export type DevicePlatform = (typeof devicePlatform.enumValues)[number];
