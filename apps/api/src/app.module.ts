@@ -14,6 +14,7 @@ import { TenantContextGuard } from './auth/guards/tenant-context.guard';
 import { CatalogModule } from './catalog/catalog.module';
 import { DevicesModule } from './devices/devices.module';
 import { HealthModule } from './health/health.module';
+import { HospitalityModule } from './hospitality/hospitality.module';
 import { LocationsModule } from './locations/locations.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { OrdersModule } from './orders/orders.module';
@@ -57,6 +58,7 @@ import { RootController } from './root.controller';
     QueueModule,
     AuthModule,
     HealthModule,
+    HospitalityModule,
     OrdersModule,
     OrganizationsModule,
     PaymentsModule,

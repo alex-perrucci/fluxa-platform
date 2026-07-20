@@ -130,6 +130,10 @@ interface CountRow extends QueryResultRow {
   count: number;
 }
 
+interface SentKitchenQuantityRow extends QueryResultRow {
+  sentQuantity: number;
+}
+
 interface MutationContext {
   order: OrderHeaderRow;
   requestHash: string;
@@ -619,6 +623,19 @@ export class OrdersService {
       }
 
       const quantityAmount = dto.quantityAmount ?? item.quantityAmount;
+
+      if (dto.quantityAmount !== undefined) {
+        const sentQuantity = await this.sentKitchenQuantity(client, itemId);
+
+        if (quantityAmount < sentQuantity) {
+          throw new ConflictException({
+            code: 'ORDER_ITEM_ALREADY_SENT_TO_KITCHEN',
+            message:
+              'La quantità non può essere inferiore a quella già inviata in cucina.',
+            sentQuantity,
+          });
+        }
+      }
       const grossTotalCents = calculateGrossFromQuantity(
         item.unitPriceCents,
         quantityAmount,
@@ -700,6 +717,16 @@ export class OrdersService {
       );
 
       if (mutation.duplicate) return;
+
+      const sentQuantity = await this.sentKitchenQuantity(client, itemId);
+
+      if (sentQuantity > 0) {
+        throw new ConflictException({
+          code: 'ORDER_ITEM_ALREADY_SENT_TO_KITCHEN',
+          message: 'Una riga già inviata in cucina non può essere eliminata.',
+          sentQuantity,
+        });
+      }
 
       const deleted = await client.query(
         `
@@ -1177,6 +1204,24 @@ export class OrdersService {
     }
 
     return { order, requestHash, duplicate: false };
+  }
+
+  private async sentKitchenQuantity(
+    client: PoolClient,
+    orderItemId: string,
+  ): Promise<number> {
+    const result = await client.query<SentKitchenQuantityRow>(
+      `
+        SELECT COALESCE(SUM(kti.quantity_amount), 0)::int AS "sentQuantity"
+        FROM kitchen_ticket_items kti
+        INNER JOIN kitchen_tickets kt ON kt.id = kti.kitchen_ticket_id
+        WHERE kti.order_item_id = $1
+          AND kt.status <> 'CANCELLED'
+      `,
+      [orderItemId],
+    );
+
+    return result.rows[0]?.sentQuantity ?? 0;
   }
 
   private async recalculate(

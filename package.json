@@ -1,6 +1,6 @@
 {
   "name": "fluxa-platform",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Fluxa POS and fiscal platform backend",
   "author": "",
   "license": "UNLICENSED",
@@ -95,7 +95,9 @@
     "test:orders": "jest apps/api/src/orders --runInBand",
     "smoke:orders": "node scripts/smoke-block-04.mjs",
     "test:payments": "jest apps/api/src/payments --runInBand",
-    "smoke:payments": "node scripts/smoke-block-05.mjs"
+    "smoke:payments": "node scripts/smoke-block-05.mjs",
+    "test:hospitality": "jest apps/api/src/hospitality --runInBand",
+    "smoke:hospitality": "node scripts/smoke-block-06.mjs"
   },
   "jest": {
     "moduleFileExtensions": [
