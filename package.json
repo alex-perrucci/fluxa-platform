@@ -89,6 +89,8 @@
     "verify": "npm run lint && npm test && npm run build",
     "db:seed": "ts-node -r tsconfig-paths/register scripts/seed-block-02.ts",
     "test:identity": "jest apps/api/src/auth libs/config/src/environment.spec.ts --runInBand",
+    "test:device-context": "jest apps/api/src/devices --runInBand",
+    "smoke:device-context": "node scripts/smoke-device-assignment-context.mjs",
     "db:seed:catalog": "ts-node -r tsconfig-paths/register scripts/seed-block-03.ts",
     "test:catalog": "jest apps/api/src/catalog --runInBand",
     "smoke:catalog": "node scripts/smoke-block-03.mjs",
