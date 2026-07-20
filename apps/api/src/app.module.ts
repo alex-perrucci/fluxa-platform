@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { AuthorizationGuard } from './auth/guards/authorization.guard';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantContextGuard } from './auth/guards/tenant-context.guard';
+import { CatalogModule } from './catalog/catalog.module';
 import { DevicesModule } from './devices/devices.module';
 import { HealthModule } from './health/health.module';
 import { LocationsModule } from './locations/locations.module';
@@ -57,6 +58,7 @@ import { RootController } from './root.controller';
     OrganizationsModule,
     MerchantsModule,
     LocationsModule,
+    CatalogModule,
     DevicesModule,
   ],
   controllers: [RootController],
