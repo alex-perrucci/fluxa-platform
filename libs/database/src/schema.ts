@@ -78,6 +78,25 @@ export const orderAdjustmentType = pgEnum('order_adjustment_type', [
   'PERCENTAGE',
 ]);
 
+export const hospitalityStatus = pgEnum('hospitality_status', [
+  'ACTIVE',
+  'INACTIVE',
+]);
+
+export const tableSessionStatus = pgEnum('table_session_status', [
+  'OPEN',
+  'CLOSED',
+  'CANCELLED',
+]);
+
+export const kitchenTicketStatus = pgEnum('kitchen_ticket_status', [
+  'QUEUED',
+  'IN_PROGRESS',
+  'READY',
+  'SERVED',
+  'CANCELLED',
+]);
+
 export const checkoutStatus = pgEnum('checkout_status', [
   'OPEN',
   'COMPLETED',
@@ -1122,6 +1141,471 @@ export const financialMutations = pgTable(
   ],
 );
 
+export const diningAreas = pgTable(
+  'dining_areas',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 40 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    status: hospitalityStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('dining_areas_org_location_code_uq').on(
+      table.organizationId,
+      table.locationId,
+      table.code,
+    ),
+    index('dining_areas_location_status_sort_idx').on(
+      table.locationId,
+      table.status,
+      table.sortOrder,
+    ),
+  ],
+);
+
+export const diningTables = pgTable(
+  'dining_tables',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    areaId: uuid('area_id')
+      .notNull()
+      .references(() => diningAreas.id, { onDelete: 'restrict' }),
+    code: varchar('code', { length: 40 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    capacity: integer('capacity').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    status: hospitalityStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('dining_tables_org_location_code_uq').on(
+      table.organizationId,
+      table.locationId,
+      table.code,
+    ),
+    index('dining_tables_area_status_sort_idx').on(
+      table.areaId,
+      table.status,
+      table.sortOrder,
+    ),
+  ],
+);
+
+export const tableSessions = pgTable(
+  'table_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    tableId: uuid('table_id')
+      .notNull()
+      .references(() => diningTables.id, { onDelete: 'restrict' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    openedByUserId: uuid('opened_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    clientSessionId: uuid('client_session_id').notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    status: tableSessionStatus('status').notNull().default('OPEN'),
+    guestCount: integer('guest_count').notNull(),
+    note: varchar('note', { length: 500 }),
+    activeTableKey: varchar('active_table_key', { length: 100 }),
+    version: integer('version').notNull().default(1),
+    openedAt: timestamp('opened_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    closeReason: varchar('close_reason', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('table_sessions_org_device_client_uq').on(
+      table.organizationId,
+      table.deviceId,
+      table.clientSessionId,
+    ),
+    uniqueIndex('table_sessions_org_active_table_uq').on(
+      table.organizationId,
+      table.activeTableKey,
+    ),
+    index('table_sessions_location_status_opened_idx').on(
+      table.locationId,
+      table.status,
+      table.openedAt,
+    ),
+  ],
+);
+
+export const tableSessionOrders = pgTable(
+  'table_session_orders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    tableSessionId: uuid('table_session_id')
+      .notNull()
+      .references(() => tableSessions.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    attachedByUserId: uuid('attached_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    attachedAt: timestamp('attached_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('table_session_orders_order_uq').on(table.orderId),
+    uniqueIndex('table_session_orders_session_order_uq').on(
+      table.tableSessionId,
+      table.orderId,
+    ),
+    index('table_session_orders_org_session_idx').on(
+      table.organizationId,
+      table.tableSessionId,
+    ),
+  ],
+);
+
+export const hospitalityMutations = pgTable(
+  'hospitality_mutations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    mutationId: uuid('mutation_id').notNull(),
+    scopeType: varchar('scope_type', { length: 30 }).notNull(),
+    scopeId: uuid('scope_id').notNull(),
+    operation: varchar('operation', { length: 80 }).notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    responseVersion: integer('response_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('hospitality_mutations_org_device_mutation_uq').on(
+      table.organizationId,
+      table.deviceId,
+      table.mutationId,
+    ),
+    index('hospitality_mutations_org_scope_idx').on(
+      table.organizationId,
+      table.scopeType,
+      table.scopeId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const kitchenStations = pgTable(
+  'kitchen_stations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 40 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    status: hospitalityStatus('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('kitchen_stations_org_location_code_uq').on(
+      table.organizationId,
+      table.locationId,
+      table.code,
+    ),
+    index('kitchen_stations_location_status_sort_idx').on(
+      table.locationId,
+      table.status,
+      table.sortOrder,
+    ),
+  ],
+);
+
+export const kitchenStationCategories = pgTable(
+  'kitchen_station_categories',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    stationId: uuid('station_id')
+      .notNull()
+      .references(() => kitchenStations.id, { onDelete: 'cascade' }),
+    categoryId: uuid('category_id')
+      .notNull()
+      .references(() => categories.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('kitchen_station_categories_route_uq').on(
+      table.organizationId,
+      table.locationId,
+      table.categoryId,
+    ),
+    index('kitchen_station_categories_station_idx').on(table.stationId),
+  ],
+);
+
+export const kitchenTicketSequences = pgTable(
+  'kitchen_ticket_sequences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    businessDate: char('business_date', { length: 10 }).notNull(),
+    lastValue: integer('last_value').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('kitchen_ticket_sequences_org_location_date_uq').on(
+      table.organizationId,
+      table.locationId,
+      table.businessDate,
+    ),
+  ],
+);
+
+export const kitchenTicketBatches = pgTable(
+  'kitchen_ticket_batches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    clientBatchId: uuid('client_batch_id').notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('kitchen_ticket_batches_org_device_client_uq').on(
+      table.organizationId,
+      table.deviceId,
+      table.clientBatchId,
+    ),
+    index('kitchen_ticket_batches_org_order_idx').on(
+      table.organizationId,
+      table.orderId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const kitchenTickets = pgTable(
+  'kitchen_tickets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    batchId: uuid('batch_id')
+      .notNull()
+      .references(() => kitchenTicketBatches.id, { onDelete: 'cascade' }),
+    stationId: uuid('station_id')
+      .notNull()
+      .references(() => kitchenStations.id, { onDelete: 'restrict' }),
+    number: varchar('number', { length: 40 }).notNull(),
+    status: kitchenTicketStatus('status').notNull().default('QUEUED'),
+    version: integer('version').notNull().default(1),
+    tableSessionId: uuid('table_session_id').references(
+      () => tableSessions.id,
+      { onDelete: 'set null' },
+    ),
+    tableCodeSnapshot: varchar('table_code_snapshot', { length: 40 }),
+    queuedByUserId: uuid('queued_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    queuedAt: timestamp('queued_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    readyAt: timestamp('ready_at', { withTimezone: true }),
+    servedAt: timestamp('served_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('kitchen_tickets_location_number_uq').on(
+      table.locationId,
+      table.number,
+    ),
+    uniqueIndex('kitchen_tickets_batch_station_uq').on(
+      table.batchId,
+      table.stationId,
+    ),
+    index('kitchen_tickets_location_station_status_idx').on(
+      table.locationId,
+      table.stationId,
+      table.status,
+      table.queuedAt,
+    ),
+    index('kitchen_tickets_org_order_idx').on(
+      table.organizationId,
+      table.orderId,
+      table.queuedAt,
+    ),
+  ],
+);
+
+export const kitchenTicketItems = pgTable(
+  'kitchen_ticket_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    kitchenTicketId: uuid('kitchen_ticket_id')
+      .notNull()
+      .references(() => kitchenTickets.id, { onDelete: 'cascade' }),
+    orderItemId: uuid('order_item_id')
+      .notNull()
+      .references(() => orderItems.id, { onDelete: 'restrict' }),
+    quantityAmount: integer('quantity_amount').notNull(),
+    quantityScale: integer('quantity_scale').notNull(),
+    productNameSnapshot: varchar('product_name_snapshot', {
+      length: 180,
+    }).notNull(),
+    variantNameSnapshot: varchar('variant_name_snapshot', { length: 120 }),
+    noteSnapshot: varchar('note_snapshot', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('kitchen_ticket_items_ticket_idx').on(
+      table.kitchenTicketId,
+      table.createdAt,
+    ),
+    index('kitchen_ticket_items_order_item_idx').on(table.orderItemId),
+  ],
+);
+
+export const kitchenMutations = pgTable(
+  'kitchen_mutations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    mutationId: uuid('mutation_id').notNull(),
+    kitchenTicketId: uuid('kitchen_ticket_id')
+      .notNull()
+      .references(() => kitchenTickets.id, { onDelete: 'cascade' }),
+    operation: varchar('operation', { length: 80 }).notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    responseVersion: integer('response_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('kitchen_mutations_org_device_mutation_uq').on(
+      table.organizationId,
+      table.deviceId,
+      table.mutationId,
+    ),
+    index('kitchen_mutations_ticket_idx').on(
+      table.kitchenTicketId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const auditEvents = pgTable(
   'audit_events',
   {
@@ -1183,6 +1667,11 @@ export const outboxEvents = pgTable(
     ),
   ],
 );
+
+export type HospitalityStatus = (typeof hospitalityStatus.enumValues)[number];
+export type TableSessionStatus = (typeof tableSessionStatus.enumValues)[number];
+export type KitchenTicketStatus =
+  (typeof kitchenTicketStatus.enumValues)[number];
 
 export type CheckoutStatus = (typeof checkoutStatus.enumValues)[number];
 export type PaymentMethod = (typeof paymentMethod.enumValues)[number];
