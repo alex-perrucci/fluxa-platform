@@ -53,7 +53,11 @@ function serviceWithRows(rows: Record<string, unknown>[]) {
 }
 
 function exceptionCode(error: unknown): string | undefined {
-  if (typeof error !== 'object' || error === null || !('getResponse' in error)) {
+  if (
+    typeof error !== 'object' ||
+    error === null ||
+    !('getResponse' in error)
+  ) {
     return undefined;
   }
 
