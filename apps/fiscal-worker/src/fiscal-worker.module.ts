@@ -4,7 +4,9 @@ import { LoggerModule } from 'nestjs-pino';
 import { validateEnvironment } from '@fluxa/config';
 import { DatabaseModule } from '@fluxa/database';
 import { QueueModule } from '@fluxa/queue';
+import { FiscalExecutionService } from './fiscal-execution.service';
 import { FiscalProcessor } from './fiscal.processor';
+import { FiscalProviderService } from './fiscal-provider.service';
 
 @Module({
   imports: [
@@ -14,13 +16,11 @@ import { FiscalProcessor } from './fiscal.processor';
       validate: validateEnvironment,
     }),
     LoggerModule.forRoot({
-      pinoHttp: {
-        level: process.env.LOG_LEVEL ?? 'info',
-      },
+      pinoHttp: { level: process.env.LOG_LEVEL ?? 'info' },
     }),
     DatabaseModule,
     QueueModule,
   ],
-  providers: [FiscalProcessor],
+  providers: [FiscalProcessor, FiscalExecutionService, FiscalProviderService],
 })
 export class FiscalWorkerModule {}

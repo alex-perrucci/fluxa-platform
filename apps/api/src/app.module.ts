@@ -13,6 +13,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantContextGuard } from './auth/guards/tenant-context.guard';
 import { CatalogModule } from './catalog/catalog.module';
 import { DevicesModule } from './devices/devices.module';
+import { FiscalModule } from './fiscal/fiscal.module';
 import { HealthModule } from './health/health.module';
 import { HospitalityModule } from './hospitality/hospitality.module';
 import { LocationsModule } from './locations/locations.module';
@@ -59,6 +60,7 @@ import { RootController } from './root.controller';
     QueueModule,
     AuthModule,
     HealthModule,
+    FiscalModule,
     HospitalityModule,
     OrdersModule,
     OrganizationsModule,

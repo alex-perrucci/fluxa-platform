@@ -160,6 +160,38 @@ export const printAttemptOutcome = pgEnum('print_attempt_outcome', [
   'EXPIRED',
 ]);
 
+export const fiscalProvider = pgEnum('fiscal_provider', [
+  'MOCK',
+  'ACUBE_SMART_RECEIPTS',
+]);
+
+export const fiscalEnvironment = pgEnum('fiscal_environment', [
+  'SANDBOX',
+  'PRODUCTION',
+]);
+
+export const fiscalDocumentType = pgEnum('fiscal_document_type', [
+  'SALE',
+  'VOID',
+]);
+
+export const fiscalDocumentStatus = pgEnum('fiscal_document_status', [
+  'QUEUED',
+  'PROCESSING',
+  'ISSUED',
+  'RETRY',
+  'REJECTED',
+  'VOIDED',
+  'CANCELLED',
+]);
+
+export const fiscalAttemptOutcome = pgEnum('fiscal_attempt_outcome', [
+  'STARTED',
+  'SUCCEEDED',
+  'RETRY',
+  'REJECTED',
+]);
+
 export const outboxStatus = pgEnum('outbox_status', [
   'PENDING',
   'PROCESSING',
@@ -1877,6 +1909,258 @@ export const printJobMutations = pgTable(
   ],
 );
 
+export const fiscalProfiles = pgTable(
+  'fiscal_profiles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    provider: fiscalProvider('provider').notNull(),
+    environment: fiscalEnvironment('environment').notNull(),
+    fiscalId: varchar('fiscal_id', { length: 32 }).notNull(),
+    enabled: boolean('enabled').notNull().default(false),
+    autoIssueOnPaid: boolean('auto_issue_on_paid').notNull().default(false),
+    receiptEmail: varchar('receipt_email', { length: 320 }),
+    displayName: varchar('display_name', { length: 120 }),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('fiscal_profiles_org_location_uq').on(
+      table.organizationId,
+      table.locationId,
+    ),
+    index('fiscal_profiles_org_enabled_idx').on(
+      table.organizationId,
+      table.enabled,
+    ),
+  ],
+);
+
+export const fiscalDocuments = pgTable(
+  'fiscal_documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'restrict' }),
+    parentDocumentId: uuid('parent_document_id'),
+    type: fiscalDocumentType('type').notNull(),
+    status: fiscalDocumentStatus('status').notNull().default('QUEUED'),
+    provider: fiscalProvider('provider').notNull(),
+    environment: fiscalEnvironment('environment').notNull(),
+    fiscalIdSnapshot: varchar('fiscal_id_snapshot', { length: 32 }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    totalCents: integer('total_cents').notNull(),
+    cashPaymentCents: integer('cash_payment_cents').notNull().default(0),
+    electronicPaymentCents: integer('electronic_payment_cents')
+      .notNull()
+      .default(0),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    providerResponse:
+      jsonb('provider_response').$type<Record<string, unknown>>(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    requestedByUserId: uuid('requested_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    requestedByDeviceId: uuid('requested_by_device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    clientRequestId: uuid('client_request_id'),
+    externalId: varchar('external_id', { length: 200 }),
+    externalStatus: varchar('external_status', { length: 80 }),
+    documentNumber: varchar('document_number', { length: 120 }),
+    documentDate: varchar('document_date', { length: 80 }),
+    errorCode: varchar('error_code', { length: 100 }),
+    errorMessage: text('error_message'),
+    attempts: integer('attempts').notNull().default(0),
+    maxAttempts: integer('max_attempts').notNull().default(5),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    version: integer('version').notNull().default(1),
+    issuedAt: timestamp('issued_at', { withTimezone: true }),
+    voidedAt: timestamp('voided_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('fiscal_documents_org_device_request_uq').on(
+      table.organizationId,
+      table.requestedByDeviceId,
+      table.clientRequestId,
+    ),
+    uniqueIndex('fiscal_documents_order_sale_uq').on(table.orderId, table.type),
+    uniqueIndex('fiscal_documents_parent_type_uq').on(
+      table.parentDocumentId,
+      table.type,
+    ),
+    index('fiscal_documents_dispatch_idx').on(
+      table.status,
+      table.nextAttemptAt,
+    ),
+    index('fiscal_documents_org_location_created_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const fiscalDocumentItems = pgTable(
+  'fiscal_document_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    fiscalDocumentId: uuid('fiscal_document_id')
+      .notNull()
+      .references(() => fiscalDocuments.id, { onDelete: 'cascade' }),
+    orderItemId: uuid('order_item_id').references(() => orderItems.id, {
+      onDelete: 'restrict',
+    }),
+    lineNo: integer('line_no').notNull(),
+    description: varchar('description', { length: 1000 }).notNull(),
+    quantityAmount: integer('quantity_amount').notNull(),
+    quantityScale: integer('quantity_scale').notNull(),
+    unitPriceCents: integer('unit_price_cents').notNull(),
+    grossCents: integer('gross_cents').notNull(),
+    discountCents: integer('discount_cents').notNull().default(0),
+    finalGrossCents: integer('final_gross_cents').notNull(),
+    vatRateBasisPoints: integer('vat_rate_basis_points').notNull(),
+    vatNatureCode: varchar('vat_nature_code', { length: 8 }),
+    vatRateCode: varchar('vat_rate_code', { length: 8 }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('fiscal_document_items_document_line_uq').on(
+      table.fiscalDocumentId,
+      table.lineNo,
+    ),
+    index('fiscal_document_items_org_document_idx').on(
+      table.organizationId,
+      table.fiscalDocumentId,
+    ),
+  ],
+);
+
+export const fiscalDocumentVatSummaries = pgTable(
+  'fiscal_document_vat_summaries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    fiscalDocumentId: uuid('fiscal_document_id')
+      .notNull()
+      .references(() => fiscalDocuments.id, { onDelete: 'cascade' }),
+    vatKey: varchar('vat_key', { length: 32 }).notNull(),
+    vatRateBasisPoints: integer('vat_rate_basis_points').notNull(),
+    vatNatureCode: varchar('vat_nature_code', { length: 8 }),
+    grossCents: integer('gross_cents').notNull(),
+    netCents: integer('net_cents').notNull(),
+    taxCents: integer('tax_cents').notNull(),
+  },
+  (table) => [
+    uniqueIndex('fiscal_document_vat_document_key_uq').on(
+      table.fiscalDocumentId,
+      table.vatKey,
+    ),
+    index('fiscal_document_vat_org_document_idx').on(
+      table.organizationId,
+      table.fiscalDocumentId,
+    ),
+  ],
+);
+
+export const fiscalAttempts = pgTable(
+  'fiscal_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    fiscalDocumentId: uuid('fiscal_document_id')
+      .notNull()
+      .references(() => fiscalDocuments.id, { onDelete: 'cascade' }),
+    attemptNo: integer('attempt_no').notNull(),
+    outcome: fiscalAttemptOutcome('outcome').notNull(),
+    errorCode: varchar('error_code', { length: 100 }),
+    errorMessage: text('error_message'),
+    response: jsonb('response')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    startedAt: timestamp('started_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('fiscal_attempts_document_attempt_uq').on(
+      table.fiscalDocumentId,
+      table.attemptNo,
+    ),
+    index('fiscal_attempts_org_document_idx').on(
+      table.organizationId,
+      table.fiscalDocumentId,
+    ),
+  ],
+);
+
+export const fiscalMutations = pgTable(
+  'fiscal_mutations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    fiscalDocumentId: uuid('fiscal_document_id')
+      .notNull()
+      .references(() => fiscalDocuments.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'restrict' }),
+    mutationId: uuid('mutation_id').notNull(),
+    operation: varchar('operation', { length: 40 }).notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    responseVersion: integer('response_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('fiscal_mutations_document_device_mutation_uq').on(
+      table.fiscalDocumentId,
+      table.deviceId,
+      table.mutationId,
+    ),
+    index('fiscal_mutations_org_created_idx').on(
+      table.organizationId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const auditEvents = pgTable(
   'audit_events',
   {
@@ -1938,6 +2222,14 @@ export const outboxEvents = pgTable(
     ),
   ],
 );
+
+export type FiscalProvider = (typeof fiscalProvider.enumValues)[number];
+export type FiscalEnvironment = (typeof fiscalEnvironment.enumValues)[number];
+export type FiscalDocumentType = (typeof fiscalDocumentType.enumValues)[number];
+export type FiscalDocumentStatus =
+  (typeof fiscalDocumentStatus.enumValues)[number];
+export type FiscalAttemptOutcome =
+  (typeof fiscalAttemptOutcome.enumValues)[number];
 
 export type HospitalityStatus = (typeof hospitalityStatus.enumValues)[number];
 export type TableSessionStatus = (typeof tableSessionStatus.enumValues)[number];
