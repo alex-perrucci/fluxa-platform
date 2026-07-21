@@ -6,6 +6,8 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/organization_selection_screen.dart';
 import '../../features/catalog/presentation/catalog_screen.dart';
 import '../../features/device/presentation/operational_blocked_screen.dart';
+import '../../features/hospitality/presentation/kitchen_screen.dart';
+import '../../features/hospitality/presentation/tables_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/payments/presentation/checkout_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
@@ -76,8 +78,24 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
+              path: '/tables',
+              builder: (context, state) => const TablesScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
               path: '/orders',
               builder: (context, state) => const OrdersScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/kitchen',
+              builder: (context, state) => const KitchenScreen(),
             ),
           ],
         ),

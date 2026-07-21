@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../device/domain/device_assignment_models.dart';
+import '../../hospitality/presentation/kitchen_controller.dart';
 import '../domain/order_models.dart';
 import 'order_controller.dart';
 
@@ -17,11 +18,13 @@ class OrdersScreen extends ConsumerStatefulWidget {
 
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String? _scheduledLocationId;
+  String? _scheduledKitchenLocationId;
 
   @override
   Widget build(BuildContext context) {
     final authController = ref.watch(authControllerProvider);
     final orderController = ref.watch(orderControllerProvider);
+    final kitchenController = ref.watch(kitchenControllerProvider);
     final location = authController.state.deviceAssignment?.location;
     if (location == null) {
       return const FluxaEmptyView(
@@ -31,10 +34,16 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       );
     }
     _scheduleBind(orderController, location.id);
-    if (orderController.locationId != location.id) {
+    _scheduleKitchenBind(kitchenController, location.id);
+    if (orderController.locationId != location.id ||
+        kitchenController.locationId != location.id) {
       return const FluxaLoadingView(label: 'Allineamento ordini');
     }
-    return OrdersView(controller: orderController, location: location);
+    return OrdersView(
+      controller: orderController,
+      kitchenController: kitchenController,
+      location: location,
+    );
   }
 
   void _scheduleBind(OrderController controller, String locationId) {
@@ -53,16 +62,35 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       }
     });
   }
+
+  void _scheduleKitchenBind(KitchenController controller, String locationId) {
+    if (controller.locationId == locationId ||
+        _scheduledKitchenLocationId == locationId) {
+      return;
+    }
+    _scheduledKitchenLocationId = locationId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await controller.bindLocation(locationId);
+      } finally {
+        if (mounted && _scheduledKitchenLocationId == locationId) {
+          setState(() => _scheduledKitchenLocationId = null);
+        }
+      }
+    });
+  }
 }
 
 class OrdersView extends StatelessWidget {
   const OrdersView({
     required this.controller,
+    required this.kitchenController,
     required this.location,
     super.key,
   });
 
   final OrderController controller;
+  final KitchenController kitchenController;
   final OperationalLocation location;
 
   @override
@@ -96,7 +124,11 @@ class OrdersView extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final list = _OrdersList(controller: controller);
-                final detail = _OrderDetailPane(controller: controller);
+                final detail = _OrderDetailPane(
+                  controller: controller,
+                  kitchenController: kitchenController,
+                  locationId: location.id,
+                );
                 if (constraints.maxWidth >= 980) {
                   return Row(
                     children: [
@@ -245,9 +277,15 @@ class _OrdersList extends StatelessWidget {
 }
 
 class _OrderDetailPane extends StatelessWidget {
-  const _OrderDetailPane({required this.controller});
+  const _OrderDetailPane({
+    required this.controller,
+    required this.kitchenController,
+    required this.locationId,
+  });
 
   final OrderController controller;
+  final KitchenController kitchenController;
+  final String locationId;
 
   @override
   Widget build(BuildContext context) {
@@ -354,6 +392,33 @@ class _OrderDetailPane extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                if ((order.header.status == OrderStatus.open ||
+                        order.header.status == OrderStatus.held) &&
+                    order.items.isNotEmpty)
+                  OutlinedButton.icon(
+                    key: const Key('send-order-kitchen-button'),
+                    onPressed: controller.busy || kitchenController.busy
+                        ? null
+                        : () async {
+                            final sent = await kitchenController.dispatchOrder(
+                              locationId: locationId,
+                              orderId: order.header.id,
+                            );
+                            if (!context.mounted) {
+                              return;
+                            }
+                            final message = sent
+                                ? kitchenController.noticeMessage ??
+                                      'Ordine inviato in cucina.'
+                                : kitchenController.errorMessage ??
+                                      'Invio cucina non riuscito.';
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(message)));
+                          },
+                    icon: const Icon(Icons.soup_kitchen_outlined),
+                    label: const Text('Invia in cucina'),
+                  ),
                 if (order.header.status == OrderStatus.held)
                   FilledButton.icon(
                     key: const Key('resume-order-button'),

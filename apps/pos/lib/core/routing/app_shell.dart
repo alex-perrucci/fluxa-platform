@@ -13,9 +13,19 @@ class AppShell extends StatelessWidget {
       label: 'Cassa',
     ),
     NavigationDestination(
+      icon: Icon(Icons.table_restaurant_outlined),
+      selectedIcon: Icon(Icons.table_restaurant),
+      label: 'Tavoli',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.receipt_long_outlined),
       selectedIcon: Icon(Icons.receipt_long),
       label: 'Ordini',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.soup_kitchen_outlined),
+      selectedIcon: Icon(Icons.soup_kitchen),
+      label: 'Cucina',
     ),
     NavigationDestination(
       icon: Icon(Icons.settings_outlined),
