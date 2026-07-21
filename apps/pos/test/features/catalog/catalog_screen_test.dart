@@ -5,10 +5,14 @@ import 'package:fluxa_pos/features/catalog/domain/catalog_models.dart';
 import 'package:fluxa_pos/features/catalog/presentation/catalog_controller.dart';
 import 'package:fluxa_pos/features/catalog/presentation/catalog_screen.dart';
 import 'package:fluxa_pos/features/device/domain/device_assignment_models.dart';
+import 'package:fluxa_pos/features/orders/data/orders_api.dart';
+import 'package:fluxa_pos/features/orders/domain/order_models.dart';
+import 'package:fluxa_pos/features/orders/presentation/order_controller.dart';
 
 void main() {
   testWidgets('shows products and filters by variant barcode', (tester) async {
     final controller = CatalogController(_FakeGateway());
+    final orderController = OrderController(_NoopOrdersGateway());
     await controller.load('location-1');
 
     await tester.pumpWidget(
@@ -16,6 +20,7 @@ void main() {
         home: Scaffold(
           body: CatalogView(
             controller: controller,
+            orderController: orderController,
             location: const OperationalLocation(
               id: 'location-1',
               code: 'PARMA',
@@ -115,4 +120,72 @@ class _FakeGateway implements CatalogGateway {
       ),
     ],
   );
+}
+
+class _NoopOrdersGateway implements OrdersGateway {
+  Never _unsupported() =>
+      throw UnsupportedError('Not used by this widget test.');
+
+  @override
+  Future<OrderDetail> addItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required String productId,
+    String? variantId,
+    required int quantityAmount,
+    String? note,
+  }) async => _unsupported();
+
+  @override
+  Future<OrderDetail> createOrder({
+    required String clientOrderId,
+    required String locationId,
+    required OrderServiceMode serviceMode,
+    String? customerNote,
+  }) async => _unsupported();
+
+  @override
+  Future<OrderDetail> deleteItem({
+    required String orderId,
+    required String itemId,
+    required String mutationId,
+    required int expectedVersion,
+  }) async => _unsupported();
+
+  @override
+  Future<OrderDetail> getOrder(String orderId) async => _unsupported();
+
+  @override
+  Future<OrderDetail> hold({
+    required String orderId,
+    required String mutationId,
+    required int expectedVersion,
+  }) async => _unsupported();
+
+  @override
+  Future<OrderListPage> listOrders({
+    required String locationId,
+    OrderStatus? status,
+    int page = 1,
+    int pageSize = 30,
+  }) async => _unsupported();
+
+  @override
+  Future<OrderDetail> resume({
+    required String orderId,
+    required String mutationId,
+    required int expectedVersion,
+  }) async => _unsupported();
+
+  @override
+  Future<OrderDetail> updateItem({
+    required String orderId,
+    required String itemId,
+    required String mutationId,
+    required int expectedVersion,
+    int? quantityAmount,
+    String? note,
+  }) async => _unsupported();
 }
