@@ -11,6 +11,7 @@ class HomeScreen extends ConsumerWidget {
     final controller = ref.watch(authControllerProvider);
     final session = controller.state.session!;
     final organization = session.activeOrganization;
+    final location = controller.state.deviceAssignment!.location!;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -25,9 +26,15 @@ class HomeScreen extends ConsumerWidget {
           children: [
             _InfoCard(
               title: 'Organizzazione',
-              value: organization?.organizationName ?? 'Nessuna selezionata',
-              detail: session.role ?? 'Contesto tenant non attivo',
+              value: organization?.organizationName ?? 'Tenant attivo',
+              detail: session.role ?? 'Ruolo non disponibile',
               icon: Icons.apartment,
+            ),
+            _InfoCard(
+              title: 'Location operativa',
+              value: location.name,
+              detail: '${location.code} · ${location.timezone}',
+              icon: Icons.storefront_outlined,
             ),
             _InfoCard(
               title: 'Dispositivo',
@@ -41,26 +48,14 @@ class HomeScreen extends ConsumerWidget {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Contesto operativo',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                const ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.location_off_outlined),
-                  title: Text(
-                    'Location non disponibile nel contratto corrente',
-                  ),
-                  subtitle: Text(
-                    'GET /devices/me non restituisce l’assegnazione alla location. '
-                    'Il Blocco 02 completerà il setup quando il backend esporrà il dato al dispositivo corrente.',
-                  ),
-                ),
-              ],
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.check_circle_outline),
+              title: const Text('Postazione pronta'),
+              subtitle: Text(
+                'Il dispositivo è assegnato alla location ${location.name}. '
+                'Catalogo e funzioni operative possono usare il locationId ${location.id}.',
+              ),
             ),
           ),
         ),
@@ -112,6 +107,7 @@ class _InfoCard extends StatelessWidget {
     required this.detail,
     required this.icon,
   });
+
   final String title;
   final String value;
   final String detail;

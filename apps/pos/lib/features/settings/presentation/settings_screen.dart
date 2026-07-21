@@ -30,7 +30,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final config = ref.watch(appConfigProvider);
     final authController = ref.watch(authControllerProvider);
-    final session = authController.state.session!;
+    final state = authController.state;
+    final session = state.session!;
+    final contextAssignment = state.deviceAssignment;
+    final location = contextAssignment?.location;
     if (_deviceName.text.isEmpty) {
       _deviceName.text = session.device.name;
     }
@@ -70,6 +73,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   label: 'Modello',
                   value: session.device.model ?? 'Non disponibile',
                 ),
+                _Row(
+                  label: 'Stato operativo',
+                  value:
+                      contextAssignment?.operationalStatus.wireValue ??
+                      state.status.name,
+                ),
+                _Row(
+                  label: 'Organization ID',
+                  value: session.organizationId ?? 'Non selezionata',
+                ),
+                _Row(
+                  label: 'Location ID',
+                  value: location?.id ?? 'Non assegnata',
+                ),
+                _Row(
+                  label: 'Location',
+                  value: location == null
+                      ? 'Non disponibile'
+                      : '${location.code} — ${location.name}',
+                ),
               ],
             ),
           ),
@@ -92,10 +115,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
-                  onPressed: authController.state.busy
+                  onPressed: state.busy
                       ? null
                       : () => authController.updateDeviceName(_deviceName.text),
                   child: const Text('Aggiorna dispositivo'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: state.busy
+                      ? null
+                      : authController.refreshOperationalContext,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Aggiorna contesto operativo'),
                 ),
               ],
             ),
@@ -145,7 +176,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: 16),
         OutlinedButton.icon(
-          onPressed: authController.state.busy ? null : authController.logout,
+          onPressed: state.busy ? null : authController.logout,
           icon: const Icon(Icons.logout),
           label: const Text('Esci'),
         ),
@@ -156,6 +187,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
 class _Row extends StatelessWidget {
   const _Row({required this.label, required this.value});
+
   final String label;
   final String value;
 

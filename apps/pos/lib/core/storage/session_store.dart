@@ -9,18 +9,28 @@ class SessionStore {
   static const _expiresInKey = 'fluxa.expires_in';
   static const _installationIdKey = 'fluxa.installation_id';
   static const _themeModeKey = 'fluxa.theme_mode';
+  static const _locationOrganizationIdKey = 'fluxa.location_organization_id';
+  static const _locationIdKey = 'fluxa.location_id';
 
   final SecureKeyValueStore _storage;
   TokenPair? _tokens;
   String? _installationId;
   String? _themeMode;
+  String? _locationOrganizationId;
+  String? _locationId;
 
   TokenPair? get tokens => _tokens;
   String? get accessToken => _tokens?.accessToken;
   String? get refreshToken => _tokens?.refreshToken;
   String? get installationId => _installationId;
   String? get themeMode => _themeMode;
+  String? get locationOrganizationId => _locationOrganizationId;
+  String? get locationId => _locationId;
   bool get hasSession => _tokens?.refreshToken.isNotEmpty == true;
+
+  bool hasReadyLocationFor(String organizationId) =>
+      _locationOrganizationId == organizationId &&
+      _locationId?.isNotEmpty == true;
 
   Future<void> load() async {
     final accessToken = await _storage.read(_accessTokenKey);
@@ -36,6 +46,8 @@ class SessionStore {
     }
     _installationId = await _storage.read(_installationIdKey);
     _themeMode = await _storage.read(_themeModeKey);
+    _locationOrganizationId = await _storage.read(_locationOrganizationIdKey);
+    _locationId = await _storage.read(_locationIdKey);
   }
 
   Future<void> saveTokens(TokenPair tokens) async {
@@ -47,12 +59,37 @@ class SessionStore {
     ]);
   }
 
+  Future<void> saveReadyLocation({
+    required String organizationId,
+    required String locationId,
+  }) async {
+    _locationOrganizationId = organizationId;
+    _locationId = locationId;
+    await Future.wait([
+      _storage.write(_locationOrganizationIdKey, organizationId),
+      _storage.write(_locationIdKey, locationId),
+    ]);
+  }
+
+  Future<void> clearLocationContext() async {
+    _locationOrganizationId = null;
+    _locationId = null;
+    await Future.wait([
+      _storage.delete(_locationOrganizationIdKey),
+      _storage.delete(_locationIdKey),
+    ]);
+  }
+
   Future<void> clearSession() async {
     _tokens = null;
+    _locationOrganizationId = null;
+    _locationId = null;
     await Future.wait([
       _storage.delete(_accessTokenKey),
       _storage.delete(_refreshTokenKey),
       _storage.delete(_expiresInKey),
+      _storage.delete(_locationOrganizationIdKey),
+      _storage.delete(_locationIdKey),
     ]);
   }
 
