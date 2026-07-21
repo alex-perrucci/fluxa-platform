@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../catalog/domain/catalog_models.dart';
 import '../domain/order_models.dart';
@@ -68,7 +69,24 @@ class ActiveOrderPanel extends StatelessWidget {
                 label: const Text('Nuovo ordine'),
               ),
             )
-          else if (controller.activeOrder?.header.status == OrderStatus.open)
+          else if (controller.activeOrder?.header.status ==
+              OrderStatus.open) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('checkout-order-button'),
+                onPressed:
+                    controller.busy ||
+                        controller.activeOrder?.items.isEmpty != false
+                    ? null
+                    : () => context.push(
+                        '/checkout/${controller.activeOrder!.header.id}',
+                      ),
+                icon: const Icon(Icons.point_of_sale),
+                label: const Text('Vai al pagamento'),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: FilledButton.tonalIcon(
@@ -79,6 +97,21 @@ class ActiveOrderPanel extends StatelessWidget {
                     : controller.holdActiveOrder,
                 icon: const Icon(Icons.pause_circle_outline),
                 label: const Text('Metti in attesa'),
+              ),
+            ),
+          ] else if (controller.activeOrder?.header.status ==
+              OrderStatus.awaitingPayment)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('resume-checkout-button'),
+                onPressed: controller.busy
+                    ? null
+                    : () => context.push(
+                        '/checkout/${controller.activeOrder!.header.id}',
+                      ),
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Continua pagamento'),
               ),
             ),
         ],
@@ -137,13 +170,30 @@ class CompactOrderBar extends StatelessWidget {
                 icon: const Icon(Icons.add),
                 label: const Text('Nuovo'),
               )
-            else if (order?.header.status == OrderStatus.open)
-              FilledButton.tonalIcon(
+            else if (order?.header.status == OrderStatus.open) ...[
+              IconButton.filledTonal(
+                tooltip: 'Metti in attesa',
                 onPressed: controller.busy || order?.canHold != true
                     ? null
                     : controller.holdActiveOrder,
                 icon: const Icon(Icons.pause),
-                label: const Text('Attesa'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                key: const Key('compact-checkout-button'),
+                onPressed: controller.busy || order?.items.isEmpty != false
+                    ? null
+                    : () => context.push('/checkout/${order!.header.id}'),
+                icon: const Icon(Icons.point_of_sale),
+                label: const Text('Incassa'),
+              ),
+            ] else if (order?.header.status == OrderStatus.awaitingPayment)
+              FilledButton.icon(
+                onPressed: controller.busy
+                    ? null
+                    : () => context.push('/checkout/${order!.header.id}'),
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Pagamento'),
               ),
           ],
         ),

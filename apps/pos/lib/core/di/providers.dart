@@ -10,6 +10,8 @@ import '../../features/catalog/presentation/catalog_controller.dart';
 import '../../features/device/data/device_api.dart';
 import '../../features/orders/data/orders_api.dart';
 import '../../features/orders/presentation/order_controller.dart';
+import '../../features/payments/data/payments_api.dart';
+import '../../features/payments/presentation/checkout_controller.dart';
 import '../config/app_config.dart';
 import '../network/api_client.dart';
 import '../network/session_expiry_bus.dart';
@@ -55,6 +57,9 @@ final catalogApiProvider = Provider<CatalogApi>(
 final ordersApiProvider = Provider<OrdersApi>(
   (ref) => OrdersApi(ref.watch(apiClientProvider).dio),
 );
+final paymentsApiProvider = Provider<PaymentsApi>(
+  (ref) => PaymentsApi(ref.watch(apiClientProvider).dio),
+);
 final installationIdentityProvider = Provider<InstallationIdentityService>(
   (ref) => InstallationIdentityService(ref.watch(sessionStoreProvider)),
 );
@@ -82,6 +87,9 @@ final catalogControllerProvider = ChangeNotifierProvider<CatalogController>(
 
 final orderControllerProvider = ChangeNotifierProvider<OrderController>(
   (ref) => OrderController(ref.watch(ordersApiProvider)),
+);
+final checkoutControllerProvider = ChangeNotifierProvider<CheckoutController>(
+  (ref) => CheckoutController(ref.watch(paymentsApiProvider)),
 );
 
 final themeControllerProvider = ChangeNotifierProvider<ThemeController>(

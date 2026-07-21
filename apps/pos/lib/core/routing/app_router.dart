@@ -7,6 +7,7 @@ import '../../features/auth/presentation/organization_selection_screen.dart';
 import '../../features/catalog/presentation/catalog_screen.dart';
 import '../../features/device/presentation/operational_blocked_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
+import '../../features/payments/presentation/checkout_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/async_states.dart';
 import 'app_shell.dart';
@@ -55,6 +56,11 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
     GoRoute(
       path: '/operational-setup',
       builder: (context, state) => const OperationalBlockedScreen(),
+    ),
+    GoRoute(
+      path: '/checkout/:orderId',
+      builder: (context, state) =>
+          CheckoutScreen(orderId: state.pathParameters['orderId']!),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => AppShell(navigationShell: shell),

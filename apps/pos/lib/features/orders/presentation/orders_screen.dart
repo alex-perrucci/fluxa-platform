@@ -349,8 +349,10 @@ class _OrderDetailPane extends StatelessWidget {
               emphasized: true,
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 if (order.header.status == OrderStatus.held)
                   FilledButton.icon(
@@ -368,14 +370,31 @@ class _OrderDetailPane extends StatelessWidget {
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Riprendi in cassa'),
                   )
-                else if (order.header.status == OrderStatus.open)
-                  FilledButton.icon(
+                else if (order.header.status == OrderStatus.open) ...[
+                  OutlinedButton.icon(
                     key: const Key('open-order-in-register-button'),
                     onPressed: controller.busy
                         ? null
                         : () => context.go('/home'),
                     icon: const Icon(Icons.point_of_sale),
                     label: const Text('Apri in cassa'),
+                  ),
+                  FilledButton.icon(
+                    key: const Key('checkout-selected-order-button'),
+                    onPressed: controller.busy || order.items.isEmpty
+                        ? null
+                        : () => context.push('/checkout/${order.header.id}'),
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Incassa'),
+                  ),
+                ] else if (order.header.status == OrderStatus.awaitingPayment)
+                  FilledButton.icon(
+                    key: const Key('continue-selected-checkout-button'),
+                    onPressed: controller.busy
+                        ? null
+                        : () => context.push('/checkout/${order.header.id}'),
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Continua pagamento'),
                   ),
               ],
             ),
