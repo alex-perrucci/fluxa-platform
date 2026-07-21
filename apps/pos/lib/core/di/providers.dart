@@ -8,6 +8,9 @@ import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/catalog/data/catalog_api.dart';
 import '../../features/catalog/presentation/catalog_controller.dart';
 import '../../features/device/data/device_api.dart';
+import '../../features/hospitality/data/hospitality_api.dart';
+import '../../features/hospitality/presentation/kitchen_controller.dart';
+import '../../features/hospitality/presentation/table_controller.dart';
 import '../../features/orders/data/orders_api.dart';
 import '../../features/orders/presentation/order_controller.dart';
 import '../../features/payments/data/payments_api.dart';
@@ -60,6 +63,9 @@ final ordersApiProvider = Provider<OrdersApi>(
 final paymentsApiProvider = Provider<PaymentsApi>(
   (ref) => PaymentsApi(ref.watch(apiClientProvider).dio),
 );
+final hospitalityApiProvider = Provider<HospitalityApi>(
+  (ref) => HospitalityApi(ref.watch(apiClientProvider).dio),
+);
 final installationIdentityProvider = Provider<InstallationIdentityService>(
   (ref) => InstallationIdentityService(ref.watch(sessionStoreProvider)),
 );
@@ -90,6 +96,15 @@ final orderControllerProvider = ChangeNotifierProvider<OrderController>(
 );
 final checkoutControllerProvider = ChangeNotifierProvider<CheckoutController>(
   (ref) => CheckoutController(ref.watch(paymentsApiProvider)),
+);
+final tableControllerProvider = ChangeNotifierProvider<TableController>(
+  (ref) => TableController(
+    ref.watch(hospitalityApiProvider),
+    ref.watch(ordersApiProvider),
+  ),
+);
+final kitchenControllerProvider = ChangeNotifierProvider<KitchenController>(
+  (ref) => KitchenController(ref.watch(hospitalityApiProvider)),
 );
 
 final themeControllerProvider = ChangeNotifierProvider<ThemeController>(

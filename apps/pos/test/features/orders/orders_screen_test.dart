@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/features/device/domain/device_assignment_models.dart';
+import 'package:fluxa_pos/features/hospitality/presentation/kitchen_controller.dart';
 import 'package:fluxa_pos/features/orders/data/orders_api.dart';
 import 'package:fluxa_pos/features/orders/domain/order_models.dart';
 import 'package:fluxa_pos/features/orders/presentation/order_controller.dart';
 import 'package:fluxa_pos/features/orders/presentation/orders_screen.dart';
 
+import '../hospitality/fakes.dart';
+
 void main() {
   testWidgets('shows held orders and their resume action', (tester) async {
     final gateway = _WidgetOrdersGateway();
     final controller = OrderController(gateway);
+    final kitchenController = KitchenController(FakeHospitalityGateway());
     await controller.bindLocation('location-1');
 
     await tester.pumpWidget(
@@ -17,6 +21,7 @@ void main() {
         home: Scaffold(
           body: OrdersView(
             controller: controller,
+            kitchenController: kitchenController,
             location: const OperationalLocation(
               id: 'location-1',
               code: 'PARMA',
