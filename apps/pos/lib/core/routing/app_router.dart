@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/organization_selection_screen.dart';
-import '../../features/device/presentation/operational_blocked_screen.dart';
 import '../../features/catalog/presentation/catalog_screen.dart';
-import '../../features/orders/presentation/orders_placeholder_screen.dart';
+import '../../features/device/presentation/operational_blocked_screen.dart';
+import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/async_states.dart';
 import 'app_shell.dart';
@@ -71,7 +71,7 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/orders',
-              builder: (context, state) => const OrdersPlaceholderScreen(),
+              builder: (context, state) => const OrdersScreen(),
             ),
           ],
         ),

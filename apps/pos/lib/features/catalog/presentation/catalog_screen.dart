@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../device/domain/device_assignment_models.dart';
+import '../../orders/presentation/order_composer.dart';
+import '../../orders/presentation/order_controller.dart';
 import '../domain/catalog_models.dart';
 import 'catalog_controller.dart';
 
@@ -15,12 +17,14 @@ class CatalogScreen extends ConsumerStatefulWidget {
 }
 
 class _CatalogScreenState extends ConsumerState<CatalogScreen> {
-  String? _scheduledLocationId;
+  String? _scheduledCatalogLocationId;
+  String? _scheduledOrderLocationId;
 
   @override
   Widget build(BuildContext context) {
     final authController = ref.watch(authControllerProvider);
     final catalogController = ref.watch(catalogControllerProvider);
+    final orderController = ref.watch(orderControllerProvider);
     final location = authController.state.deviceAssignment?.location;
 
     if (location == null) {
@@ -31,22 +35,48 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       );
     }
 
-    _scheduleLoad(catalogController, location.id);
-    return CatalogView(controller: catalogController, location: location);
+    _scheduleCatalogLoad(catalogController, location.id);
+    _scheduleOrderBind(orderController, location.id);
+    if (catalogController.locationId != location.id ||
+        orderController.locationId != location.id) {
+      return const FluxaLoadingView(label: 'Allineamento contesto operativo');
+    }
+    return CatalogView(
+      controller: catalogController,
+      orderController: orderController,
+      location: location,
+    );
   }
 
-  void _scheduleLoad(CatalogController controller, String locationId) {
+  void _scheduleCatalogLoad(CatalogController controller, String locationId) {
     if (controller.locationId == locationId ||
-        _scheduledLocationId == locationId) {
+        _scheduledCatalogLocationId == locationId) {
       return;
     }
-    _scheduledLocationId = locationId;
+    _scheduledCatalogLocationId = locationId;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await controller.ensureLoaded(locationId);
       } finally {
-        if (mounted && _scheduledLocationId == locationId) {
-          setState(() => _scheduledLocationId = null);
+        if (mounted && _scheduledCatalogLocationId == locationId) {
+          setState(() => _scheduledCatalogLocationId = null);
+        }
+      }
+    });
+  }
+
+  void _scheduleOrderBind(OrderController controller, String locationId) {
+    if (controller.locationId == locationId ||
+        _scheduledOrderLocationId == locationId) {
+      return;
+    }
+    _scheduledOrderLocationId = locationId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await controller.bindLocation(locationId);
+      } finally {
+        if (mounted && _scheduledOrderLocationId == locationId) {
+          setState(() => _scheduledOrderLocationId = null);
         }
       }
     });
@@ -56,101 +86,166 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 class CatalogView extends StatelessWidget {
   const CatalogView({
     required this.controller,
+    required this.orderController,
     required this.location,
     super.key,
   });
 
   final CatalogController controller;
+  final OrderController orderController;
   final OperationalLocation location;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: controller,
-    builder: (context, child) {
-      final snapshot = controller.snapshot;
-      if (controller.isLoading && snapshot == null) {
-        return const FluxaLoadingView(label: 'Caricamento catalogo');
-      }
-      if (controller.status == CatalogLoadStatus.failure && snapshot == null) {
-        return _CatalogFailureView(
-          message:
-              controller.errorMessage ?? 'Impossibile recuperare il catalogo.',
-          onRetry: controller.refresh,
+    builder: (context, child) => AnimatedBuilder(
+      animation: orderController,
+      builder: (context, child) {
+        final snapshot = controller.snapshot;
+        if (controller.isLoading && snapshot == null) {
+          return const FluxaLoadingView(label: 'Caricamento catalogo');
+        }
+        if (controller.status == CatalogLoadStatus.failure &&
+            snapshot == null) {
+          return _CatalogFailureView(
+            message:
+                controller.errorMessage ??
+                'Impossibile recuperare il catalogo.',
+            onRetry: controller.refresh,
+          );
+        }
+        if (snapshot == null) {
+          return const FluxaEmptyView(
+            icon: Icons.inventory_2_outlined,
+            title: 'Catalogo non ancora caricato',
+            message:
+                'Il catalogo della location verrà caricato automaticamente.',
+          );
+        }
+        return _CatalogReadyView(
+          controller: controller,
+          orderController: orderController,
+          location: location,
+          snapshot: snapshot,
         );
-      }
-      if (snapshot == null) {
-        return const FluxaEmptyView(
-          icon: Icons.inventory_2_outlined,
-          title: 'Catalogo non ancora caricato',
-          message: 'Il catalogo della location verrà caricato automaticamente.',
-        );
-      }
-      return _CatalogReadyView(
-        controller: controller,
-        location: location,
-        snapshot: snapshot,
-      );
-    },
+      },
+    ),
   );
 }
 
 class _CatalogReadyView extends StatelessWidget {
   const _CatalogReadyView({
     required this.controller,
+    required this.orderController,
     required this.location,
     required this.snapshot,
   });
 
   final CatalogController controller;
+  final OrderController orderController;
+  final OperationalLocation location;
+  final CatalogSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(20),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final browser = _CatalogBrowser(
+          controller: controller,
+          orderController: orderController,
+          location: location,
+          snapshot: snapshot,
+        );
+        if (constraints.maxWidth >= 1120) {
+          return Row(
+            children: [
+              Expanded(child: browser),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 390,
+                child: ActiveOrderPanel(
+                  controller: orderController,
+                  currency: snapshot.currency,
+                ),
+              ),
+            ],
+          );
+        }
+        return Column(
+          children: [
+            CompactOrderBar(
+              controller: orderController,
+              currency: snapshot.currency,
+            ),
+            Expanded(child: browser),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _CatalogBrowser extends StatelessWidget {
+  const _CatalogBrowser({
+    required this.controller,
+    required this.orderController,
+    required this.location,
+    required this.snapshot,
+  });
+
+  final CatalogController controller;
+  final OrderController orderController;
   final OperationalLocation location;
   final CatalogSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) {
     final products = controller.visibleProducts;
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CatalogHeader(
-            location: location,
-            snapshot: snapshot,
-            loading: controller.isLoading,
-            onRefresh: controller.refresh,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CatalogHeader(
+          location: location,
+          snapshot: snapshot,
+          loading: controller.isLoading,
+          onRefresh: controller.refresh,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          key: const Key('catalog-search-field'),
+          onChanged: controller.setSearchQuery,
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search),
+            hintText: 'Cerca nome, codice, SKU, barcode o variante',
+            border: OutlineInputBorder(),
           ),
-          const SizedBox(height: 16),
-          TextField(
-            key: const Key('catalog-search-field'),
-            onChanged: controller.setSearchQuery,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Cerca nome, codice, SKU, barcode o variante',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _CategorySelector(
-            categories: controller.categories,
-            selectedCategoryId: controller.selectedCategoryId,
-            onSelected: controller.selectCategory,
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: products.isEmpty
-                ? FluxaEmptyView(
-                    icon: Icons.search_off,
-                    title: controller.searchQuery.trim().isEmpty
-                        ? 'Catalogo vuoto'
-                        : 'Nessun prodotto trovato',
-                    message: controller.searchQuery.trim().isEmpty
-                        ? 'Non risultano prodotti attivi per questa location.'
-                        : 'Prova con un altro nome, codice, SKU o barcode.',
-                  )
-                : _ProductGrid(products: products, currency: snapshot.currency),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+        _CategorySelector(
+          categories: controller.categories,
+          selectedCategoryId: controller.selectedCategoryId,
+          onSelected: controller.selectCategory,
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: products.isEmpty
+              ? FluxaEmptyView(
+                  icon: Icons.search_off,
+                  title: controller.searchQuery.trim().isEmpty
+                      ? 'Catalogo vuoto'
+                      : 'Nessun prodotto trovato',
+                  message: controller.searchQuery.trim().isEmpty
+                      ? 'Non risultano prodotti attivi per questa location.'
+                      : 'Prova con un altro nome, codice, SKU o barcode.',
+                )
+              : _ProductGrid(
+                  products: products,
+                  currency: snapshot.currency,
+                  orderController: orderController,
+                ),
+        ),
+      ],
     );
   }
 }
@@ -175,7 +270,7 @@ class _CatalogHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Catalogo', style: Theme.of(context).textTheme.headlineMedium),
+            Text('Cassa', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 4),
             Text(
               '${location.name} · ${snapshot.products.length} prodotti · '
@@ -242,10 +337,15 @@ class _CategorySelector extends StatelessWidget {
 }
 
 class _ProductGrid extends StatelessWidget {
-  const _ProductGrid({required this.products, required this.currency});
+  const _ProductGrid({
+    required this.products,
+    required this.currency,
+    required this.orderController,
+  });
 
   final List<CatalogProduct> products;
   final String currency;
+  final OrderController orderController;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -266,18 +366,26 @@ class _ProductGrid extends StatelessWidget {
           childAspectRatio: columns == 1 ? 2.45 : 0.82,
         ),
         itemCount: products.length,
-        itemBuilder: (context, index) =>
-            _ProductCard(product: products[index], currency: currency),
+        itemBuilder: (context, index) => _ProductCard(
+          product: products[index],
+          currency: currency,
+          orderController: orderController,
+        ),
       );
     },
   );
 }
 
 class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.product, required this.currency});
+  const _ProductCard({
+    required this.product,
+    required this.currency,
+    required this.orderController,
+  });
 
   final CatalogProduct product;
   final String currency;
+  final OrderController orderController;
 
   @override
   Widget build(BuildContext context) {
@@ -290,7 +398,8 @@ class _ProductCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         key: Key('catalog-product-${product.id}'),
-        onTap: () => _showProductDetails(context),
+        onTap: () async =>
+            showAddProductDialog(context, orderController, product, currency),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -328,16 +437,6 @@ class _ProductCard extends StatelessWidget {
       ),
     );
   }
-
-  Future<void> _showProductDetails(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) =>
-          _ProductDetailsSheet(product: product, currency: currency),
-    );
-  }
 }
 
 class _ProductImage extends StatelessWidget {
@@ -364,66 +463,6 @@ class _ProductImage extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ProductDetailsSheet extends StatelessWidget {
-  const _ProductDetailsSheet({required this.product, required this.currency});
-
-  final CatalogProduct product;
-  final String currency;
-
-  @override
-  Widget build(BuildContext context) => SafeArea(
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(product.name, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text('${product.code} · ${product.unit.label}'),
-          if (product.description != null) ...[
-            const SizedBox(height: 12),
-            Text(product.description!),
-          ],
-          const SizedBox(height: 16),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Prezzo base'),
-            subtitle: Text(product.vat.displayRate),
-            trailing: Text(
-              product.price == null
-                  ? 'Non disponibile'
-                  : formatCatalogMoney(product.price!.amountCents, currency),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          if (product.variants.isNotEmpty) ...[
-            const Divider(),
-            Text('Varianti', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            ...product.variants.map(
-              (variant) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(variant.name),
-                subtitle: Text(
-                  [variant.code, ?variant.sku, ?variant.barcode].join(' · '),
-                ),
-                trailing: Text(
-                  variant.price == null
-                      ? 'Non disponibile'
-                      : formatCatalogMoney(
-                          variant.price!.amountCents,
-                          currency,
-                        ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    ),
-  );
 }
 
 class _CatalogFailureView extends StatelessWidget {

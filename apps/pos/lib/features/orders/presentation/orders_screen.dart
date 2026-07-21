@@ -1,0 +1,449 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/di/providers.dart';
+import '../../../core/widgets/async_states.dart';
+import '../../device/domain/device_assignment_models.dart';
+import '../domain/order_models.dart';
+import 'order_controller.dart';
+
+class OrdersScreen extends ConsumerStatefulWidget {
+  const OrdersScreen({super.key});
+
+  @override
+  ConsumerState<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends ConsumerState<OrdersScreen> {
+  String? _scheduledLocationId;
+
+  @override
+  Widget build(BuildContext context) {
+    final authController = ref.watch(authControllerProvider);
+    final orderController = ref.watch(orderControllerProvider);
+    final location = authController.state.deviceAssignment?.location;
+    if (location == null) {
+      return const FluxaEmptyView(
+        icon: Icons.storefront_outlined,
+        title: 'Location non disponibile',
+        message: 'Completa il contesto operativo prima di aprire gli ordini.',
+      );
+    }
+    _scheduleBind(orderController, location.id);
+    if (orderController.locationId != location.id) {
+      return const FluxaLoadingView(label: 'Allineamento ordini');
+    }
+    return OrdersView(controller: orderController, location: location);
+  }
+
+  void _scheduleBind(OrderController controller, String locationId) {
+    if (controller.locationId == locationId ||
+        _scheduledLocationId == locationId) {
+      return;
+    }
+    _scheduledLocationId = locationId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await controller.bindLocation(locationId);
+      } finally {
+        if (mounted && _scheduledLocationId == locationId) {
+          setState(() => _scheduledLocationId = null);
+        }
+      }
+    });
+  }
+}
+
+class OrdersView extends StatelessWidget {
+  const OrdersView({
+    required this.controller,
+    required this.location,
+    super.key,
+  });
+
+  final OrderController controller;
+  final OperationalLocation location;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, child) => Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _OrdersHeader(controller: controller, location: location),
+          if (controller.errorMessage != null) ...[
+            const SizedBox(height: 12),
+            _MessageCard(
+              message: controller.errorMessage!,
+              error: true,
+              onDismiss: controller.clearMessages,
+            ),
+          ] else if (controller.noticeMessage != null) ...[
+            const SizedBox(height: 12),
+            _MessageCard(
+              message: controller.noticeMessage!,
+              error: false,
+              onDismiss: controller.clearMessages,
+            ),
+          ],
+          const SizedBox(height: 12),
+          _StatusFilters(controller: controller),
+          const SizedBox(height: 12),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final list = _OrdersList(controller: controller);
+                final detail = _OrderDetailPane(controller: controller);
+                if (constraints.maxWidth >= 980) {
+                  return Row(
+                    children: [
+                      SizedBox(width: 420, child: list),
+                      const VerticalDivider(width: 24),
+                      Expanded(child: detail),
+                    ],
+                  );
+                }
+                return controller.activeOrder == null ? list : detail;
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _OrdersHeader extends StatelessWidget {
+  const _OrdersHeader({required this.controller, required this.location});
+
+  final OrderController controller;
+  final OperationalLocation location;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Ordini', style: Theme.of(context).textTheme.headlineMedium),
+            Text('${location.name} · ${controller.orders.length} visualizzati'),
+          ],
+        ),
+      ),
+      IconButton.filledTonal(
+        key: const Key('orders-refresh-button'),
+        tooltip: 'Aggiorna ordini',
+        onPressed: controller.busy ? null : controller.refreshOrders,
+        icon: controller.listStatus == OrdersLoadStatus.loading
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.refresh),
+      ),
+    ],
+  );
+}
+
+class _StatusFilters extends StatelessWidget {
+  const _StatusFilters({required this.controller});
+
+  final OrderController controller;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 44,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: FilterChip(
+            key: const Key('orders-filter-all'),
+            selected: controller.statusFilter == null,
+            label: const Text('Tutti'),
+            onSelected: controller.busy
+                ? null
+                : (_) async => controller.setStatusFilter(null),
+          ),
+        ),
+        ...OrderStatus.values.map(
+          (status) => Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              key: Key('orders-filter-${status.wireValue}'),
+              selected: controller.statusFilter == status,
+              label: Text(status.label),
+              onSelected: controller.busy
+                  ? null
+                  : (_) async => controller.setStatusFilter(status),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _OrdersList extends StatelessWidget {
+  const _OrdersList({required this.controller});
+
+  final OrderController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller.listStatus == OrdersLoadStatus.loading &&
+        controller.orders.isEmpty) {
+      return const FluxaLoadingView(label: 'Caricamento ordini');
+    }
+    if (controller.listStatus == OrdersLoadStatus.failure &&
+        controller.orders.isEmpty) {
+      return FluxaEmptyView(
+        icon: Icons.cloud_off_outlined,
+        title: 'Ordini non disponibili',
+        message: controller.errorMessage ?? 'Riprova tra poco.',
+      );
+    }
+    if (controller.orders.isEmpty) {
+      return const FluxaEmptyView(
+        icon: Icons.receipt_long_outlined,
+        title: 'Nessun ordine',
+        message: 'Gli ordini creati per questa location compariranno qui.',
+      );
+    }
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListView.separated(
+        key: const Key('orders-list'),
+        itemCount: controller.orders.length,
+        separatorBuilder: (context, index) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final order = controller.orders[index];
+          final selected = controller.activeOrder?.header.id == order.id;
+          return ListTile(
+            key: Key('order-row-${order.id}'),
+            selected: selected,
+            leading: CircleAvatar(child: Text(order.number.split('-').last)),
+            title: Text(order.number),
+            subtitle: Text(
+              '${order.serviceMode.label} · v${order.version} · '
+              '${formatOrderMoney(order.totalCents, order.currency)}',
+            ),
+            trailing: _StatusChip(status: order.status),
+            onTap: controller.busy
+                ? null
+                : () async => controller.selectOrder(order.id),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OrderDetailPane extends StatelessWidget {
+  const _OrderDetailPane({required this.controller});
+
+  final OrderController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final order = controller.activeOrder;
+    if (order == null) {
+      return const FluxaEmptyView(
+        icon: Icons.touch_app_outlined,
+        title: 'Seleziona un ordine',
+        message: 'Apri un ordine per visualizzare righe, stato e totali.',
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.header.number,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      Text(
+                        '${order.header.serviceMode.label} · '
+                        '${order.header.businessDate} · versione ${order.header.version}',
+                      ),
+                    ],
+                  ),
+                ),
+                _StatusChip(status: order.header.status),
+                IconButton(
+                  tooltip: 'Chiudi dettaglio',
+                  onPressed: controller.busy
+                      ? null
+                      : controller.discardCurrentView,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            if (order.header.customerNote != null) ...[
+              const SizedBox(height: 12),
+              Text('Nota: ${order.header.customerNote}'),
+            ],
+            const Divider(height: 24),
+            Expanded(
+              child: order.items.isEmpty
+                  ? const FluxaEmptyView(
+                      icon: Icons.shopping_cart_outlined,
+                      title: 'Ordine vuoto',
+                      message: 'Aggiungi prodotti dalla schermata Cassa.',
+                    )
+                  : ListView.separated(
+                      itemCount: order.items.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = order.items[index];
+                        return ListTile(
+                          title: Text(item.displayName),
+                          subtitle: Text(
+                            '${item.displayQuantity} × '
+                            '${formatOrderMoney(item.unitPriceCents, order.header.currency)}',
+                          ),
+                          trailing: Text(
+                            formatOrderMoney(
+                              item.finalGrossCents,
+                              order.header.currency,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            const Divider(height: 24),
+            _TotalRow(
+              label: 'Subtotale',
+              value: formatOrderMoney(
+                order.header.subtotalCents,
+                order.header.currency,
+              ),
+            ),
+            if (order.header.discountCents > 0)
+              _TotalRow(
+                label: 'Sconti',
+                value:
+                    '-${formatOrderMoney(order.header.discountCents, order.header.currency)}',
+              ),
+            _TotalRow(
+              label: 'Totale',
+              value: formatOrderMoney(
+                order.header.totalCents,
+                order.header.currency,
+              ),
+              emphasized: true,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (order.header.status == OrderStatus.held)
+                  FilledButton.icon(
+                    key: const Key('resume-order-button'),
+                    onPressed: controller.busy
+                        ? null
+                        : () async {
+                            final resumed = await controller.resumeOrder(
+                              order.header.id,
+                            );
+                            if (resumed && context.mounted) {
+                              context.go('/home');
+                            }
+                          },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Riprendi in cassa'),
+                  )
+                else if (order.header.status == OrderStatus.open)
+                  FilledButton.icon(
+                    key: const Key('open-order-in-register-button'),
+                    onPressed: controller.busy
+                        ? null
+                        : () => context.go('/home'),
+                    icon: const Icon(Icons.point_of_sale),
+                    label: const Text('Apri in cassa'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+
+  final OrderStatus status;
+
+  @override
+  Widget build(BuildContext context) => Chip(label: Text(status.label));
+}
+
+class _TotalRow extends StatelessWidget {
+  const _TotalRow({
+    required this.label,
+    required this.value,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final String value;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = emphasized
+        ? Theme.of(context).textTheme.titleLarge
+        : Theme.of(context).textTheme.bodyLarge;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: style)),
+          Text(value, style: style),
+        ],
+      ),
+    );
+  }
+}
+
+class _MessageCard extends StatelessWidget {
+  const _MessageCard({
+    required this.message,
+    required this.error,
+    required this.onDismiss,
+  });
+
+  final String message;
+  final bool error;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      leading: Icon(error ? Icons.error_outline : Icons.check_circle_outline),
+      title: Text(message),
+      trailing: IconButton(
+        tooltip: 'Chiudi',
+        onPressed: onDismiss,
+        icon: const Icon(Icons.close),
+      ),
+    ),
+  );
+}
