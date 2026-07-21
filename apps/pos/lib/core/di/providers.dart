@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/data/auth_api.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/presentation/auth_controller.dart';
+import '../../features/catalog/data/catalog_api.dart';
+import '../../features/catalog/presentation/catalog_controller.dart';
 import '../../features/device/data/device_api.dart';
 import '../config/app_config.dart';
 import '../network/api_client.dart';
@@ -45,6 +47,9 @@ final authApiProvider = Provider<AuthApi>(
 final deviceApiProvider = Provider<DeviceApi>(
   (ref) => DeviceApi(ref.watch(apiClientProvider).dio),
 );
+final catalogApiProvider = Provider<CatalogApi>(
+  (ref) => CatalogApi(ref.watch(apiClientProvider).dio),
+);
 final installationIdentityProvider = Provider<InstallationIdentityService>(
   (ref) => InstallationIdentityService(ref.watch(sessionStoreProvider)),
 );
@@ -64,6 +69,10 @@ final authControllerProvider = ChangeNotifierProvider<AuthController>(
     sessionStore: ref.watch(sessionStoreProvider),
     expiryBus: ref.watch(sessionExpiryBusProvider),
   ),
+);
+
+final catalogControllerProvider = ChangeNotifierProvider<CatalogController>(
+  (ref) => CatalogController(ref.watch(catalogApiProvider)),
 );
 
 final themeControllerProvider = ChangeNotifierProvider<ThemeController>(
