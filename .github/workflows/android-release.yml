@@ -58,7 +58,7 @@ jobs:
           $arguments = @('-ApiBaseUrl', $env:POS_API_BASE_URL, '-Environment', 'production')
           if ('${{ inputs.build_apk }}' -eq 'true') { $arguments += '-BuildApk' }
           ./scripts/build-pos-release.ps1 @arguments
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: fluxa-pos-production-${{ github.sha }}
           path: |
@@ -66,4 +66,4 @@ jobs:
             apps/pos/build/app/outputs/flutter-apk/*-release.apk
             release-symbols/**
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7

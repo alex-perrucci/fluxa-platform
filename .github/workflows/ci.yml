@@ -54,9 +54,5 @@ jobs:
       - run: flutter test
       - run: flutter build apk --debug
       - run: flutter build web --dart-define=FLUXA_ENV=test --dart-define=API_BASE_URL=https://test.invalid/api/v1
-      - uses: actions/upload-artifact@v4
-        with:
-          name: fluxa-pos-debug-${{ github.sha }}
-          path: apps/pos/build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+      # The debug APK is built and validated but is not uploaded on every PR.
+      # Signed downloadable artifacts are produced only by android-release.yml.
