@@ -6,10 +6,15 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.createApplicationContext(FiscalWorkerModule, {
     bufferLogs: true,
   });
-
-  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
+  app.useLogger(logger);
   app.enableShutdownHooks();
-  app.get(Logger).log('Fluxa fiscal worker started');
+  logger.log('Fluxa fiscal worker started');
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  const message =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  console.error(`Fluxa fiscal worker failed to start: ${message}`);
+  process.exitCode = 1;
+});

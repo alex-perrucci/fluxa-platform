@@ -103,7 +103,11 @@
     "test:printing": "jest apps/api/src/printing --runInBand",
     "smoke:printing": "node scripts/smoke-block-07.mjs",
     "test:fiscal": "jest apps/api/src/fiscal --runInBand",
-    "smoke:fiscal": "node scripts/smoke-block-08.mjs"
+    "smoke:fiscal": "node scripts/smoke-block-08.mjs",
+    "security:secrets": "node scripts/check-secrets.mjs",
+    "verify:production": "node scripts/verify-production-config.mjs",
+    "smoke:production": "node scripts/smoke-production.mjs",
+    "verify:ci": "npm run security:secrets && npm run lint && npm test && npm run build"
   },
   "jest": {
     "moduleFileExtensions": [
