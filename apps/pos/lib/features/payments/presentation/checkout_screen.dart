@@ -315,6 +315,16 @@ class _CheckoutSummary extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                key: const Key('fiscalize-checkout-order-button'),
+                onPressed: () => context.push('/fiscalize/${checkout.orderId}'),
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('Fiscalizza con A-Cube'),
+              ),
+            ),
+            const SizedBox(height: 8),
             FilledButton.icon(
               key: const Key('checkout-completed-button'),
               onPressed: () async {

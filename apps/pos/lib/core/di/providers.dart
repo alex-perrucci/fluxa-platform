@@ -8,6 +8,8 @@ import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/catalog/data/catalog_api.dart';
 import '../../features/catalog/presentation/catalog_controller.dart';
 import '../../features/device/data/device_api.dart';
+import '../../features/fiscal/data/fiscal_api.dart';
+import '../../features/fiscal/presentation/fiscal_controller.dart';
 import '../../features/hospitality/data/hospitality_api.dart';
 import '../../features/hospitality/presentation/kitchen_controller.dart';
 import '../../features/hospitality/presentation/table_controller.dart';
@@ -67,6 +69,9 @@ final ordersApiProvider = Provider<OrdersApi>(
 final paymentsApiProvider = Provider<PaymentsApi>(
   (ref) => PaymentsApi(ref.watch(apiClientProvider).dio),
 );
+final fiscalApiProvider = Provider<FiscalApi>(
+  (ref) => FiscalApi(ref.watch(apiClientProvider).dio),
+);
 final hospitalityApiProvider = Provider<HospitalityApi>(
   (ref) => HospitalityApi(ref.watch(apiClientProvider).dio),
 );
@@ -118,6 +123,12 @@ final tableControllerProvider = ChangeNotifierProvider<TableController>(
 );
 final kitchenControllerProvider = ChangeNotifierProvider<KitchenController>(
   (ref) => KitchenController(ref.watch(hospitalityApiProvider)),
+);
+final fiscalControllerProvider = ChangeNotifierProvider<FiscalController>(
+  (ref) => FiscalController(
+    ref.watch(fiscalApiProvider),
+    ref.watch(ordersApiProvider),
+  ),
 );
 final printingControllerProvider = ChangeNotifierProvider<PrintingController>(
   (ref) => PrintingController(

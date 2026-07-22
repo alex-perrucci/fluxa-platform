@@ -6,6 +6,8 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/organization_selection_screen.dart';
 import '../../features/catalog/presentation/catalog_screen.dart';
 import '../../features/device/presentation/operational_blocked_screen.dart';
+import '../../features/fiscal/presentation/fiscal_screen.dart';
+import '../../features/fiscal/presentation/fiscalize_screen.dart';
 import '../../features/hospitality/presentation/kitchen_screen.dart';
 import '../../features/hospitality/presentation/tables_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
@@ -61,6 +63,11 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
       builder: (context, state) => const OperationalBlockedScreen(),
     ),
     GoRoute(
+      path: '/fiscalize/:orderId',
+      builder: (context, state) =>
+          FiscalizeScreen(orderId: state.pathParameters['orderId']!),
+    ),
+    GoRoute(
       path: '/checkout/:orderId',
       builder: (context, state) =>
           CheckoutScreen(orderId: state.pathParameters['orderId']!),
@@ -105,6 +112,14 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
             GoRoute(
               path: '/printing',
               builder: (context, state) => const PrintingScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/fiscal',
+              builder: (context, state) => const FiscalScreen(),
             ),
           ],
         ),
