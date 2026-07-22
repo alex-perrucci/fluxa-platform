@@ -28,6 +28,11 @@ class AppShell extends StatelessWidget {
       label: 'Cucina',
     ),
     NavigationDestination(
+      icon: Icon(Icons.print_outlined),
+      selectedIcon: Icon(Icons.print),
+      label: 'Stampa',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.settings_outlined),
       selectedIcon: Icon(Icons.settings),
       label: 'Impostazioni',

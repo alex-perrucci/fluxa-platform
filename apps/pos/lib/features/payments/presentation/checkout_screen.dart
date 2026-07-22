@@ -6,6 +6,7 @@ import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../orders/domain/order_models.dart';
 import '../../orders/presentation/order_controller.dart';
+import '../../printing/presentation/printing_controller.dart';
 import '../domain/payment_models.dart';
 import 'checkout_controller.dart';
 
@@ -26,6 +27,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final authController = ref.watch(authControllerProvider);
     final orderController = ref.watch(orderControllerProvider);
     final checkoutController = ref.watch(checkoutControllerProvider);
+    final printingController = ref.watch(printingControllerProvider);
     final location = authController.state.deviceAssignment?.location;
     final session = authController.state.session;
 
@@ -83,6 +85,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           orderId: widget.orderId,
           canRecordPayments: canRecordPayments,
           role: session.role,
+          printingController: printingController,
         ),
       ),
     );
@@ -128,6 +131,7 @@ class CheckoutView extends StatelessWidget {
     required this.orderId,
     required this.canRecordPayments,
     required this.role,
+    this.printingController,
     super.key,
   });
 
@@ -136,6 +140,7 @@ class CheckoutView extends StatelessWidget {
   final String orderId;
   final bool canRecordPayments;
   final String? role;
+  final PrintingController? printingController;
 
   @override
   Widget build(BuildContext context) {
@@ -170,6 +175,7 @@ class CheckoutView extends StatelessWidget {
           canRecordPayments: canRecordPayments,
           role: role,
           onOrderRefresh: () => orderController.selectOrder(orderId),
+          printingController: printingController,
         );
         final payments = _PaymentsList(
           checkout: checkout,
@@ -211,6 +217,7 @@ class _CheckoutSummary extends StatelessWidget {
     required this.canRecordPayments,
     required this.role,
     required this.onOrderRefresh,
+    this.printingController,
   });
 
   final CheckoutSession checkout;
@@ -219,6 +226,7 @@ class _CheckoutSummary extends StatelessWidget {
   final bool canRecordPayments;
   final String? role;
   final Future<bool> Function() onOrderRefresh;
+  final PrintingController? printingController;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -291,7 +299,22 @@ class _CheckoutSummary extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 20),
-          if (checkout.isCompleted)
+          if (checkout.isCompleted) ...[
+            if (printingController != null)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const Key('print-payment-receipt-button'),
+                  onPressed: printingController!.busy
+                      ? null
+                      : () => printingController!.requestPaymentReceipt(
+                          checkout.id,
+                        ),
+                  icon: const Icon(Icons.print_outlined),
+                  label: const Text('Stampa riepilogo pagamento'),
+                ),
+              ),
+            const SizedBox(height: 8),
             FilledButton.icon(
               key: const Key('checkout-completed-button'),
               onPressed: () async {
@@ -302,8 +325,8 @@ class _CheckoutSummary extends StatelessWidget {
               },
               icon: const Icon(Icons.check_circle_outline),
               label: const Text('Pagamento completato'),
-            )
-          else if (!checkout.isOpen)
+            ),
+          ] else if (!checkout.isOpen)
             FilledButton.tonalIcon(
               onPressed: () => context.go('/orders'),
               icon: const Icon(Icons.receipt_long_outlined),

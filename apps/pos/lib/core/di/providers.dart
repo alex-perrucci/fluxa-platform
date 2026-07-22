@@ -15,6 +15,10 @@ import '../../features/orders/data/orders_api.dart';
 import '../../features/orders/presentation/order_controller.dart';
 import '../../features/payments/data/payments_api.dart';
 import '../../features/payments/presentation/checkout_controller.dart';
+import '../../features/printing/data/local_printer_mapping_store.dart';
+import '../../features/printing/data/printing_api.dart';
+import '../../features/printing/platform/local_printer_backend.dart';
+import '../../features/printing/presentation/printing_controller.dart';
 import '../config/app_config.dart';
 import '../network/api_client.dart';
 import '../network/session_expiry_bus.dart';
@@ -66,6 +70,15 @@ final paymentsApiProvider = Provider<PaymentsApi>(
 final hospitalityApiProvider = Provider<HospitalityApi>(
   (ref) => HospitalityApi(ref.watch(apiClientProvider).dio),
 );
+final printingApiProvider = Provider<PrintingApi>(
+  (ref) => PrintingApi(ref.watch(apiClientProvider).dio),
+);
+final localPrinterMappingStoreProvider = Provider<LocalPrinterMappingStore>(
+  (ref) => LocalPrinterMappingStore(ref.watch(secureStoreProvider)),
+);
+final localPrinterBackendProvider = Provider(
+  (ref) => createLocalPrinterBackend(),
+);
 final installationIdentityProvider = Provider<InstallationIdentityService>(
   (ref) => InstallationIdentityService(ref.watch(sessionStoreProvider)),
 );
@@ -105,6 +118,13 @@ final tableControllerProvider = ChangeNotifierProvider<TableController>(
 );
 final kitchenControllerProvider = ChangeNotifierProvider<KitchenController>(
   (ref) => KitchenController(ref.watch(hospitalityApiProvider)),
+);
+final printingControllerProvider = ChangeNotifierProvider<PrintingController>(
+  (ref) => PrintingController(
+    ref.watch(printingApiProvider),
+    ref.watch(localPrinterMappingStoreProvider),
+    ref.watch(localPrinterBackendProvider),
+  ),
 );
 
 final themeControllerProvider = ChangeNotifierProvider<ThemeController>(

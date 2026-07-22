@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../device/domain/device_assignment_models.dart';
+import '../../printing/presentation/printing_controller.dart';
 import '../../hospitality/presentation/kitchen_controller.dart';
 import '../domain/order_models.dart';
 import 'order_controller.dart';
@@ -25,6 +26,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final authController = ref.watch(authControllerProvider);
     final orderController = ref.watch(orderControllerProvider);
     final kitchenController = ref.watch(kitchenControllerProvider);
+    final printingController = ref.watch(printingControllerProvider);
     final location = authController.state.deviceAssignment?.location;
     if (location == null) {
       return const FluxaEmptyView(
@@ -42,6 +44,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return OrdersView(
       controller: orderController,
       kitchenController: kitchenController,
+      printingController: printingController,
       location: location,
     );
   }
@@ -85,12 +88,14 @@ class OrdersView extends StatelessWidget {
   const OrdersView({
     required this.controller,
     required this.kitchenController,
+    this.printingController,
     required this.location,
     super.key,
   });
 
   final OrderController controller;
   final KitchenController kitchenController;
+  final PrintingController? printingController;
   final OperationalLocation location;
 
   @override
@@ -127,6 +132,7 @@ class OrdersView extends StatelessWidget {
                 final detail = _OrderDetailPane(
                   controller: controller,
                   kitchenController: kitchenController,
+                  printingController: printingController,
                   locationId: location.id,
                 );
                 if (constraints.maxWidth >= 980) {
@@ -280,11 +286,13 @@ class _OrderDetailPane extends StatelessWidget {
   const _OrderDetailPane({
     required this.controller,
     required this.kitchenController,
+    this.printingController,
     required this.locationId,
   });
 
   final OrderController controller;
   final KitchenController kitchenController;
+  final PrintingController? printingController;
   final String locationId;
 
   @override
@@ -392,6 +400,32 @@ class _OrderDetailPane extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (printingController != null)
+                  OutlinedButton.icon(
+                    key: const Key('print-order-receipt-button'),
+                    onPressed: controller.busy || printingController!.busy
+                        ? null
+                        : () async {
+                            final printed = await printingController!
+                                .requestOrderReceipt(order.header.id);
+                            if (!context.mounted) {
+                              return;
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  printed
+                                      ? printingController!.noticeMessage ??
+                                            'Riepilogo ordine accodato.'
+                                      : printingController!.errorMessage ??
+                                            'Stampa non riuscita.',
+                                ),
+                              ),
+                            );
+                          },
+                    icon: const Icon(Icons.print_outlined),
+                    label: const Text('Stampa riepilogo'),
+                  ),
                 if ((order.header.status == OrderStatus.open ||
                         order.header.status == OrderStatus.held) &&
                     order.items.isNotEmpty)
