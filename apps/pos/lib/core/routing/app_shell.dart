@@ -33,6 +33,11 @@ class AppShell extends StatelessWidget {
       label: 'Stampa',
     ),
     NavigationDestination(
+      icon: Icon(Icons.account_balance_outlined),
+      selectedIcon: Icon(Icons.account_balance),
+      label: 'Fiscale',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.settings_outlined),
       selectedIcon: Icon(Icons.settings),
       label: 'Impostazioni',

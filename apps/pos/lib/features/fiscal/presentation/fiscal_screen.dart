@@ -1,0 +1,765 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/di/providers.dart';
+import '../../../core/widgets/async_states.dart';
+import '../../orders/domain/order_models.dart';
+import '../domain/fiscal_models.dart';
+import 'fiscal_controller.dart';
+
+class FiscalScreen extends ConsumerStatefulWidget {
+  const FiscalScreen({super.key});
+
+  @override
+  ConsumerState<FiscalScreen> createState() => _FiscalScreenState();
+}
+
+class _FiscalScreenState extends ConsumerState<FiscalScreen> {
+  String? _scheduledLocationId;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = ref.watch(authControllerProvider);
+    final controller = ref.watch(fiscalControllerProvider);
+    final location = auth.state.deviceAssignment?.location;
+    final role = auth.state.session?.role;
+    if (!{
+      'OWNER',
+      'ADMIN',
+      'MANAGER',
+      'CASHIER',
+      'ACCOUNTANT',
+      'SUPPORT_READONLY',
+    }.contains(role)) {
+      return const FluxaEmptyView(
+        icon: Icons.lock_outline,
+        title: 'Accesso fiscale non autorizzato',
+        message: 'Il ruolo corrente non può consultare i documenti fiscali.',
+      );
+    }
+    if (location == null) {
+      return const FluxaEmptyView(
+        icon: Icons.storefront_outlined,
+        title: 'Location non disponibile',
+        message:
+            'Completa il contesto operativo prima di aprire i documenti fiscali.',
+      );
+    }
+    _scheduleBind(controller, location.id);
+    if (controller.locationId != location.id) {
+      return const FluxaLoadingView(label: 'Allineamento fiscale');
+    }
+    return FiscalView(
+      controller: controller,
+      locationName: location.name,
+      role: role,
+    );
+  }
+
+  void _scheduleBind(FiscalController controller, String locationId) {
+    if (controller.locationId == locationId ||
+        _scheduledLocationId == locationId) {
+      return;
+    }
+    _scheduledLocationId = locationId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await controller.bindLocation(locationId);
+      } finally {
+        if (mounted && _scheduledLocationId == locationId) {
+          setState(() => _scheduledLocationId = null);
+        }
+      }
+    });
+  }
+}
+
+class FiscalView extends StatelessWidget {
+  const FiscalView({
+    required this.controller,
+    required this.locationName,
+    required this.role,
+    super.key,
+  });
+
+  final FiscalController controller;
+  final String locationName;
+  final String? role;
+
+  bool get _canIssue => {'OWNER', 'ADMIN', 'MANAGER', 'CASHIER'}.contains(role);
+  bool get _canRetry => {'OWNER', 'ADMIN', 'MANAGER'}.contains(role);
+  bool get _canVoid => {'OWNER', 'ADMIN'}.contains(role);
+  bool get _canConfigure => {'OWNER', 'ADMIN'}.contains(role);
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, child) {
+      if (controller.status == FiscalLoadStatus.loading &&
+          controller.documents.isEmpty &&
+          controller.profile == null) {
+        return const FluxaLoadingView(label: 'Caricamento fiscalizzazione');
+      }
+      return ListView(
+        key: const Key('fiscal-screen-list'),
+        padding: const EdgeInsets.all(20),
+        children: [
+          _FiscalHeader(locationName: locationName, controller: controller),
+          const SizedBox(height: 12),
+          if (controller.errorMessage != null)
+            _MessageCard(
+              message: controller.errorMessage!,
+              error: true,
+              onDismiss: controller.clearMessages,
+            )
+          else if (controller.noticeMessage != null)
+            _MessageCard(
+              message: controller.noticeMessage!,
+              error: false,
+              onDismiss: controller.clearMessages,
+            ),
+          if (controller.errorMessage != null ||
+              controller.noticeMessage != null)
+            const SizedBox(height: 12),
+          _FiscalProfileCard(
+            profile: controller.profile,
+            canConfigure: _canConfigure,
+            busy: controller.busy,
+            onConfigure: () => _configureProfile(context),
+          ),
+          const SizedBox(height: 16),
+          _OrdersToFiscalizeCard(
+            orders: controller.ordersToFiscalize,
+            canIssue: _canIssue,
+            busy: controller.busy,
+            onIssue: (order) => _issue(context, order),
+          ),
+          const SizedBox(height: 16),
+          _FiscalFilters(controller: controller),
+          const SizedBox(height: 12),
+          _DocumentsCard(
+            controller: controller,
+            canRetry: _canRetry,
+            canVoid: _canVoid,
+            onRetry: (document) => _retry(context, document),
+            onVoid: (document) => _void(context, document),
+          ),
+        ],
+      );
+    },
+  );
+
+  Future<void> _issue(BuildContext context, OrderHeader order) async {
+    final lotteryCode = await showLotteryCodeDialog(context, order.number);
+    if (lotteryCode == null || !context.mounted) return;
+    final success = await controller.issueOrder(
+      order.id,
+      lotteryCode: lotteryCode,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? controller.noticeMessage ?? 'Fiscalizzazione accodata.'
+                : controller.errorMessage ?? 'Fiscalizzazione non riuscita.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _retry(BuildContext context, FiscalDocument document) async {
+    final success = await controller.retryDocument(document);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Documento rimesso in coda.'
+                : controller.errorMessage ?? 'Retry non riuscito.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _void(BuildContext context, FiscalDocument document) async {
+    final reason = await showVoidFiscalDialog(context);
+    if (reason == null || !context.mounted) return;
+    final success = await controller.voidDocument(document, reason);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Annullamento fiscale accodato.'
+                : controller.errorMessage ?? 'Annullamento non riuscito.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _configureProfile(BuildContext context) async {
+    final values = await showAcubeSandboxDialog(context, controller.profile);
+    if (values == null || !context.mounted) return;
+    final success = await controller.configureAcubeSandbox(
+      fiscalId: values.fiscalId,
+      receiptEmail: values.receiptEmail,
+      displayName: values.displayName,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Profilo A-Cube sandbox salvato.'
+                : controller.errorMessage ?? 'Configurazione non riuscita.',
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _FiscalHeader extends StatelessWidget {
+  const _FiscalHeader({required this.locationName, required this.controller});
+  final String locationName;
+  final FiscalController controller;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Documenti fiscali',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            Text('$locationName · ${controller.documents.length} documenti'),
+          ],
+        ),
+      ),
+      IconButton.filledTonal(
+        key: const Key('fiscal-refresh-button'),
+        tooltip: 'Aggiorna fiscalizzazione',
+        onPressed: controller.busy ? null : () => controller.refresh(),
+        icon: const Icon(Icons.refresh),
+      ),
+    ],
+  );
+}
+
+class _FiscalProfileCard extends StatelessWidget {
+  const _FiscalProfileCard({
+    required this.profile,
+    required this.canConfigure,
+    required this.busy,
+    required this.onConfigure,
+  });
+  final FiscalProfile? profile;
+  final bool canConfigure;
+  final bool busy;
+  final VoidCallback onConfigure;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_balance_outlined),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Profilo fiscale',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              if (profile != null)
+                Chip(label: Text(profile!.enabled ? 'Attivo' : 'Disabilitato')),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (profile == null)
+            const Text('Nessun profilo fiscale configurato per questa sede.')
+          else ...[
+            Text('${profile!.provider.label} · ${profile!.environment.label}'),
+            Text('Partita IVA: ${profile!.maskedFiscalId}'),
+            if (profile!.displayName != null) Text(profile!.displayName!),
+            if (profile!.receiptEmail != null)
+              Text('Invio ricevute: ${profile!.receiptEmail}'),
+          ],
+          if (canConfigure) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const Key('configure-acube-sandbox-button'),
+              onPressed: busy ? null : onConfigure,
+              icon: const Icon(Icons.settings_outlined),
+              label: const Text('Configura A-Cube sandbox'),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _OrdersToFiscalizeCard extends StatelessWidget {
+  const _OrdersToFiscalizeCard({
+    required this.orders,
+    required this.canIssue,
+    required this.busy,
+    required this.onIssue,
+  });
+  final List<OrderHeader> orders;
+  final bool canIssue;
+  final bool busy;
+  final ValueChanged<OrderHeader> onIssue;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ordini pagati da fiscalizzare',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          if (orders.isEmpty)
+            const Text('Nessun ordine pagato in attesa di fiscalizzazione.')
+          else
+            ...orders.map(
+              (order) => ListTile(
+                key: Key('fiscal-pending-order-${order.id}'),
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: Text(order.number),
+                subtitle: Text(
+                  '${order.businessDate} · ${formatFiscalMoney(order.totalCents, order.currency)}',
+                ),
+                trailing: FilledButton.tonal(
+                  onPressed: !canIssue || busy ? null : () => onIssue(order),
+                  child: const Text('Fiscalizza'),
+                ),
+              ),
+            ),
+          if (!canIssue && orders.isNotEmpty)
+            const Text(
+              'Il ruolo corrente può consultare i documenti ma non emetterli.',
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _FiscalFilters extends StatelessWidget {
+  const _FiscalFilters({required this.controller});
+  final FiscalController controller;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      FilterChip(
+        selected: controller.typeFilter == null,
+        label: const Text('Tutti i tipi'),
+        onSelected: controller.busy
+            ? null
+            : (_) => controller.setTypeFilter(null),
+      ),
+      ...FiscalDocumentType.values.map(
+        (type) => FilterChip(
+          selected: controller.typeFilter == type,
+          label: Text(type.label),
+          onSelected: controller.busy
+              ? null
+              : (_) => controller.setTypeFilter(type),
+        ),
+      ),
+      const SizedBox(width: 8),
+      FilterChip(
+        selected: controller.statusFilter == null,
+        label: const Text('Tutti gli stati'),
+        onSelected: controller.busy
+            ? null
+            : (_) => controller.setStatusFilter(null),
+      ),
+      ...FiscalDocumentStatus.values.map(
+        (status) => FilterChip(
+          selected: controller.statusFilter == status,
+          label: Text(status.label),
+          onSelected: controller.busy
+              ? null
+              : (_) => controller.setStatusFilter(status),
+        ),
+      ),
+    ],
+  );
+}
+
+class _DocumentsCard extends StatelessWidget {
+  const _DocumentsCard({
+    required this.controller,
+    required this.canRetry,
+    required this.canVoid,
+    required this.onRetry,
+    required this.onVoid,
+  });
+  final FiscalController controller;
+  final bool canRetry;
+  final bool canVoid;
+  final ValueChanged<FiscalDocument> onRetry;
+  final ValueChanged<FiscalDocument> onVoid;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = controller.selectedDocument;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Storico fiscale',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            if (controller.documents.isEmpty)
+              const Text('Nessun documento fiscale disponibile.')
+            else
+              ...controller.documents.map(
+                (document) => ListTile(
+                  key: Key('fiscal-document-${document.id}'),
+                  selected: selected?.id == document.id,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    document.type == FiscalDocumentType.sale
+                        ? Icons.receipt_long_outlined
+                        : Icons.undo_outlined,
+                  ),
+                  title: Text(document.documentNumber ?? document.id),
+                  subtitle: Text(
+                    '${document.type.label} · ${formatFiscalMoney(document.totalCents, document.currency)} · v${document.version}',
+                  ),
+                  trailing: Chip(label: Text(document.status.label)),
+                  onTap: controller.busy
+                      ? null
+                      : () => controller.selectDocument(document.id),
+                ),
+              ),
+            if (selected != null) ...[
+              const Divider(height: 28),
+              _FiscalDocumentDetail(
+                document: selected,
+                canRetry: canRetry,
+                canVoid: canVoid,
+                busy: controller.busy,
+                onRetry: () => onRetry(selected),
+                onVoid: () => onVoid(selected),
+                onClose: controller.clearSelection,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FiscalDocumentDetail extends StatelessWidget {
+  const _FiscalDocumentDetail({
+    required this.document,
+    required this.canRetry,
+    required this.canVoid,
+    required this.busy,
+    required this.onRetry,
+    required this.onVoid,
+    required this.onClose,
+  });
+  final FiscalDocument document;
+  final bool canRetry;
+  final bool canVoid;
+  final bool busy;
+  final VoidCallback onRetry;
+  final VoidCallback onVoid;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Dettaglio documento',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          IconButton(onPressed: onClose, icon: const Icon(Icons.close)),
+        ],
+      ),
+      Text(
+        'Provider: ${document.provider.label} · ${document.environment.label}',
+      ),
+      Text('Ordine: ${document.orderId}'),
+      Text(
+        'Totale: ${formatFiscalMoney(document.totalCents, document.currency)}',
+      ),
+      Text(
+        'Contanti: ${formatFiscalMoney(document.cashPaymentCents, document.currency)}',
+      ),
+      Text(
+        'Elettronico: ${formatFiscalMoney(document.electronicPaymentCents, document.currency)}',
+      ),
+      if (document.documentNumber != null)
+        Text('Numero fiscale: ${document.documentNumber}'),
+      if (document.documentDate != null)
+        Text('Data documento: ${document.documentDate}'),
+      if (document.externalId != null)
+        Text('ID A-Cube: ${document.externalId}'),
+      if (document.errorMessage != null) ...[
+        const SizedBox(height: 8),
+        Text(
+          '${document.errorCode ?? 'ERRORE'}: ${document.errorMessage}',
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ],
+      if (document.items.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        Text('Righe', style: Theme.of(context).textTheme.titleMedium),
+        ...document.items.map(
+          (item) => ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(item.description),
+            subtitle: Text('${item.displayQuantity} · IVA ${item.vatRateCode}'),
+            trailing: Text(
+              formatFiscalMoney(item.finalGrossCents, document.currency),
+            ),
+          ),
+        ),
+      ],
+      if (document.attemptHistory.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        Text('Tentativi', style: Theme.of(context).textTheme.titleMedium),
+        ...document.attemptHistory.map(
+          (attempt) => ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: CircleAvatar(child: Text('${attempt.attemptNo}')),
+            title: Text(attempt.outcome),
+            subtitle: attempt.errorMessage == null
+                ? null
+                : Text(
+                    '${attempt.errorCode ?? 'ERRORE'} · ${attempt.errorMessage}',
+                  ),
+          ),
+        ),
+      ],
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (document.canRetry)
+            FilledButton.tonalIcon(
+              key: const Key('fiscal-retry-button'),
+              onPressed: !canRetry || busy ? null : onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Riprova'),
+            ),
+          if (document.canVoid)
+            OutlinedButton.icon(
+              key: const Key('fiscal-void-button'),
+              onPressed: !canVoid || busy ? null : onVoid,
+              icon: const Icon(Icons.undo),
+              label: const Text('Annulla documento'),
+            ),
+        ],
+      ),
+    ],
+  );
+}
+
+class _MessageCard extends StatelessWidget {
+  const _MessageCard({
+    required this.message,
+    required this.error,
+    required this.onDismiss,
+  });
+  final String message;
+  final bool error;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      leading: Icon(error ? Icons.error_outline : Icons.check_circle_outline),
+      title: Text(message),
+      trailing: IconButton(onPressed: onDismiss, icon: const Icon(Icons.close)),
+    ),
+  );
+}
+
+Future<String?> showLotteryCodeDialog(
+  BuildContext context,
+  String orderNumber,
+) async {
+  final controller = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Fiscalizza $orderNumber'),
+      content: TextField(
+        controller: controller,
+        textCapitalization: TextCapitalization.characters,
+        maxLength: 8,
+        decoration: const InputDecoration(
+          labelText: 'Codice lotteria facoltativo',
+          helperText: 'Lascia vuoto se non richiesto',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annulla'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          child: const Text('Fiscalizza'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  return result;
+}
+
+Future<String?> showVoidFiscalDialog(BuildContext context) async {
+  final controller = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Annullamento fiscale'),
+      content: TextField(
+        controller: controller,
+        maxLength: 300,
+        minLines: 2,
+        maxLines: 4,
+        decoration: const InputDecoration(labelText: 'Motivo'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Indietro'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          child: const Text('Conferma'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  return result;
+}
+
+class AcubeSandboxValues {
+  const AcubeSandboxValues({
+    required this.fiscalId,
+    this.receiptEmail,
+    this.displayName,
+  });
+  final String fiscalId;
+  final String? receiptEmail;
+  final String? displayName;
+}
+
+Future<AcubeSandboxValues?> showAcubeSandboxDialog(
+  BuildContext context,
+  FiscalProfile? profile,
+) async {
+  final fiscalId = TextEditingController(text: profile?.fiscalId ?? '');
+  final email = TextEditingController(text: profile?.receiptEmail ?? '');
+  final name = TextEditingController(text: profile?.displayName ?? '');
+  final result = await showDialog<AcubeSandboxValues>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Configura A-Cube sandbox'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.science_outlined),
+              title: Text('Ambiente SANDBOX'),
+              subtitle: Text(
+                'Le credenziali A-Cube restano nei segreti del fiscal-worker.',
+              ),
+            ),
+            TextField(
+              controller: fiscalId,
+              keyboardType: TextInputType.number,
+              maxLength: 11,
+              decoration: const InputDecoration(
+                labelText: 'Partita IVA / fiscal ID',
+              ),
+            ),
+            TextField(
+              controller: name,
+              decoration: const InputDecoration(
+                labelText: 'Denominazione facoltativa',
+              ),
+            ),
+            TextField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email ricevute facoltativa',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annulla'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            AcubeSandboxValues(
+              fiscalId: fiscalId.text.trim(),
+              receiptEmail: email.text.trim().isEmpty
+                  ? null
+                  : email.text.trim(),
+              displayName: name.text.trim().isEmpty ? null : name.text.trim(),
+            ),
+          ),
+          child: const Text('Salva'),
+        ),
+      ],
+    ),
+  );
+  fiscalId.dispose();
+  email.dispose();
+  name.dispose();
+  return result;
+}

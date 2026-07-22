@@ -426,6 +426,15 @@ class _OrderDetailPane extends StatelessWidget {
                     icon: const Icon(Icons.print_outlined),
                     label: const Text('Stampa riepilogo'),
                   ),
+                if (order.header.status == OrderStatus.paid)
+                  FilledButton.tonalIcon(
+                    key: const Key('fiscalize-paid-order-button'),
+                    onPressed: controller.busy
+                        ? null
+                        : () => context.push('/fiscalize/${order.header.id}'),
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: const Text('Fiscalizza'),
+                  ),
                 if ((order.header.status == OrderStatus.open ||
                         order.header.status == OrderStatus.held) &&
                     order.items.isNotEmpty)
