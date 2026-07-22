@@ -5,12 +5,19 @@ import { BackgroundWorkerModule } from './background-worker.module';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.createApplicationContext(
     BackgroundWorkerModule,
-    { bufferLogs: true },
+    {
+      bufferLogs: true,
+    },
   );
-
-  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
+  app.useLogger(logger);
   app.enableShutdownHooks();
-  app.get(Logger).log('Fluxa background worker started');
+  logger.log('Fluxa background worker started');
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  const message =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  console.error(`Fluxa background worker failed to start: ${message}`);
+  process.exitCode = 1;
+});

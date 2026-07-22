@@ -10,6 +10,11 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.production.example
+*.pem
+*.p12
+*.pfx
+*.key
 
 # logs
 *.log
@@ -25,3 +30,7 @@ Thumbs.db
 # temporary
 .tmp/
 temp/
+
+# release outputs kept outside Git
+release-artifacts/
+release-symbols/

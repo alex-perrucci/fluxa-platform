@@ -9,7 +9,8 @@ import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
-  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
+  app.useLogger(logger);
   app.enableShutdownHooks();
   app.use(helmet());
   app.use(compression());
@@ -45,21 +46,28 @@ async function bootstrap(): Promise<void> {
     },
   });
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Fluxa Platform API')
-    .setDescription('API della piattaforma POS e fiscale Fluxa')
-    .setVersion('0.2.0')
-    .addBearerAuth()
-    .build();
-
-  SwaggerModule.setup(
-    'docs',
-    app,
-    SwaggerModule.createDocument(app, swaggerConfig),
-  );
+  if (config.getOrThrow<boolean>('SWAGGER_ENABLED')) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Fluxa Platform API')
+      .setDescription('API della piattaforma POS e fiscale Fluxa')
+      .setVersion('1.0.0')
+      .addBearerAuth()
+      .build();
+    SwaggerModule.setup(
+      'docs',
+      app,
+      SwaggerModule.createDocument(app, swaggerConfig),
+    );
+  }
 
   const port = config.getOrThrow<number>('API_PORT');
   await app.listen(port, '0.0.0.0');
+  logger.log(`Fluxa API listening on port ${port}`);
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  const message =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  console.error(`Fluxa API failed to start: ${message}`);
+  process.exitCode = 1;
+});

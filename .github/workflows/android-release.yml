@@ -1,0 +1,69 @@
+name: Android release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_apk:
+        description: Also build split APK files
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.32.5'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-36' 'ndk;27.0.12077973'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Configure Android signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          echo "$KEYSTORE_BASE64" | base64 --decode > apps/pos/android/fluxa-upload.jks
+          cat > apps/pos/android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=../fluxa-upload.jks
+          EOF
+      - name: Build signed artifacts
+        shell: pwsh
+        env:
+          POS_API_BASE_URL: ${{ secrets.POS_API_BASE_URL }}
+        run: |
+          $arguments = @('-ApiBaseUrl', $env:POS_API_BASE_URL, '-Environment', 'production')
+          if ('${{ inputs.build_apk }}' -eq 'true') { $arguments += '-BuildApk' }
+          ./scripts/build-pos-release.ps1 @arguments
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fluxa-pos-production-${{ github.sha }}
+          path: |
+            apps/pos/build/app/outputs/bundle/release/app-release.aab
+            apps/pos/build/app/outputs/flutter-apk/*-release.apk
+            release-symbols/**
+          if-no-files-found: error
+          retention-days: 30

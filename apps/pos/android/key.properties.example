@@ -1,0 +1,6 @@
+# Copy this file to key.properties. Never commit key.properties or the keystore.
+storePassword=<KEYSTORE_PASSWORD>
+keyPassword=<KEY_PASSWORD>
+keyAlias=fluxa-upload
+# Relative to apps/pos/android/app/build.gradle.kts
+storeFile=../fluxa-upload.jks
