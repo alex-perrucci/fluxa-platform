@@ -10,6 +10,7 @@ import '../../features/hospitality/presentation/kitchen_screen.dart';
 import '../../features/hospitality/presentation/tables_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/payments/presentation/checkout_screen.dart';
+import '../../features/printing/presentation/printing_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/async_states.dart';
 import 'app_shell.dart';
@@ -96,6 +97,14 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
             GoRoute(
               path: '/kitchen',
               builder: (context, state) => const KitchenScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/printing',
+              builder: (context, state) => const PrintingScreen(),
             ),
           ],
         ),

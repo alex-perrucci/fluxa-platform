@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../device/domain/device_assignment_models.dart';
+import '../../printing/presentation/printing_controller.dart';
 import '../domain/hospitality_models.dart';
 import 'kitchen_controller.dart';
 
@@ -21,6 +22,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   Widget build(BuildContext context) {
     final authController = ref.watch(authControllerProvider);
     final controller = ref.watch(kitchenControllerProvider);
+    final printingController = ref.watch(printingControllerProvider);
     final location = authController.state.deviceAssignment?.location;
     if (location == null) {
       return const FluxaEmptyView(
@@ -37,6 +39,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
       controller: controller,
       location: location,
       canCancel: _isManagerRole(authController.state.session?.role),
+      printingController: printingController,
     );
   }
 
@@ -63,12 +66,14 @@ class KitchenView extends StatelessWidget {
     required this.controller,
     required this.location,
     required this.canCancel,
+    this.printingController,
     super.key,
   });
 
   final KitchenController controller;
   final OperationalLocation location;
   final bool canCancel;
+  final PrintingController? printingController;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -98,7 +103,11 @@ class KitchenView extends StatelessWidget {
           _KitchenFilters(controller: controller),
           const SizedBox(height: 12),
           Expanded(
-            child: _KitchenBody(controller: controller, canCancel: canCancel),
+            child: _KitchenBody(
+              controller: controller,
+              canCancel: canCancel,
+              printingController: printingController,
+            ),
           ),
         ],
       ),
@@ -230,10 +239,15 @@ class _KitchenFilters extends StatelessWidget {
 }
 
 class _KitchenBody extends StatelessWidget {
-  const _KitchenBody({required this.controller, required this.canCancel});
+  const _KitchenBody({
+    required this.controller,
+    required this.canCancel,
+    this.printingController,
+  });
 
   final KitchenController controller;
   final bool canCancel;
+  final PrintingController? printingController;
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +277,7 @@ class _KitchenBody extends StatelessWidget {
         final detail = _TicketDetailPanel(
           controller: controller,
           canCancel: canCancel,
+          printingController: printingController,
         );
         if (constraints.maxWidth >= 1050) {
           return Row(
@@ -389,10 +404,15 @@ class _TicketCard extends StatelessWidget {
 }
 
 class _TicketDetailPanel extends StatelessWidget {
-  const _TicketDetailPanel({required this.controller, required this.canCancel});
+  const _TicketDetailPanel({
+    required this.controller,
+    required this.canCancel,
+    this.printingController,
+  });
 
   final KitchenController controller;
   final bool canCancel;
+  final PrintingController? printingController;
 
   @override
   Widget build(BuildContext context) {
@@ -470,6 +490,17 @@ class _TicketDetailPanel extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (printingController != null)
+                  OutlinedButton.icon(
+                    key: const Key('reprint-kitchen-ticket-button'),
+                    onPressed: controller.busy || printingController!.busy
+                        ? null
+                        : () => printingController!.requestKitchenTicket(
+                            ticket.id,
+                          ),
+                    icon: const Icon(Icons.print_outlined),
+                    label: const Text('Ristampa'),
+                  ),
                 if (canCancel && ticket.status == KitchenTicketStatus.queued)
                   TextButton.icon(
                     key: const Key('cancel-kitchen-ticket-button'),
