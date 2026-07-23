@@ -113,6 +113,22 @@ class ActiveOrderPanel extends StatelessWidget {
                 icon: const Icon(Icons.payments_outlined),
                 label: const Text('Continua pagamento'),
               ),
+            )
+          else if (controller.activeOrder?.header.status == OrderStatus.paid ||
+              controller.activeOrder?.header.status == OrderStatus.cancelled)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('new-order-after-terminal'),
+                onPressed: controller.busy
+                    ? null
+                    : () async {
+                        controller.discardCurrentView();
+                        await showNewOrderDialog(context, controller);
+                      },
+                icon: const Icon(Icons.add_shopping_cart),
+                label: const Text('Nuovo ordine'),
+              ),
             ),
         ],
       ),
@@ -194,6 +210,19 @@ class CompactOrderBar extends StatelessWidget {
                     : () => context.push('/checkout/${order!.header.id}'),
                 icon: const Icon(Icons.payments_outlined),
                 label: const Text('Pagamento'),
+              )
+            else if (order?.header.status == OrderStatus.paid ||
+                order?.header.status == OrderStatus.cancelled)
+              FilledButton.icon(
+                key: const Key('compact-new-order-after-terminal'),
+                onPressed: controller.busy
+                    ? null
+                    : () async {
+                        controller.discardCurrentView();
+                        await showNewOrderDialog(context, controller);
+                      },
+                icon: const Icon(Icons.add),
+                label: const Text('Nuovo'),
               ),
           ],
         ),

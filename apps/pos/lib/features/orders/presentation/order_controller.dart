@@ -127,6 +127,11 @@ class OrderController extends ChangeNotifier {
         return;
       }
       _orders = page.items;
+      if (_activeOrder != null &&
+          _statusFilter != null &&
+          _activeOrder!.header.status != _statusFilter) {
+        _activeOrder = null;
+      }
       _listStatus = OrdersLoadStatus.ready;
     } on BackendError catch (error) {
       if (requestVersion != _requestVersion) {
@@ -158,6 +163,12 @@ class OrderController extends ChangeNotifier {
       return;
     }
     _statusFilter = status;
+    if (_activeOrder != null &&
+        status != null &&
+        _activeOrder!.header.status != status) {
+      _activeOrder = null;
+    }
+    notifyListeners();
     await refreshOrders();
   }
 
