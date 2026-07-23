@@ -18,11 +18,12 @@ Future<void> bootstrap({required FluxaEnvironment fallbackEnvironment}) async {
   };
   PlatformDispatcher.instance.onError = (error, stackTrace) {
     AppErrorReporter.record(error, stackTrace, source: 'platform');
-    return true;
+    return kReleaseMode;
   };
-  ErrorWidget.builder = (details) => AppFailureWidget(
-    debugMessage: kDebugMode ? details.exceptionAsString() : null,
-  );
+  if (kReleaseMode) {
+    ErrorWidget.builder = (details) =>
+        AppFailureWidget(debugMessage: details.exceptionAsString());
+  }
 
   try {
     final config = AppConfig.fromEnvironment(fallbackEnvironment);

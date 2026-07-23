@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/di/providers.dart';
@@ -132,6 +133,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
+        if ({'OWNER', 'ADMIN', 'MANAGER'}.contains(session.role)) ...[
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              key: const Key('open-admin-page'),
+              leading: const Icon(Icons.admin_panel_settings_outlined),
+              title: const Text('Amministrazione'),
+              subtitle: const Text(
+                'Crea utenti, catalogo, listini, tavoli, cucina, stampanti e configurazione fiscale.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/admin'),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         Card(
           child: Padding(

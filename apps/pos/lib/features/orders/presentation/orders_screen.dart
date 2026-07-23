@@ -24,7 +24,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final authController = ref.watch(authControllerProvider);
-    final orderController = ref.watch(orderControllerProvider);
+    final orderController = ref.read(orderControllerProvider);
     final kitchenController = ref.watch(kitchenControllerProvider);
     final printingController = ref.watch(printingControllerProvider);
     final location = authController.state.deviceAssignment?.location;

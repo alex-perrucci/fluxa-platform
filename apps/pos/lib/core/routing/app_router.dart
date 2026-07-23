@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/admin/presentation/admin_screen.dart';
 import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/organization_selection_screen.dart';
@@ -62,6 +63,7 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
       path: '/operational-setup',
       builder: (context, state) => const OperationalBlockedScreen(),
     ),
+    GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
     GoRoute(
       path: '/fiscalize/:orderId',
       builder: (context, state) =>

@@ -77,16 +77,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
         ],
       ),
-      body: AnimatedBuilder(
-        animation: Listenable.merge([checkoutController, orderController]),
-        builder: (context, child) => CheckoutView(
-          controller: checkoutController,
-          orderController: orderController,
-          orderId: widget.orderId,
-          canRecordPayments: canRecordPayments,
-          role: session.role,
-          printingController: printingController,
-        ),
+      body: CheckoutView(
+        controller: checkoutController,
+        orderController: orderController,
+        orderId: widget.orderId,
+        canRecordPayments: canRecordPayments,
+        role: session.role,
+        printingController: printingController,
       ),
     );
   }
@@ -175,6 +172,10 @@ class CheckoutView extends StatelessWidget {
           canRecordPayments: canRecordPayments,
           role: role,
           onOrderRefresh: () => orderController.selectOrder(orderId),
+          onStartNewOrder: () {
+            orderController.discardCurrentView();
+            context.go('/home');
+          },
           printingController: printingController,
         );
         final payments = _PaymentsList(
@@ -217,6 +218,7 @@ class _CheckoutSummary extends StatelessWidget {
     required this.canRecordPayments,
     required this.role,
     required this.onOrderRefresh,
+    required this.onStartNewOrder,
     this.printingController,
   });
 
@@ -226,6 +228,7 @@ class _CheckoutSummary extends StatelessWidget {
   final bool canRecordPayments;
   final String? role;
   final Future<bool> Function() onOrderRefresh;
+  final VoidCallback onStartNewOrder;
   final PrintingController? printingController;
 
   @override
@@ -327,14 +330,9 @@ class _CheckoutSummary extends StatelessWidget {
             const SizedBox(height: 8),
             FilledButton.icon(
               key: const Key('checkout-completed-button'),
-              onPressed: () async {
-                await onOrderRefresh();
-                if (context.mounted) {
-                  context.go('/orders');
-                }
-              },
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Pagamento completato'),
+              onPressed: onStartNewOrder,
+              icon: const Icon(Icons.add_shopping_cart),
+              label: const Text('Nuovo ordine'),
             ),
           ] else if (!checkout.isOpen)
             FilledButton.tonalIcon(

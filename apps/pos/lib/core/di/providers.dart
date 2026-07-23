@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/admin/data/admin_api.dart';
+import '../../features/admin/presentation/admin_controller.dart';
 import '../../features/auth/data/auth_api.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/presentation/auth_controller.dart';
@@ -54,6 +56,9 @@ final apiClientProvider = Provider<ApiClient>(
   ),
 );
 
+final adminApiProvider = Provider<AdminApi>(
+  (ref) => AdminApi(ref.watch(apiClientProvider).dio),
+);
 final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(ref.watch(apiClientProvider).dio),
 );
@@ -94,6 +99,10 @@ final authRepositoryProvider = Provider<AuthRepository>(
     sessionStore: ref.watch(sessionStoreProvider),
     refreshCoordinator: ref.watch(apiClientProvider).refreshCoordinator,
   ),
+);
+
+final adminControllerProvider = ChangeNotifierProvider<AdminController>(
+  (ref) => AdminController(ref.watch(adminApiProvider)),
 );
 
 final authControllerProvider = ChangeNotifierProvider<AuthController>(

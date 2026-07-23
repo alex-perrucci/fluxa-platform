@@ -45,74 +45,98 @@ class PrintingView extends StatelessWidget {
   final bool canManageJobs;
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: controller,
-    builder: (context, child) {
-      if (controller.status == PrintingLoadStatus.loading &&
-          controller.printers.isEmpty &&
-          controller.jobs.isEmpty) {
-        return const FluxaLoadingView(label: 'Caricamento stampa');
-      }
-      if (controller.status == PrintingLoadStatus.failure &&
-          controller.printers.isEmpty &&
-          controller.jobs.isEmpty) {
-        return FluxaEmptyView(
-          icon: Icons.cloud_off_outlined,
-          title: 'Stampa non disponibile',
-          message: controller.errorMessage ?? 'Riprova tra poco.',
+  Widget build(BuildContext context) {
+    if (controller.status == PrintingLoadStatus.loading &&
+        controller.printers.isEmpty &&
+        controller.jobs.isEmpty) {
+      return const FluxaLoadingView(label: 'Caricamento stampa');
+    }
+    if (controller.status == PrintingLoadStatus.failure &&
+        controller.printers.isEmpty &&
+        controller.jobs.isEmpty) {
+      return FluxaEmptyView(
+        icon: Icons.cloud_off_outlined,
+        title: 'Stampa non disponibile',
+        message: controller.errorMessage ?? 'Riprova tra poco.',
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final list = _QueuePane(controller: controller);
+        final detail = _JobDetailPane(
+          controller: controller,
+          canManageJobs: canManageJobs,
         );
-      }
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _Header(controller: controller, location: location),
-            if (controller.errorMessage != null) ...[
+        final selectedPane = controller.selectedJob == null ? list : detail;
+        if (constraints.maxWidth < 760) {
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _Header(controller: controller, location: location),
+              if (controller.errorMessage != null) ...[
+                const SizedBox(height: 12),
+                _MessageCard(
+                  message: controller.errorMessage!,
+                  error: true,
+                  onDismiss: controller.clearMessages,
+                ),
+              ] else if (controller.noticeMessage != null) ...[
+                const SizedBox(height: 12),
+                _MessageCard(
+                  message: controller.noticeMessage!,
+                  error: false,
+                  onDismiss: controller.clearMessages,
+                ),
+              ],
               const SizedBox(height: 12),
-              _MessageCard(
-                message: controller.errorMessage!,
-                error: true,
-                onDismiss: controller.clearMessages,
-              ),
-            ] else if (controller.noticeMessage != null) ...[
+              _AgentCard(controller: controller),
               const SizedBox(height: 12),
-              _MessageCard(
-                message: controller.noticeMessage!,
-                error: false,
-                onDismiss: controller.clearMessages,
+              SizedBox(height: 560, child: selectedPane),
+            ],
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Header(controller: controller, location: location),
+              if (controller.errorMessage != null) ...[
+                const SizedBox(height: 12),
+                _MessageCard(
+                  message: controller.errorMessage!,
+                  error: true,
+                  onDismiss: controller.clearMessages,
+                ),
+              ] else if (controller.noticeMessage != null) ...[
+                const SizedBox(height: 12),
+                _MessageCard(
+                  message: controller.noticeMessage!,
+                  error: false,
+                  onDismiss: controller.clearMessages,
+                ),
+              ],
+              const SizedBox(height: 12),
+              _AgentCard(controller: controller),
+              const SizedBox(height: 12),
+              Expanded(
+                child: constraints.maxWidth >= 1120
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(width: 430, child: list),
+                          const SizedBox(width: 16),
+                          Expanded(child: detail),
+                        ],
+                      )
+                    : selectedPane,
               ),
             ],
-            const SizedBox(height: 12),
-            _AgentCard(controller: controller),
-            const SizedBox(height: 12),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final list = _QueuePane(controller: controller);
-                  final detail = _JobDetailPane(
-                    controller: controller,
-                    canManageJobs: canManageJobs,
-                  );
-                  if (constraints.maxWidth >= 1120) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(width: 430, child: list),
-                        const SizedBox(width: 16),
-                        Expanded(child: detail),
-                      ],
-                    );
-                  }
-                  return controller.selectedJob == null ? list : detail;
-                },
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _Header extends StatelessWidget {
@@ -212,9 +236,13 @@ class _AgentCard extends StatelessWidget {
             ],
             if (controller.agentSupported) ...[
               const SizedBox(height: 12),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const Expanded(
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
                     child: Text(
                       'Associa ogni stampante backend a una termica Wi-Fi oppure a una stampante Bluetooth già abbinata ad Android.',
                     ),
@@ -227,7 +255,6 @@ class _AgentCard extends StatelessWidget {
                     icon: const Icon(Icons.bluetooth_searching),
                     label: const Text('Rileva Bluetooth'),
                   ),
-                  const SizedBox(width: 8),
                   TextButton.icon(
                     key: const Key('printing-poll-now'),
                     onPressed:
@@ -251,101 +278,9 @@ class _AgentCard extends StatelessWidget {
                 ...assigned.map(
                   (printer) => Padding(
                     padding: const EdgeInsets.only(top: 10),
-                    child: Card.outlined(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${printer.name} · ${printer.purpose.label}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleSmall,
-                                  ),
-                                  Text(controller.connectionLabel(printer.id)),
-                                ],
-                              ),
-                            ),
-                            SizedBox(
-                              width: 280,
-                              child: DropdownButtonFormField<String?>(
-                                key: Key('printer-bluetooth-${printer.id}'),
-                                value:
-                                    isBluetoothPrinterTarget(
-                                      controller.queueFor(printer.id),
-                                    )
-                                    ? controller.queueFor(printer.id)
-                                    : null,
-                                decoration: const InputDecoration(
-                                  labelText: 'Bluetooth abbinato',
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                items: [
-                                  const DropdownMenuItem<String?>(
-                                    value: null,
-                                    child: Text('Nessuno'),
-                                  ),
-                                  ...controller.localQueues.map(
-                                    (target) => DropdownMenuItem<String?>(
-                                      value: target,
-                                      child: Text(
-                                        localPrinterTargetLabel(target),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                onChanged: controller.busy
-                                    ? null
-                                    : (value) => controller.setQueueMapping(
-                                        printer,
-                                        value,
-                                      ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              key: Key('printer-wifi-${printer.id}'),
-                              onPressed: controller.busy
-                                  ? null
-                                  : () => _configureWifiPrinter(
-                                      context,
-                                      controller,
-                                      printer,
-                                    ),
-                              icon: const Icon(Icons.wifi),
-                              label: const Text('Wi-Fi'),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              key: Key('printer-clear-${printer.id}'),
-                              tooltip: 'Rimuovi connessione locale',
-                              onPressed:
-                                  controller.busy ||
-                                      controller.queueFor(printer.id) == null
-                                  ? null
-                                  : () => controller.setQueueMapping(
-                                      printer,
-                                      null,
-                                    ),
-                              icon: const Icon(Icons.link_off),
-                            ),
-                            IconButton(
-                              key: Key('printer-test-${printer.id}'),
-                              tooltip: 'Accoda pagina di test',
-                              onPressed: controller.busy
-                                  ? null
-                                  : () => controller.requestTestPage(printer),
-                              icon: const Icon(Icons.description_outlined),
-                            ),
-                          ],
-                        ),
-                      ),
+                    child: _AssignedPrinterCard(
+                      controller: controller,
+                      printer: printer,
                     ),
                   ),
                 ),
@@ -355,6 +290,114 @@ class _AgentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AssignedPrinterCard extends StatelessWidget {
+  const _AssignedPrinterCard({required this.controller, required this.printer});
+
+  final PrintingController controller;
+  final PrinterDevice printer;
+
+  @override
+  Widget build(BuildContext context) => Card.outlined(
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final information = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${printer.name} · ${printer.purpose.label}',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              Text(controller.connectionLabel(printer.id)),
+            ],
+          );
+          final bluetooth = DropdownButtonFormField<String?>(
+            key: Key('printer-bluetooth-${printer.id}'),
+            value: isBluetoothPrinterTarget(controller.queueFor(printer.id))
+                ? controller.queueFor(printer.id)
+                : null,
+            decoration: const InputDecoration(
+              labelText: 'Bluetooth abbinato',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Nessuno'),
+              ),
+              ...controller.localQueues.map(
+                (target) => DropdownMenuItem<String?>(
+                  value: target,
+                  child: Text(
+                    localPrinterTargetLabel(target),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: controller.busy
+                ? null
+                : (value) => controller.setQueueMapping(printer, value),
+          );
+          final actions = Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              OutlinedButton.icon(
+                key: Key('printer-wifi-${printer.id}'),
+                onPressed: controller.busy
+                    ? null
+                    : () => _configureWifiPrinter(context, controller, printer),
+                icon: const Icon(Icons.wifi),
+                label: const Text('Wi-Fi'),
+              ),
+              IconButton(
+                key: Key('printer-clear-${printer.id}'),
+                tooltip: 'Rimuovi connessione locale',
+                onPressed:
+                    controller.busy || controller.queueFor(printer.id) == null
+                    ? null
+                    : () => controller.setQueueMapping(printer, null),
+                icon: const Icon(Icons.link_off),
+              ),
+              IconButton(
+                key: Key('printer-test-${printer.id}'),
+                tooltip: 'Accoda pagina di test',
+                onPressed: controller.busy
+                    ? null
+                    : () => controller.requestTestPage(printer),
+                icon: const Icon(Icons.description_outlined),
+              ),
+            ],
+          );
+          if (constraints.maxWidth < 760) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                information,
+                const SizedBox(height: 10),
+                bluetooth,
+                const SizedBox(height: 8),
+                actions,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: information),
+              SizedBox(width: 280, child: bluetooth),
+              const SizedBox(width: 8),
+              actions,
+            ],
+          );
+        },
+      ),
+    ),
+  );
 }
 
 Future<void> _configureWifiPrinter(
