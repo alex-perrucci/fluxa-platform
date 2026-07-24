@@ -70,6 +70,7 @@
     "build:background-worker": "nest build background-worker",
     "start:dev": "concurrently -k -n API,FISCAL,BACKGROUND -c blue,magenta,green \"npm:start:dev:api\" \"npm:start:dev:fiscal\" \"npm:start:dev:background\"",
     "start:dev:api": "nest start api --watch",
+    "start:render": "concurrently -k -n API,FISCAL,BACKGROUND -c blue,magenta,green \"npm:start:prod:api\" \"npm:start:prod:fiscal\" \"npm:start:prod:background\"",
     "start:dev:fiscal": "nest start fiscal-worker --watch",
     "start:dev:background": "nest start background-worker --watch",
     "start:prod:api": "node dist/apps/api/main.js",
