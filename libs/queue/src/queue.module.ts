@@ -14,6 +14,7 @@ import { BACKGROUND_QUEUE, FISCAL_QUEUE } from './queue.constants';
           host: config.getOrThrow<string>('REDIS_HOST'),
           port: config.getOrThrow<number>('REDIS_PORT'),
           password: config.get<string>('REDIS_PASSWORD') || undefined,
+          tls: config.getOrThrow<boolean>('REDIS_TLS') ? {} : undefined,
           maxRetriesPerRequest: null,
         },
         prefix: 'fluxa',
