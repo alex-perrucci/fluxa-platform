@@ -41,6 +41,49 @@ void main() {
     expect(find.byKey(const Key('printing-agent-switch')), findsOneWidget);
     controller.dispose();
   });
+
+  testWidgets('does not overflow on a compact printing viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 560);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = PrintingController(
+      _UnusedGateway(),
+      LocalPrinterMappingStore(MemorySecureKeyValueStore()),
+      const _SupportedBackend(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PrintingView(
+            controller: controller,
+            location: const OperationalLocation(
+              id: 'location-1',
+              code: 'PARMA',
+              name: 'Parma Centro con denominazione molto lunga',
+              timezone: 'Europe/Rome',
+              status: 'ACTIVE',
+            ),
+            canManageJobs: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('printing-refresh-local-queues')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
 }
 
 class _UnsupportedBackend implements LocalPrinterBackend {
@@ -59,6 +102,13 @@ class _UnsupportedBackend implements LocalPrinterBackend {
     required int copies,
     required bool supportsCut,
   }) async {}
+}
+
+class _SupportedBackend extends _UnsupportedBackend {
+  const _SupportedBackend();
+
+  @override
+  bool get isSupported => true;
 }
 
 class _UnusedGateway implements PrintingGateway {

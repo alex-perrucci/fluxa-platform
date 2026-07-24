@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   char,
   index,
@@ -261,6 +262,10 @@ export const organizationMemberships = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     role: membershipRole('role').notNull(),
     status: membershipStatus('status').notNull().default('ACTIVE'),
+    defaultLocationId: uuid('default_location_id').references(
+      (): AnyPgColumn => locations.id,
+      { onDelete: 'set null' },
+    ),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -274,6 +279,9 @@ export const organizationMemberships = pgTable(
       table.userId,
     ),
     index('organization_memberships_user_idx').on(table.userId, table.status),
+    index('organization_memberships_default_location_idx').on(
+      table.defaultLocationId,
+    ),
     index('organization_memberships_org_role_idx').on(
       table.organizationId,
       table.role,

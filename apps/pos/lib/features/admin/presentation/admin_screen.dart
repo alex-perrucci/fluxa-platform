@@ -118,15 +118,38 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                         _AdminAction(
                           label: 'Nuovo utente',
                           icon: Icons.person_add_alt_1,
-                          onPressed: controller.busy
+                          onPressed:
+                              controller.busy ||
+                                  snapshot?.locations.isEmpty != false
                               ? null
-                              : () => _createMember(context, controller),
+                              : () => _createMember(
+                                  context,
+                                  controller,
+                                  snapshot!.locations,
+                                ),
+                        ),
+                      if (ownerOrAdmin)
+                        _AdminAction(
+                          label: 'Assegna sede',
+                          icon: Icons.location_on_outlined,
+                          onPressed:
+                              controller.busy ||
+                                  snapshot?.members.isEmpty != false ||
+                                  snapshot?.locations.isEmpty != false
+                              ? null
+                              : () => _assignMemberLocation(
+                                  context,
+                                  controller,
+                                  snapshot!,
+                                ),
                         ),
                     ],
                     preview: _EntityPreview(
                       values: snapshot?.members ?? const [],
                       label: (value) =>
-                          '${value['displayName'] ?? value['email']} · ${value['role'] ?? ''}',
+                          '${value['displayName'] ?? value['email']} · '
+                          '${value['role'] ?? ''} · '
+                          '${value['locationName'] ?? 'sede non assegnata'}',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -360,14 +383,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   Future<void> _createMember(
     BuildContext context,
     AdminController controller,
+    List<Map<String, Object?>> locations,
   ) async {
     final values = await _showAdminForm(
       context,
       title: 'Nuovo utente',
-      fields: const [
-        _FieldSpec(keyName: 'email', label: 'Email'),
-        _FieldSpec(keyName: 'displayName', label: 'Nome visualizzato'),
-        _FieldSpec(
+      fields: [
+        const _FieldSpec(keyName: 'email', label: 'Email'),
+        const _FieldSpec(keyName: 'displayName', label: 'Nome visualizzato'),
+        const _FieldSpec(
           keyName: 'role',
           label: 'Ruolo',
           initialValue: 'CASHIER',
@@ -382,6 +406,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           },
         ),
         _FieldSpec(
+          keyName: 'locationId',
+          label: 'Location predefinita',
+          initialValue: controller.locationId ?? '',
+          options: _options(
+            locations,
+            (value) => value['name'] ?? value['code'],
+          ),
+        ),
+        const _FieldSpec(
           keyName: 'password',
           label: 'Password temporanea (minimo 12 caratteri)',
           obscureText: true,
@@ -394,6 +427,46 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       displayName: values['displayName']!,
       role: values['role']!,
       temporaryPassword: values['password']!,
+      locationId: values['locationId']!,
+    );
+  }
+
+  Future<void> _assignMemberLocation(
+    BuildContext context,
+    AdminController controller,
+    AdminSnapshot snapshot,
+  ) async {
+    final memberOptions = <String, String>{
+      for (final value in snapshot.members)
+        if (value['membershipId'] != null)
+          value['membershipId'].toString():
+              '${value['displayName'] ?? value['email']} · '
+              '${value['role'] ?? ''}',
+    };
+    final values = await _showAdminForm(
+      context,
+      title: 'Assegna membro a una location',
+      fields: [
+        _FieldSpec(
+          keyName: 'membershipId',
+          label: 'Membro',
+          options: memberOptions,
+        ),
+        _FieldSpec(
+          keyName: 'locationId',
+          label: 'Location',
+          initialValue: controller.locationId ?? '',
+          options: _options(
+            snapshot.locations,
+            (value) => value['name'] ?? value['code'],
+          ),
+        ),
+      ],
+    );
+    if (values == null) return;
+    await controller.assignMemberLocation(
+      membershipId: values['membershipId']!,
+      locationId: values['locationId']!,
     );
   }
 
@@ -997,14 +1070,11 @@ Future<Map<String, String>?> _showAdminForm(
   required List<_FieldSpec> fields,
 }) async {
   final formKey = GlobalKey<FormState>();
-  final controllers = <String, TextEditingController>{};
   final values = <String, String>{};
 
   for (final field in fields) {
     if (field.options == null) {
-      controllers[field.keyName] = TextEditingController(
-        text: field.initialValue,
-      );
+      values[field.keyName] = field.initialValue;
     } else {
       final options = field.options!;
       values[field.keyName] = field.initialValue.isNotEmpty
@@ -1013,7 +1083,7 @@ Future<Map<String, String>?> _showAdminForm(
     }
   }
 
-  final result = await showDialog<Map<String, String>>(
+  return showDialog<Map<String, String>>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
@@ -1028,10 +1098,13 @@ Future<Map<String, String>?> _showAdminForm(
                 children: fields
                     .map(
                       (field) => Padding(
+                        key: ValueKey(field.keyName),
                         padding: const EdgeInsets.only(bottom: 12),
                         child: field.options == null
                             ? TextFormField(
-                                controller: controllers[field.keyName],
+                                initialValue: values[field.keyName],
+                                onChanged: (value) =>
+                                    values[field.keyName] = value,
                                 obscureText: field.obscureText,
                                 keyboardType: field.number
                                     ? TextInputType.number
@@ -1095,10 +1168,11 @@ Future<Map<String, String>?> _showAdminForm(
               if (formKey.currentState?.validate() != true) {
                 return;
               }
-              for (final entry in controllers.entries) {
-                values[entry.key] = entry.value.text.trim();
-              }
-              Navigator.pop(dialogContext, Map<String, String>.from(values));
+              final normalized = <String, String>{
+                for (final entry in values.entries)
+                  entry.key: entry.value.trim(),
+              };
+              Navigator.pop(dialogContext, normalized);
             },
             child: const Text('Salva'),
           ),
@@ -1106,11 +1180,6 @@ Future<Map<String, String>?> _showAdminForm(
       ),
     ),
   );
-
-  for (final controller in controllers.values) {
-    controller.dispose();
-  }
-  return result;
 }
 
 Map<String, String> _options(

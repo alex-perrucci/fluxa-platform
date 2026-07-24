@@ -255,26 +255,62 @@ class _OrdersList extends StatelessWidget {
     }
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: ListView.separated(
-        key: const Key('orders-list'),
-        itemCount: controller.orders.length,
-        separatorBuilder: (context, index) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final order = controller.orders[index];
-          final selected = controller.activeOrder?.header.id == order.id;
-          return ListTile(
-            key: Key('order-row-${order.id}'),
-            selected: selected,
-            leading: CircleAvatar(child: Text(order.number.split('-').last)),
-            title: Text(order.number),
-            subtitle: Text(
-              '${order.serviceMode.label} · v${order.version} · '
-              '${formatOrderMoney(order.totalCents, order.currency)}',
-            ),
-            trailing: _StatusChip(status: order.status),
-            onTap: controller.busy
-                ? null
-                : () async => controller.selectOrder(order.id),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 390;
+          return ListView.separated(
+            key: const Key('orders-list'),
+            itemCount: controller.orders.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final order = controller.orders[index];
+              final selected = controller.activeOrder?.header.id == order.id;
+              final amount = formatOrderMoney(order.totalCents, order.currency);
+              return ListTile(
+                key: Key('order-row-${order.id}'),
+                selected: selected,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                leading: compact
+                    ? null
+                    : CircleAvatar(child: Text(order.number.split('-').last)),
+                title: Text(
+                  order.number,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: compact
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${order.serviceMode.label} · '
+                            'v${order.version} · $amount',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: _StatusChip(status: order.status),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        '${order.serviceMode.label} · '
+                        'v${order.version} · $amount',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                trailing: compact ? null : _StatusChip(status: order.status),
+                isThreeLine: compact,
+                onTap: controller.busy
+                    ? null
+                    : () async => controller.selectOrder(order.id),
+              );
+            },
           );
         },
       ),
@@ -306,211 +342,296 @@ class _OrderDetailPane extends StatelessWidget {
       );
     }
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 600;
+          if (compact) {
+            return ListView(
+              key: const Key('compact-order-detail-scroll'),
+              padding: const EdgeInsets.all(16),
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        order.header.number,
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      Text(
-                        '${order.header.serviceMode.label} · '
-                        '${order.header.businessDate} · versione ${order.header.version}',
-                      ),
-                    ],
-                  ),
-                ),
-                _StatusChip(status: order.header.status),
-                IconButton(
-                  tooltip: 'Chiudi dettaglio',
-                  onPressed: controller.busy
-                      ? null
-                      : controller.discardCurrentView,
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            if (order.header.customerNote != null) ...[
-              const SizedBox(height: 12),
-              Text('Nota: ${order.header.customerNote}'),
-            ],
-            const Divider(height: 24),
-            Expanded(
-              child: order.items.isEmpty
-                  ? const FluxaEmptyView(
+                _buildHeader(context, order, compact: true),
+                if (order.header.customerNote != null) ...[
+                  const SizedBox(height: 12),
+                  Text('Nota: ${order.header.customerNote}'),
+                ],
+                const Divider(height: 24),
+                if (order.items.isEmpty)
+                  const SizedBox(
+                    height: 160,
+                    child: FluxaEmptyView(
                       icon: Icons.shopping_cart_outlined,
                       title: 'Ordine vuoto',
                       message: 'Aggiungi prodotti dalla schermata Cassa.',
-                    )
-                  : ListView.separated(
-                      itemCount: order.items.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final item = order.items[index];
-                        return ListTile(
-                          title: Text(item.displayName),
-                          subtitle: Text(
-                            '${item.displayQuantity} × '
-                            '${formatOrderMoney(item.unitPriceCents, order.header.currency)}',
-                          ),
-                          trailing: Text(
-                            formatOrderMoney(
-                              item.finalGrossCents,
-                              order.header.currency,
-                            ),
-                          ),
-                        );
-                      },
                     ),
-            ),
-            const Divider(height: 24),
-            _TotalRow(
-              label: 'Subtotale',
-              value: formatOrderMoney(
-                order.header.subtotalCents,
-                order.header.currency,
-              ),
-            ),
-            if (order.header.discountCents > 0)
-              _TotalRow(
-                label: 'Sconti',
-                value:
-                    '-${formatOrderMoney(order.header.discountCents, order.header.currency)}',
-              ),
-            _TotalRow(
-              label: 'Totale',
-              value: formatOrderMoney(
-                order.header.totalCents,
-                order.header.currency,
-              ),
-              emphasized: true,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (printingController != null)
-                  OutlinedButton.icon(
-                    key: const Key('print-order-receipt-button'),
-                    onPressed: controller.busy || printingController!.busy
-                        ? null
-                        : () async {
-                            final printed = await printingController!
-                                .requestOrderReceipt(order.header.id);
-                            if (!context.mounted) {
-                              return;
-                            }
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  printed
-                                      ? printingController!.noticeMessage ??
-                                            'Riepilogo ordine accodato.'
-                                      : printingController!.errorMessage ??
-                                            'Stampa non riuscita.',
-                                ),
-                              ),
-                            );
-                          },
-                    icon: const Icon(Icons.print_outlined),
-                    label: const Text('Stampa riepilogo'),
-                  ),
-                if (order.header.status == OrderStatus.paid)
-                  FilledButton.tonalIcon(
-                    key: const Key('fiscalize-paid-order-button'),
-                    onPressed: controller.busy
-                        ? null
-                        : () => context.push('/fiscalize/${order.header.id}'),
-                    icon: const Icon(Icons.receipt_long_outlined),
-                    label: const Text('Fiscalizza'),
-                  ),
-                if ((order.header.status == OrderStatus.open ||
-                        order.header.status == OrderStatus.held) &&
-                    order.items.isNotEmpty)
-                  OutlinedButton.icon(
-                    key: const Key('send-order-kitchen-button'),
-                    onPressed: controller.busy || kitchenController.busy
-                        ? null
-                        : () async {
-                            final sent = await kitchenController.dispatchOrder(
-                              locationId: locationId,
-                              orderId: order.header.id,
-                            );
-                            if (!context.mounted) {
-                              return;
-                            }
-                            final message = sent
-                                ? kitchenController.noticeMessage ??
-                                      'Ordine inviato in cucina.'
-                                : kitchenController.errorMessage ??
-                                      'Invio cucina non riuscito.';
-                            ScaffoldMessenger.of(
-                              context,
-                            ).showSnackBar(SnackBar(content: Text(message)));
-                          },
-                    icon: const Icon(Icons.soup_kitchen_outlined),
-                    label: const Text('Invia in cucina'),
-                  ),
-                if (order.header.status == OrderStatus.held)
-                  FilledButton.icon(
-                    key: const Key('resume-order-button'),
-                    onPressed: controller.busy
-                        ? null
-                        : () async {
-                            final resumed = await controller.resumeOrder(
-                              order.header.id,
-                            );
-                            if (resumed && context.mounted) {
-                              context.go('/home');
-                            }
-                          },
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Riprendi in cassa'),
                   )
-                else if (order.header.status == OrderStatus.open) ...[
-                  OutlinedButton.icon(
-                    key: const Key('open-order-in-register-button'),
-                    onPressed: controller.busy
-                        ? null
-                        : () => context.go('/home'),
-                    icon: const Icon(Icons.point_of_sale),
-                    label: const Text('Apri in cassa'),
+                else
+                  ...order.items.map(
+                    (item) => Column(
+                      children: [
+                        _buildItemTile(order, item, compact: true),
+                        const Divider(height: 1),
+                      ],
+                    ),
                   ),
-                  FilledButton.icon(
-                    key: const Key('checkout-selected-order-button'),
-                    onPressed: controller.busy || order.items.isEmpty
-                        ? null
-                        : () => context.push('/checkout/${order.header.id}'),
-                    icon: const Icon(Icons.payments_outlined),
-                    label: const Text('Incassa'),
-                  ),
-                ] else if (order.header.status == OrderStatus.awaitingPayment)
-                  FilledButton.icon(
-                    key: const Key('continue-selected-checkout-button'),
-                    onPressed: controller.busy
-                        ? null
-                        : () => context.push('/checkout/${order.header.id}'),
-                    icon: const Icon(Icons.payments_outlined),
-                    label: const Text('Continua pagamento'),
-                  ),
+                const Divider(height: 24),
+                ..._buildTotals(order),
+                const SizedBox(height: 16),
+                _buildActions(context, order),
+              ],
+            );
+          }
+
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(context, order, compact: false),
+                if (order.header.customerNote != null) ...[
+                  const SizedBox(height: 12),
+                  Text('Nota: ${order.header.customerNote}'),
+                ],
+                const Divider(height: 24),
+                Expanded(
+                  child: order.items.isEmpty
+                      ? const FluxaEmptyView(
+                          icon: Icons.shopping_cart_outlined,
+                          title: 'Ordine vuoto',
+                          message: 'Aggiungi prodotti dalla schermata Cassa.',
+                        )
+                      : ListView.separated(
+                          itemCount: order.items.length,
+                          separatorBuilder: (context, index) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) => _buildItemTile(
+                            order,
+                            order.items[index],
+                            compact: false,
+                          ),
+                        ),
+                ),
+                const Divider(height: 24),
+                ..._buildTotals(order),
+                const SizedBox(height: 16),
+                _buildActions(context, order),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
+
+  Widget _buildHeader(
+    BuildContext context,
+    OrderDetail order, {
+    required bool compact,
+  }) {
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          order.header.number,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        Text(
+          '${order.header.serviceMode.label} · '
+          '${order.header.businessDate} · '
+          'versione ${order.header.version}',
+        ),
+      ],
+    );
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: identity),
+              IconButton(
+                tooltip: 'Chiudi dettaglio',
+                onPressed: controller.busy
+                    ? null
+                    : controller.discardCurrentView,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _StatusChip(status: order.header.status),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: identity),
+        _StatusChip(status: order.header.status),
+        IconButton(
+          tooltip: 'Chiudi dettaglio',
+          onPressed: controller.busy ? null : controller.discardCurrentView,
+          icon: const Icon(Icons.close),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildItemTile(
+    OrderDetail order,
+    OrderItem item, {
+    required bool compact,
+  }) {
+    final unit = formatOrderMoney(item.unitPriceCents, order.header.currency);
+    final total = formatOrderMoney(item.finalGrossCents, order.header.currency);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        item.displayName,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        compact
+            ? '${item.displayQuantity} × $unit · $total'
+            : '${item.displayQuantity} × $unit',
+      ),
+      trailing: compact ? null : Text(total),
+    );
+  }
+
+  List<Widget> _buildTotals(OrderDetail order) => [
+    _TotalRow(
+      label: 'Subtotale',
+      value: formatOrderMoney(
+        order.header.subtotalCents,
+        order.header.currency,
+      ),
+    ),
+    if (order.header.discountCents > 0)
+      _TotalRow(
+        label: 'Sconti',
+        value:
+            '-${formatOrderMoney(order.header.discountCents, order.header.currency)}',
+      ),
+    _TotalRow(
+      label: 'Totale',
+      value: formatOrderMoney(order.header.totalCents, order.header.currency),
+      emphasized: true,
+    ),
+  ];
+
+  Widget _buildActions(BuildContext context, OrderDetail order) => Align(
+    alignment: Alignment.centerRight,
+    child: Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (printingController != null)
+          OutlinedButton.icon(
+            key: const Key('print-order-receipt-button'),
+            onPressed: controller.busy || printingController!.busy
+                ? null
+                : () async {
+                    final printed = await printingController!
+                        .requestOrderReceipt(order.header.id);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          printed
+                              ? printingController!.noticeMessage ??
+                                    'Riepilogo ordine accodato.'
+                              : printingController!.errorMessage ??
+                                    'Stampa non riuscita.',
+                        ),
+                      ),
+                    );
+                  },
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('Stampa riepilogo'),
+          ),
+        if (order.header.status == OrderStatus.paid)
+          FilledButton.tonalIcon(
+            key: const Key('fiscalize-paid-order-button'),
+            onPressed: controller.busy
+                ? null
+                : () => context.push('/fiscalize/${order.header.id}'),
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: const Text('Fiscalizza'),
+          ),
+        if ((order.header.status == OrderStatus.open ||
+                order.header.status == OrderStatus.held) &&
+            order.items.isNotEmpty)
+          OutlinedButton.icon(
+            key: const Key('send-order-kitchen-button'),
+            onPressed: controller.busy || kitchenController.busy
+                ? null
+                : () async {
+                    final sent = await kitchenController.dispatchOrder(
+                      locationId: locationId,
+                      orderId: order.header.id,
+                    );
+                    if (!context.mounted) return;
+                    final message = sent
+                        ? kitchenController.noticeMessage ??
+                              'Ordine inviato in cucina.'
+                        : kitchenController.errorMessage ??
+                              'Invio cucina non riuscito.';
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(message)));
+                  },
+            icon: const Icon(Icons.soup_kitchen_outlined),
+            label: const Text('Invia in cucina'),
+          ),
+        if (order.header.status == OrderStatus.held)
+          FilledButton.icon(
+            key: const Key('resume-order-button'),
+            onPressed: controller.busy
+                ? null
+                : () async {
+                    final resumed = await controller.resumeOrder(
+                      order.header.id,
+                    );
+                    if (resumed && context.mounted) {
+                      context.go('/home');
+                    }
+                  },
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Riprendi in cassa'),
+          )
+        else if (order.header.status == OrderStatus.open) ...[
+          OutlinedButton.icon(
+            key: const Key('open-order-in-register-button'),
+            onPressed: controller.busy ? null : () => context.go('/home'),
+            icon: const Icon(Icons.point_of_sale),
+            label: const Text('Apri in cassa'),
+          ),
+          FilledButton.icon(
+            key: const Key('checkout-selected-order-button'),
+            onPressed: controller.busy || order.items.isEmpty
+                ? null
+                : () => context.push('/checkout/${order.header.id}'),
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('Incassa'),
+          ),
+        ] else if (order.header.status == OrderStatus.awaitingPayment)
+          FilledButton.icon(
+            key: const Key('continue-selected-checkout-button'),
+            onPressed: controller.busy
+                ? null
+                : () => context.push('/checkout/${order.header.id}'),
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('Continua pagamento'),
+          ),
+      ],
+    ),
+  );
 }
 
 class _StatusChip extends StatelessWidget {

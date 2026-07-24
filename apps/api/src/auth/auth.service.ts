@@ -42,6 +42,7 @@ interface SelectedMembership {
   organizationName: string;
   organizationSlug: string;
   role: MembershipRole;
+  defaultLocationId: string | null;
 }
 
 interface SessionSnapshot {
@@ -64,6 +65,7 @@ interface SessionSnapshot {
   membershipOrganizationId: string | null;
   membershipRole: MembershipRole | null;
   membershipStatus: 'ACTIVE' | 'SUSPENDED' | null;
+  membershipDefaultLocationId: string | null;
   organizationStatus: 'ACTIVE' | 'SUSPENDED' | null;
   organizationName: string | null;
   organizationSlug: string | null;
@@ -148,6 +150,7 @@ export class AuthService {
       await this.ensureDeviceAssignment(
         device.id,
         selectedMembership.organizationId,
+        selectedMembership.defaultLocationId,
       );
     }
 
@@ -234,6 +237,7 @@ export class AuthService {
             organizationName: snapshot.organizationName ?? '',
             organizationSlug: snapshot.organizationSlug ?? '',
             role: context.role!,
+            defaultLocationId: snapshot.membershipDefaultLocationId,
           }
         : null,
       metadata,
@@ -270,7 +274,11 @@ export class AuthService {
       });
     }
 
-    await this.ensureDeviceAssignment(auth.deviceId, dto.organizationId);
+    await this.ensureDeviceAssignment(
+      auth.deviceId,
+      dto.organizationId,
+      selected.defaultLocationId,
+    );
 
     return this.rotateSession(snapshot, providedHash, selected, metadata);
   }
@@ -599,17 +607,33 @@ export class AuthService {
   private async ensureDeviceAssignment(
     deviceId: string,
     organizationId: string,
+    defaultLocationId: string | null,
   ): Promise<void> {
+    const [existing] = await this.database.db
+      .select({ locationId: deviceAssignments.locationId })
+      .from(deviceAssignments)
+      .where(
+        and(
+          eq(deviceAssignments.deviceId, deviceId),
+          eq(deviceAssignments.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+
+    const locationId = existing?.locationId ?? defaultLocationId;
+
     await this.database.db
       .insert(deviceAssignments)
       .values({
         deviceId,
         organizationId,
+        locationId,
         active: true,
       })
       .onConflictDoUpdate({
         target: [deviceAssignments.deviceId, deviceAssignments.organizationId],
         set: {
+          locationId,
           active: true,
           revokedAt: null,
           updatedAt: new Date(),
@@ -627,6 +651,7 @@ export class AuthService {
         organizationName: organizations.name,
         organizationSlug: organizations.slug,
         role: organizationMemberships.role,
+        defaultLocationId: organizationMemberships.defaultLocationId,
       })
       .from(organizationMemberships)
       .innerJoin(
@@ -705,6 +730,7 @@ export class AuthService {
         membershipOrganizationId: organizationMemberships.organizationId,
         membershipRole: organizationMemberships.role,
         membershipStatus: organizationMemberships.status,
+        membershipDefaultLocationId: organizationMemberships.defaultLocationId,
         organizationStatus: organizations.status,
         organizationName: organizations.name,
         organizationSlug: organizations.slug,

@@ -5,12 +5,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq, inArray } from 'drizzle-orm';
 import {
   auditEvents,
+  deviceAssignments,
+  devices,
+  locations,
   organizationMemberships,
   organizations,
   users,
+  type MembershipRole,
 } from '@fluxa/database';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
@@ -19,6 +23,7 @@ import { assertOrganizationScope } from '../auth/tenant-scope';
 import type { CreateMemberDto } from './dto/create-member.dto';
 import type { CreateOrganizationDto } from './dto/create-organization.dto';
 import type { UpdateMemberDto } from './dto/update-member.dto';
+import { memberRoleRequiresLocation } from './member-location-policy';
 
 @Injectable()
 export class OrganizationsService {
@@ -133,10 +138,16 @@ export class OrganizationsService {
         userStatus: users.status,
         role: organizationMemberships.role,
         membershipStatus: organizationMemberships.status,
+        locationId: organizationMemberships.defaultLocationId,
+        locationName: locations.name,
         createdAt: organizationMemberships.createdAt,
       })
       .from(organizationMemberships)
       .innerJoin(users, eq(users.id, organizationMemberships.userId))
+      .leftJoin(
+        locations,
+        eq(locations.id, organizationMemberships.defaultLocationId),
+      )
       .where(eq(organizationMemberships.organizationId, organizationId))
       .orderBy(asc(users.displayName));
   }
@@ -149,6 +160,11 @@ export class OrganizationsService {
     assertOrganizationScope(auth, organizationId);
 
     const email = dto.email.trim().toLowerCase();
+    const defaultLocationId = await this.resolveMemberLocation(
+      organizationId,
+      dto.role,
+      dto.locationId,
+    );
 
     return this.database.db.transaction(async (tx) => {
       let [user] = await tx
@@ -185,6 +201,7 @@ export class OrganizationsService {
           userId: user.id,
           role: dto.role,
           status: 'ACTIVE',
+          defaultLocationId,
         })
         .onConflictDoUpdate({
           target: [
@@ -194,10 +211,35 @@ export class OrganizationsService {
           set: {
             role: dto.role,
             status: 'ACTIVE',
+            defaultLocationId,
             updatedAt: new Date(),
           },
         })
         .returning();
+
+      const activeDevices = await tx
+        .select({ id: devices.id })
+        .from(devices)
+        .where(and(eq(devices.userId, user.id), eq(devices.status, 'ACTIVE')));
+
+      if (activeDevices.length > 0) {
+        await tx
+          .update(deviceAssignments)
+          .set({
+            locationId: defaultLocationId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(deviceAssignments.organizationId, organizationId),
+              eq(deviceAssignments.active, true),
+              inArray(
+                deviceAssignments.deviceId,
+                activeDevices.map((device) => device.id),
+              ),
+            ),
+          );
+      }
 
       await tx.insert(auditEvents).values({
         organizationId,
@@ -209,6 +251,7 @@ export class OrganizationsService {
           userId: user.id,
           email,
           role: dto.role,
+          locationId: defaultLocationId,
         },
       });
 
@@ -275,31 +318,113 @@ export class OrganizationsService {
       }
     }
 
-    const [updated] = await this.database.db
-      .update(organizationMemberships)
-      .set({
-        role: dto.role ?? current.role,
-        status: dto.status ?? current.status,
-        updatedAt: new Date(),
-      })
-      .where(eq(organizationMemberships.id, membershipId))
-      .returning();
-
-    await this.database.db.insert(auditEvents).values({
+    const nextRole = dto.role ?? current.role;
+    const nextLocationId = await this.resolveMemberLocation(
       organizationId,
-      actorUserId: auth.userId,
-      action: 'organization.member.updated',
-      entityType: 'organization_membership',
-      entityId: membershipId,
-      payload: {
-        previousRole: current.role,
-        previousStatus: current.status,
-        role: updated.role,
-        status: updated.status,
-      },
-    });
+      nextRole,
+      dto.locationId === undefined ? current.defaultLocationId : dto.locationId,
+    );
 
-    return updated;
+    return this.database.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(organizationMemberships)
+        .set({
+          role: nextRole,
+          status: dto.status ?? current.status,
+          defaultLocationId: nextLocationId,
+          updatedAt: new Date(),
+        })
+        .where(eq(organizationMemberships.id, membershipId))
+        .returning();
+
+      if (dto.locationId !== undefined) {
+        const activeDevices = await tx
+          .select({ id: devices.id })
+          .from(devices)
+          .where(
+            and(
+              eq(devices.userId, current.userId),
+              eq(devices.status, 'ACTIVE'),
+            ),
+          );
+
+        if (activeDevices.length > 0) {
+          await tx
+            .update(deviceAssignments)
+            .set({
+              locationId: nextLocationId,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(deviceAssignments.organizationId, organizationId),
+                eq(deviceAssignments.active, true),
+                inArray(
+                  deviceAssignments.deviceId,
+                  activeDevices.map((device) => device.id),
+                ),
+              ),
+            );
+        }
+      }
+
+      await tx.insert(auditEvents).values({
+        organizationId,
+        actorUserId: auth.userId,
+        action: 'organization.member.updated',
+        entityType: 'organization_membership',
+        entityId: membershipId,
+        payload: {
+          previousRole: current.role,
+          previousStatus: current.status,
+          previousLocationId: current.defaultLocationId,
+          role: updated.role,
+          status: updated.status,
+          locationId: updated.defaultLocationId,
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  private async resolveMemberLocation(
+    organizationId: string,
+    role: MembershipRole,
+    requestedLocationId?: string | null,
+  ): Promise<string | null> {
+    if (!requestedLocationId) {
+      if (memberRoleRequiresLocation(role)) {
+        throw new BadRequestException({
+          code: 'MEMBER_LOCATION_REQUIRED',
+          message:
+            'Cassieri e camerieri devono essere assegnati a una location.',
+        });
+      }
+      return null;
+    }
+
+    const [location] = await this.database.db
+      .select({ id: locations.id })
+      .from(locations)
+      .where(
+        and(
+          eq(locations.id, requestedLocationId),
+          eq(locations.organizationId, organizationId),
+          eq(locations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+
+    if (!location) {
+      throw new NotFoundException({
+        code: 'MEMBER_LOCATION_NOT_FOUND',
+        message:
+          "La location selezionata non appartiene all'organizzazione o non è attiva.",
+      });
+    }
+
+    return location.id;
   }
 
   private isUniqueViolation(error: unknown): boolean {

@@ -55,6 +55,18 @@ class AdminApi {
     }
   }
 
+  Future<Map<String, Object?>> patch(
+    String path, {
+    Map<String, Object?> data = const {},
+  }) async {
+    try {
+      final response = await _dio.patch<Object?>(path, data: data);
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
   List<Map<String, Object?>> _asList(Object? data) {
     final raw = switch (data) {
       final List<Object?> values => values,

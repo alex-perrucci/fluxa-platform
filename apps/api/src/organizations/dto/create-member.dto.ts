@@ -1,4 +1,11 @@
-import { IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+} from 'class-validator';
 import { membershipRole, type MembershipRole } from '@fluxa/database';
 
 export class CreateMemberDto {
@@ -16,4 +23,8 @@ export class CreateMemberDto {
   @IsString()
   @Length(12, 200)
   temporaryPassword?: string;
+
+  @IsOptional()
+  @IsUUID()
+  locationId?: string;
 }

@@ -41,6 +41,49 @@ void main() {
     expect(find.byKey(const Key('resume-order-button')), findsOneWidget);
     expect(find.text('Caffè espresso'), findsOneWidget);
   });
+
+  testWidgets('does not overflow on a compact order detail', (tester) async {
+    tester.view.physicalSize = const Size(320, 560);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final gateway = _WidgetOrdersGateway();
+    final controller = OrderController(gateway);
+    final kitchenController = KitchenController(FakeHospitalityGateway());
+    await controller.bindLocation('location-1');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OrdersView(
+            controller: controller,
+            kitchenController: kitchenController,
+            location: const OperationalLocation(
+              id: 'location-1',
+              code: 'PARMA',
+              name: 'Parma Centro con denominazione molto lunga',
+              timezone: 'Europe/Rome',
+              status: 'ACTIVE',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('order-row-order-1')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('compact-order-detail-scroll')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    kitchenController.dispose();
+  });
 }
 
 class _WidgetOrdersGateway implements OrdersGateway {

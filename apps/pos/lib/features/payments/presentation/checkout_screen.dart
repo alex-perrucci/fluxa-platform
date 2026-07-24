@@ -732,103 +732,94 @@ Future<CashPaymentInput?> showCashPaymentDialog(
   BuildContext context,
   CheckoutSession checkout,
 ) async {
-  final amountController = TextEditingController(
-    text: moneyInputValue(checkout.availableCents),
-  );
-  final tenderedController = TextEditingController(
-    text: moneyInputValue(checkout.availableCents),
-  );
+  var amountText = moneyInputValue(checkout.availableCents);
+  var tenderedText = moneyInputValue(checkout.availableCents);
   String? validation;
-  try {
-    return await showDialog<CashPaymentInput>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Pagamento in contanti'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const Key('cash-amount-field'),
-                  controller: amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Importo applicato all’ordine',
-                    prefixText: '€ ',
-                    border: OutlineInputBorder(),
-                  ),
+  return showDialog<CashPaymentInput>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Pagamento in contanti'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                key: const Key('cash-amount-field'),
+                initialValue: amountText,
+                onChanged: (value) => amountText = value,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('cash-tendered-field'),
-                  controller: tenderedController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Contante ricevuto',
-                    prefixText: '€ ',
-                    border: OutlineInputBorder(),
-                  ),
+                decoration: const InputDecoration(
+                  labelText: 'Importo applicato all’ordine',
+                  prefixText: '€ ',
+                  border: OutlineInputBorder(),
                 ),
-                if (validation != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    validation!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const Key('cash-tendered-field'),
+                initialValue: tenderedText,
+                onChanged: (value) => tenderedText = value,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Contante ricevuto',
+                  prefixText: '€ ',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (validation != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  validation!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ],
-            ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              key: const Key('confirm-cash-payment-button'),
-              onPressed: () {
-                try {
-                  final amount = parseMoneyInput(amountController.text);
-                  final tendered = parseMoneyInput(tenderedController.text);
-                  if (amount > checkout.availableCents) {
-                    throw const FormatException(
-                      'L’importo supera il residuo disponibile.',
-                    );
-                  }
-                  if (tendered < amount) {
-                    throw const FormatException(
-                      'Il contante ricevuto è inferiore all’importo.',
-                    );
-                  }
-                  Navigator.pop(
-                    dialogContext,
-                    CashPaymentInput(
-                      amountCents: amount,
-                      tenderedCents: tendered,
-                    ),
-                  );
-                } on FormatException catch (error) {
-                  setState(() => validation = error.message.toString());
-                }
-              },
-              child: const Text('Registra'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            key: const Key('confirm-cash-payment-button'),
+            onPressed: () {
+              try {
+                final amount = parseMoneyInput(amountText);
+                final tendered = parseMoneyInput(tenderedText);
+                if (amount > checkout.availableCents) {
+                  throw const FormatException(
+                    'L’importo supera il residuo disponibile.',
+                  );
+                }
+                if (tendered < amount) {
+                  throw const FormatException(
+                    'Il contante ricevuto è inferiore all’importo.',
+                  );
+                }
+                Navigator.pop(
+                  dialogContext,
+                  CashPaymentInput(
+                    amountCents: amount,
+                    tenderedCents: tendered,
+                  ),
+                );
+              } on FormatException catch (error) {
+                setState(() => validation = error.message.toString());
+              }
+            },
+            child: const Text('Registra'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    amountController.dispose();
-    tenderedController.dispose();
-  }
+    ),
+  );
 }
 
 Future<TerminalPaymentInput?> showTerminalPaymentDialog(
@@ -837,338 +828,316 @@ Future<TerminalPaymentInput?> showTerminalPaymentDialog(
 ) async {
   var method = PaymentMethod.card;
   var provider = PaymentProvider.manualTerminal;
-  final amountController = TextEditingController(
-    text: moneyInputValue(checkout.availableCents),
-  );
+  var amountText = moneyInputValue(checkout.availableCents);
   String? validation;
-  try {
-    return await showDialog<TerminalPaymentInput>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Pagamento tramite terminale'),
-          content: SizedBox(
-            width: 440,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<PaymentMethod>(
-                  value: method,
-                  decoration: const InputDecoration(
-                    labelText: 'Metodo',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: PaymentMethod.card,
-                      child: Text('Carta'),
-                    ),
-                    DropdownMenuItem(
-                      value: PaymentMethod.other,
-                      child: Text('Altro'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => method = value);
-                    }
-                  },
+  return showDialog<TerminalPaymentInput>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Pagamento tramite terminale'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<PaymentMethod>(
+                value: method,
+                decoration: const InputDecoration(
+                  labelText: 'Metodo',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<PaymentProvider>(
-                  value: provider,
-                  decoration: const InputDecoration(
-                    labelText: 'Provider',
-                    border: OutlineInputBorder(),
+                items: const [
+                  DropdownMenuItem(
+                    value: PaymentMethod.card,
+                    child: Text('Carta'),
                   ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: PaymentProvider.manualTerminal,
-                      child: Text('Terminale manuale'),
-                    ),
-                    DropdownMenuItem(
-                      value: PaymentProvider.externalTerminal,
-                      child: Text('Terminale esterno'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => provider = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('terminal-amount-field'),
-                  controller: amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Importo',
-                    prefixText: '€ ',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                if (validation != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    validation!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                  DropdownMenuItem(
+                    value: PaymentMethod.other,
+                    child: Text('Altro'),
                   ),
                 ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              key: const Key('confirm-terminal-payment-button'),
-              onPressed: () {
-                try {
-                  final amount = parseMoneyInput(amountController.text);
-                  if (amount > checkout.availableCents) {
-                    throw const FormatException(
-                      'L’importo supera il residuo disponibile.',
-                    );
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => method = value);
                   }
-                  Navigator.pop(
-                    dialogContext,
-                    TerminalPaymentInput(
-                      method: method,
-                      provider: provider,
-                      amountCents: amount,
-                    ),
-                  );
-                } on FormatException catch (error) {
-                  setState(() => validation = error.message.toString());
-                }
-              },
-              child: const Text('Crea pagamento'),
-            ),
-          ],
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<PaymentProvider>(
+                value: provider,
+                decoration: const InputDecoration(
+                  labelText: 'Provider',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: PaymentProvider.manualTerminal,
+                    child: Text('Terminale manuale'),
+                  ),
+                  DropdownMenuItem(
+                    value: PaymentProvider.externalTerminal,
+                    child: Text('Terminale esterno'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => provider = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const Key('terminal-amount-field'),
+                initialValue: amountText,
+                onChanged: (value) => amountText = value,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Importo',
+                  prefixText: '€ ',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (validation != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  validation!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            key: const Key('confirm-terminal-payment-button'),
+            onPressed: () {
+              try {
+                final amount = parseMoneyInput(amountText);
+                if (amount > checkout.availableCents) {
+                  throw const FormatException(
+                    'L’importo supera il residuo disponibile.',
+                  );
+                }
+                Navigator.pop(
+                  dialogContext,
+                  TerminalPaymentInput(
+                    method: method,
+                    provider: provider,
+                    amountCents: amount,
+                  ),
+                );
+              } on FormatException catch (error) {
+                setState(() => validation = error.message.toString());
+              }
+            },
+            child: const Text('Crea pagamento'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    amountController.dispose();
-  }
+    ),
+  );
 }
 
 Future<CapturePaymentInput?> showCapturePaymentDialog(
   BuildContext context,
 ) async {
-  final referenceController = TextEditingController();
-  final eventController = TextEditingController();
+  var referenceText = '';
+  var eventText = '';
   String? validation;
-  try {
-    return await showDialog<CapturePaymentInput>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Conferma acquisizione'),
-          content: SizedBox(
-            width: 440,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const Key('provider-reference-field'),
-                  controller: referenceController,
-                  maxLength: 200,
-                  decoration: const InputDecoration(
-                    labelText: 'Riferimento provider',
-                    border: OutlineInputBorder(),
-                  ),
+  return showDialog<CapturePaymentInput>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Conferma acquisizione'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                key: const Key('provider-reference-field'),
+                initialValue: referenceText,
+                onChanged: (value) => referenceText = value,
+                maxLength: 200,
+                decoration: const InputDecoration(
+                  labelText: 'Riferimento provider',
+                  border: OutlineInputBorder(),
                 ),
-                TextField(
-                  controller: eventController,
-                  maxLength: 200,
-                  decoration: const InputDecoration(
-                    labelText: 'ID evento provider (facoltativo)',
-                    border: OutlineInputBorder(),
-                  ),
+              ),
+              TextFormField(
+                initialValue: eventText,
+                onChanged: (value) => eventText = value,
+                maxLength: 200,
+                decoration: const InputDecoration(
+                  labelText: 'ID evento provider (facoltativo)',
+                  border: OutlineInputBorder(),
                 ),
-                if (validation != null)
-                  Text(
-                    validation!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-              ],
-            ),
+              ),
+              if (validation != null)
+                Text(
+                  validation!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final reference = referenceController.text.trim();
-                if (reference.isEmpty) {
-                  setState(
-                    () => validation = 'Inserisci il riferimento provider.',
-                  );
-                  return;
-                }
-                Navigator.pop(
-                  dialogContext,
-                  CapturePaymentInput(
-                    providerReference: reference,
-                    providerEventId: _optionalDialogValue(eventController.text),
-                  ),
-                );
-              },
-              child: const Text('Acquisisci'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final reference = referenceText.trim();
+              if (reference.isEmpty) {
+                setState(
+                  () => validation = 'Inserisci il riferimento provider.',
+                );
+                return;
+              }
+              Navigator.pop(
+                dialogContext,
+                CapturePaymentInput(
+                  providerReference: reference,
+                  providerEventId: _optionalDialogValue(eventText),
+                ),
+              );
+            },
+            child: const Text('Acquisisci'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    referenceController.dispose();
-    eventController.dispose();
-  }
+    ),
+  );
 }
 
 Future<FailPaymentInput?> showFailPaymentDialog(BuildContext context) async {
-  final codeController = TextEditingController();
-  final messageController = TextEditingController();
-  final eventController = TextEditingController();
+  var codeText = '';
+  var messageText = '';
+  var eventText = '';
   String? validation;
-  try {
-    return await showDialog<FailPaymentInput>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Pagamento fallito'),
-          content: SizedBox(
-            width: 440,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const Key('payment-failure-code-field'),
-                  controller: codeController,
-                  maxLength: 80,
-                  decoration: const InputDecoration(
-                    labelText: 'Codice errore',
-                    border: OutlineInputBorder(),
-                  ),
+  return showDialog<FailPaymentInput>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Pagamento fallito'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                key: const Key('payment-failure-code-field'),
+                initialValue: codeText,
+                onChanged: (value) => codeText = value,
+                maxLength: 80,
+                decoration: const InputDecoration(
+                  labelText: 'Codice errore',
+                  border: OutlineInputBorder(),
                 ),
-                TextField(
-                  controller: messageController,
-                  maxLength: 500,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Messaggio (facoltativo)',
-                    border: OutlineInputBorder(),
-                  ),
+              ),
+              TextFormField(
+                initialValue: messageText,
+                onChanged: (value) => messageText = value,
+                maxLength: 500,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Messaggio (facoltativo)',
+                  border: OutlineInputBorder(),
                 ),
-                TextField(
-                  controller: eventController,
-                  maxLength: 200,
-                  decoration: const InputDecoration(
-                    labelText: 'ID evento provider (facoltativo)',
-                    border: OutlineInputBorder(),
-                  ),
+              ),
+              TextFormField(
+                initialValue: eventText,
+                onChanged: (value) => eventText = value,
+                maxLength: 200,
+                decoration: const InputDecoration(
+                  labelText: 'ID evento provider (facoltativo)',
+                  border: OutlineInputBorder(),
                 ),
-                if (validation != null)
-                  Text(
-                    validation!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-              ],
-            ),
+              ),
+              if (validation != null)
+                Text(
+                  validation!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final code = codeController.text.trim();
-                if (code.isEmpty) {
-                  setState(() => validation = 'Inserisci il codice errore.');
-                  return;
-                }
-                Navigator.pop(
-                  dialogContext,
-                  FailPaymentInput(
-                    failureCode: code,
-                    failureMessage: _optionalDialogValue(
-                      messageController.text,
-                    ),
-                    providerEventId: _optionalDialogValue(eventController.text),
-                  ),
-                );
-              },
-              child: const Text('Conferma fallimento'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final code = codeText.trim();
+              if (code.isEmpty) {
+                setState(() => validation = 'Inserisci il codice errore.');
+                return;
+              }
+              Navigator.pop(
+                dialogContext,
+                FailPaymentInput(
+                  failureCode: code,
+                  failureMessage: _optionalDialogValue(messageText),
+                  providerEventId: _optionalDialogValue(eventText),
+                ),
+              );
+            },
+            child: const Text('Conferma fallimento'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    codeController.dispose();
-    messageController.dispose();
-    eventController.dispose();
-  }
+    ),
+  );
 }
 
 Future<String?> showCheckoutCancelDialog(BuildContext context) async {
-  final reasonController = TextEditingController();
+  var reasonText = '';
   String? validation;
-  try {
-    return await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Annulla checkout'),
-          content: TextField(
-            key: const Key('checkout-cancel-reason-field'),
-            controller: reasonController,
-            maxLength: 500,
-            maxLines: 3,
-            decoration: InputDecoration(
-              labelText: 'Motivo',
-              errorText: validation,
-              border: const OutlineInputBorder(),
-            ),
+  return showDialog<String>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Annulla checkout'),
+        content: TextFormField(
+          key: const Key('checkout-cancel-reason-field'),
+          initialValue: reasonText,
+          onChanged: (value) => reasonText = value,
+          maxLength: 500,
+          maxLines: 3,
+          decoration: InputDecoration(
+            labelText: 'Motivo',
+            errorText: validation,
+            border: const OutlineInputBorder(),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Indietro'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final reason = reasonController.text.trim();
-                if (reason.length < 3) {
-                  setState(() => validation = 'Inserisci almeno 3 caratteri.');
-                  return;
-                }
-                Navigator.pop(dialogContext, reason);
-              },
-              child: const Text('Annulla checkout'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Indietro'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final reason = reasonText.trim();
+              if (reason.length < 3) {
+                setState(() => validation = 'Inserisci almeno 3 caratteri.');
+                return;
+              }
+              Navigator.pop(dialogContext, reason);
+            },
+            child: const Text('Annulla checkout'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    reasonController.dispose();
-  }
+    ),
+  );
 }
 
 String? _optionalDialogValue(String value) {

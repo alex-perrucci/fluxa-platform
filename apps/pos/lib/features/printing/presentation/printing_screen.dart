@@ -68,6 +68,9 @@ class PrintingView extends StatelessWidget {
           canManageJobs: canManageJobs,
         );
         final selectedPane = controller.selectedJob == null ? list : detail;
+        final mobilePaneHeight = (MediaQuery.sizeOf(context).height * 0.62)
+            .clamp(480.0, 680.0)
+            .toDouble();
         if (constraints.maxWidth < 760) {
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -91,7 +94,7 @@ class PrintingView extends StatelessWidget {
               const SizedBox(height: 12),
               _AgentCard(controller: controller),
               const SizedBox(height: 12),
-              SizedBox(height: 560, child: selectedPane),
+              SizedBox(height: mobilePaneHeight, child: selectedPane),
             ],
           );
         }
@@ -189,46 +192,77 @@ class _AgentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(
-                  controller.agentEnabled
-                      ? Icons.print_outlined
-                      : Icons.print_disabled_outlined,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Agente di stampa Android',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        controller.agentSupported
-                            ? '${assigned.length} stampanti assegnate a questo dispositivo'
-                            : 'Apri questa sezione nell’app Android per stampare via Wi-Fi o Bluetooth.',
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(
-                  key: const Key('printing-agent-switch'),
-                  value: controller.agentEnabled,
-                  onChanged: controller.busy || !controller.agentSupported
-                      ? null
-                      : controller.setAgentEnabled,
-                ),
-                if (controller.agentPolling)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 8),
-                    child: SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 430;
+                final identity = Row(
+                  children: [
+                    Icon(
+                      controller.agentEnabled
+                          ? Icons.print_outlined
+                          : Icons.print_disabled_outlined,
                     ),
-                  ),
-              ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Agente di stampa Android',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          Text(
+                            controller.agentSupported
+                                ? '${assigned.length} stampanti assegnate '
+                                      'a questo dispositivo'
+                                : 'Apri questa sezione nell’app Android '
+                                      'per stampare via Wi-Fi o Bluetooth.',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+
+                final controls = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Switch(
+                      key: const Key('printing-agent-switch'),
+                      value: controller.agentEnabled,
+                      onChanged: controller.busy || !controller.agentSupported
+                          ? null
+                          : controller.setAgentEnabled,
+                    ),
+                    if (controller.agentPolling)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                  ],
+                );
+
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      identity,
+                      const SizedBox(height: 8),
+                      Align(alignment: Alignment.centerRight, child: controls),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: identity),
+                    controls,
+                  ],
+                );
+              },
             ),
             if (controller.agentMessage != null) ...[
               const SizedBox(height: 8),
@@ -243,8 +277,10 @@ class _AgentCard extends StatelessWidget {
                 children: [
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 520),
-                    child: Text(
-                      'Associa ogni stampante backend a una termica Wi-Fi oppure a una stampante Bluetooth già abbinata ad Android.',
+                    child: const Text(
+                      'Associa ogni stampante backend a una termica '
+                      'Wi-Fi oppure a una stampante Bluetooth già '
+                      'abbinata ad Android.',
                     ),
                   ),
                   TextButton.icon(
@@ -270,8 +306,9 @@ class _AgentCard extends StatelessWidget {
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
-                    'Nessuna stampante attiva è assegnata al dispositivo corrente. '
-                    'La configurazione backend va completata da un amministratore.',
+                    'Nessuna stampante attiva è assegnata al '
+                    'dispositivo corrente. La configurazione backend '
+                    'va completata da un amministratore.',
                   ),
                 )
               else
@@ -406,17 +443,15 @@ Future<void> _configureWifiPrinter(
   PrinterDevice printer,
 ) async {
   final current = controller.queueFor(printer.id);
-  var initialHost = '';
-  var initialPort = '9100';
+  var hostText = '';
+  var portText = '9100';
   if (isWifiPrinterTarget(current)) {
     final parts = current!.split('|');
     if (parts.length == 3) {
-      initialHost = parts[1];
-      initialPort = parts[2];
+      hostText = parts[1];
+      portText = parts[2];
     }
   }
-  final hostController = TextEditingController(text: initialHost);
-  final portController = TextEditingController(text: initialPort);
   final target = await showDialog<String>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -426,9 +461,10 @@ Future<void> _configureWifiPrinter(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            TextFormField(
               key: const Key('wifi-printer-host'),
-              controller: hostController,
+              initialValue: hostText,
+              onChanged: (value) => hostText = value,
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(
                 labelText: 'Indirizzo IP o hostname',
@@ -437,9 +473,10 @@ Future<void> _configureWifiPrinter(
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            TextFormField(
               key: const Key('wifi-printer-port'),
-              controller: portController,
+              initialValue: portText,
+              onChanged: (value) => portText = value,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'Porta TCP',
@@ -462,8 +499,8 @@ Future<void> _configureWifiPrinter(
         FilledButton(
           key: const Key('save-wifi-printer'),
           onPressed: () {
-            final host = hostController.text.trim();
-            final port = int.tryParse(portController.text.trim());
+            final host = hostText.trim();
+            final port = int.tryParse(portText.trim());
             if (host.isEmpty || port == null || port < 1 || port > 65535) {
               return;
             }
@@ -477,8 +514,6 @@ Future<void> _configureWifiPrinter(
       ],
     ),
   );
-  hostController.dispose();
-  portController.dispose();
   if (target != null) {
     await controller.setQueueMapping(printer, target);
   }
@@ -490,64 +525,84 @@ class _QueuePane extends StatelessWidget {
   final PrintingController controller;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: DropdownButtonFormField<String?>(
-              key: const Key('print-printer-filter'),
-              value: controller.printerFilterId,
-              decoration: const InputDecoration(
-                labelText: 'Stampante',
-                border: OutlineInputBorder(),
-                isDense: true,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact = constraints.maxWidth < 430;
+      final printerFilter = DropdownButtonFormField<String?>(
+        key: const Key('print-printer-filter'),
+        value: controller.printerFilterId,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Stampante',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Tutte')),
+          ...controller.printers.map(
+            (printer) => DropdownMenuItem<String?>(
+              value: printer.id,
+              child: Text(
+                printer.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('Tutte'),
-                ),
-                ...controller.printers.map(
-                  (printer) => DropdownMenuItem<String?>(
-                    value: printer.id,
-                    child: Text(printer.name),
-                  ),
-                ),
-              ],
-              onChanged: controller.busy ? null : controller.setPrinterFilter,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: DropdownButtonFormField<PrintJobStatus?>(
-              key: const Key('print-status-filter'),
-              value: controller.statusFilter,
-              decoration: const InputDecoration(
-                labelText: 'Stato',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: [
-                const DropdownMenuItem<PrintJobStatus?>(
-                  value: null,
-                  child: Text('Tutti'),
-                ),
-                ...PrintJobStatus.values.map(
-                  (status) => DropdownMenuItem<PrintJobStatus?>(
-                    value: status,
-                    child: Text(status.label),
-                  ),
-                ),
-              ],
-              onChanged: controller.busy ? null : controller.setStatusFilter,
             ),
           ),
         ],
-      ),
-      const SizedBox(height: 12),
-      Expanded(child: _JobList(controller: controller)),
-    ],
+        onChanged: controller.busy ? null : controller.setPrinterFilter,
+      );
+      final statusFilter = DropdownButtonFormField<PrintJobStatus?>(
+        key: const Key('print-status-filter'),
+        value: controller.statusFilter,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Stato',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: [
+          const DropdownMenuItem<PrintJobStatus?>(
+            value: null,
+            child: Text('Tutti'),
+          ),
+          ...PrintJobStatus.values.map(
+            (status) => DropdownMenuItem<PrintJobStatus?>(
+              value: status,
+              child: Text(
+                status.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ],
+        onChanged: controller.busy ? null : controller.setStatusFilter,
+      );
+
+      return Column(
+        children: [
+          if (compact)
+            Column(
+              children: [
+                printerFilter,
+                const SizedBox(height: 10),
+                statusFilter,
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(child: printerFilter),
+                const SizedBox(width: 10),
+                Expanded(child: statusFilter),
+              ],
+            ),
+          const SizedBox(height: 12),
+          Expanded(child: _JobList(controller: controller)),
+        ],
+      );
+    },
   );
 }
 
@@ -567,23 +622,60 @@ class _JobList extends StatelessWidget {
     }
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: ListView.separated(
-        key: const Key('print-jobs-list'),
-        itemCount: controller.jobs.length,
-        separatorBuilder: (context, index) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final job = controller.jobs[index];
-          return ListTile(
-            key: Key('print-job-${job.id}'),
-            selected: controller.selectedJob?.id == job.id,
-            leading: Icon(_documentIcon(job.documentType)),
-            title: Text(job.documentType.label),
-            subtitle: Text(
-              '${controller.printerName(job.printerId)} · '
-              '${job.attempts}/${job.maxAttempts} tentativi',
-            ),
-            trailing: Chip(label: Text(job.status.label)),
-            onTap: controller.busy ? null : () => controller.selectJob(job.id),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 390;
+          return ListView.separated(
+            key: const Key('print-jobs-list'),
+            itemCount: controller.jobs.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final job = controller.jobs[index];
+              return ListTile(
+                key: Key('print-job-${job.id}'),
+                selected: controller.selectedJob?.id == job.id,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                leading: compact ? null : Icon(_documentIcon(job.documentType)),
+                title: Text(
+                  job.documentType.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: compact
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${controller.printerName(job.printerId)} · '
+                            '${job.attempts}/${job.maxAttempts} '
+                            'tentativi',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Chip(label: Text(job.status.label)),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        '${controller.printerName(job.printerId)} · '
+                        '${job.attempts}/${job.maxAttempts} '
+                        'tentativi',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                trailing: compact ? null : Chip(label: Text(job.status.label)),
+                isThreeLine: compact,
+                onTap: controller.busy
+                    ? null
+                    : () => controller.selectJob(job.id),
+              );
+            },
           );
         },
       ),
@@ -608,134 +700,217 @@ class _JobDetailPane extends StatelessWidget {
             'Apri un elemento della coda per vedere documento e tentativi.',
       );
     }
+
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 620;
+          if (compact) {
+            return ListView(
+              key: const Key('compact-print-job-detail-scroll'),
+              padding: const EdgeInsets.all(16),
               children: [
-                Icon(_documentIcon(job.documentType)),
-                const SizedBox(width: 10),
+                _buildHeader(context, job, compact: true),
+                if (job.lastError != null) ...[
+                  const SizedBox(height: 10),
+                  Text('Ultimo errore: ${job.lastError}'),
+                ],
+                const Divider(height: 24),
+                Text(
+                  'Documento',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                SizedBox(height: 240, child: _renderedDocument(context, job)),
+                const Divider(height: 24),
+                Text(
+                  'Tentativi',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                _attemptHistory(job, shrinkWrap: true),
+                const Divider(height: 24),
+                _actions(context, job),
+              ],
+            );
+          }
+
+          return Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(context, job, compact: false),
+                if (job.lastError != null) ...[
+                  const SizedBox(height: 10),
+                  Text('Ultimo errore: ${job.lastError}'),
+                ],
+                const Divider(height: 24),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        job.documentType.label,
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      Text(
-                        '${controller.printerName(job.printerId)} · v${job.version}',
+                      Expanded(flex: 3, child: _renderedDocument(context, job)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: _attemptHistory(job, shrinkWrap: false),
                       ),
                     ],
                   ),
                 ),
-                Chip(label: Text(job.status.label)),
-                IconButton(
-                  tooltip: 'Chiudi dettaglio',
-                  onPressed: controller.busy ? null : controller.closeJob,
-                  icon: const Icon(Icons.close),
-                ),
+                const Divider(height: 24),
+                _actions(context, job),
               ],
             ),
-            if (job.lastError != null) ...[
-              const SizedBox(height: 10),
-              Text('Ultimo errore: ${job.lastError}'),
-            ],
-            const Divider(height: 24),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(14),
-                        child: SelectableText(
-                          job.renderedText,
-                          key: const Key('print-rendered-text'),
-                          style: const TextStyle(fontFamily: 'monospace'),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: job.attemptHistory.isEmpty
-                        ? const Center(
-                            child: Text('Nessun tentativo registrato.'),
-                          )
-                        : ListView.separated(
-                            itemCount: job.attemptHistory.length,
-                            separatorBuilder: (context, index) =>
-                                const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final attempt = job.attemptHistory[index];
-                              return ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  'Tentativo ${attempt.attemptNo} · ${attempt.outcome.label}',
-                                ),
-                                subtitle: attempt.error == null
-                                    ? null
-                                    : Text(attempt.error!),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 24),
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  key: const Key('reprint-job-button'),
-                  onPressed: controller.busy || !job.canReprint
-                      ? null
-                      : () => controller.reprintJob(job),
-                  icon: const Icon(Icons.print_outlined),
-                  label: const Text('Ristampa'),
-                ),
-                if (canManageJobs && job.status.canRetry)
-                  FilledButton.tonalIcon(
-                    key: const Key('retry-print-job-button'),
-                    onPressed: controller.busy
-                        ? null
-                        : () => controller.retryJob(job),
-                    icon: const Icon(Icons.replay),
-                    label: const Text('Riprova'),
-                  ),
-                if (canManageJobs && job.status.canCancel)
-                  TextButton.icon(
-                    key: const Key('cancel-print-job-button'),
-                    onPressed: controller.busy
-                        ? null
-                        : () => _cancelJob(context, controller, job),
-                    icon: const Icon(Icons.cancel_outlined),
-                    label: const Text('Annulla'),
-                  ),
-              ],
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
+
+  Widget _buildHeader(
+    BuildContext context,
+    PrintJob job, {
+    required bool compact,
+  }) {
+    final identity = Row(
+      children: [
+        Icon(_documentIcon(job.documentType)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                job.documentType.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              Text(
+                '${controller.printerName(job.printerId)} · '
+                'v${job.version}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: identity),
+              IconButton(
+                tooltip: 'Chiudi dettaglio',
+                onPressed: controller.busy ? null : controller.closeJob,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Chip(label: Text(job.status.label)),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: identity),
+        Chip(label: Text(job.status.label)),
+        IconButton(
+          tooltip: 'Chiudi dettaglio',
+          onPressed: controller.busy ? null : controller.closeJob,
+          icon: const Icon(Icons.close),
+        ),
+      ],
+    );
+  }
+
+  Widget _renderedDocument(BuildContext context, PrintJob job) => DecoratedBox(
+    decoration: BoxDecoration(
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(14),
+      child: SelectableText(
+        job.renderedText,
+        key: const Key('print-rendered-text'),
+        style: const TextStyle(fontFamily: 'monospace'),
+      ),
+    ),
+  );
+
+  Widget _attemptHistory(PrintJob job, {required bool shrinkWrap}) {
+    if (job.attemptHistory.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Nessun tentativo registrato.'),
+        ),
+      );
+    }
+    return ListView.separated(
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+      itemCount: job.attemptHistory.length,
+      separatorBuilder: (context, index) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final attempt = job.attemptHistory[index];
+        return ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            'Tentativo ${attempt.attemptNo} · '
+            '${attempt.outcome.label}',
+          ),
+          subtitle: attempt.error == null ? null : Text(attempt.error!),
+        );
+      },
+    );
+  }
+
+  Widget _actions(BuildContext context, PrintJob job) => Align(
+    alignment: Alignment.centerRight,
+    child: Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        OutlinedButton.icon(
+          key: const Key('reprint-job-button'),
+          onPressed: controller.busy || !job.canReprint
+              ? null
+              : () => controller.reprintJob(job),
+          icon: const Icon(Icons.print_outlined),
+          label: const Text('Ristampa'),
+        ),
+        if (canManageJobs && job.status.canRetry)
+          FilledButton.tonalIcon(
+            key: const Key('retry-print-job-button'),
+            onPressed: controller.busy ? null : () => controller.retryJob(job),
+            icon: const Icon(Icons.replay),
+            label: const Text('Riprova'),
+          ),
+        if (canManageJobs && job.status.canCancel)
+          TextButton.icon(
+            key: const Key('cancel-print-job-button'),
+            onPressed: controller.busy
+                ? null
+                : () => _cancelJob(context, controller, job),
+            icon: const Icon(Icons.cancel_outlined),
+            label: const Text('Annulla'),
+          ),
+      ],
+    ),
+  );
 }
 
 Future<void> _cancelJob(
@@ -743,38 +918,35 @@ Future<void> _cancelJob(
   PrintingController controller,
   PrintJob job,
 ) async {
-  final textController = TextEditingController();
-  try {
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Annulla lavoro di stampa'),
-        content: TextField(
-          key: const Key('cancel-print-job-reason'),
-          controller: textController,
-          maxLength: 500,
-          decoration: const InputDecoration(
-            labelText: 'Motivo',
-            border: OutlineInputBorder(),
-          ),
+  var reasonText = '';
+  final reason = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Annulla lavoro di stampa'),
+      content: TextFormField(
+        key: const Key('cancel-print-job-reason'),
+        initialValue: reasonText,
+        onChanged: (value) => reasonText = value,
+        maxLength: 500,
+        decoration: const InputDecoration(
+          labelText: 'Motivo',
+          border: OutlineInputBorder(),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Indietro'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, textController.text),
-            child: const Text('Annulla lavoro'),
-          ),
-        ],
       ),
-    );
-    if (reason != null) {
-      await controller.cancelJob(job, reason);
-    }
-  } finally {
-    textController.dispose();
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Indietro'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, reasonText),
+          child: const Text('Annulla lavoro'),
+        ),
+      ],
+    ),
+  );
+  if (reason != null) {
+    await controller.cancelJob(job, reason);
   }
 }
 
