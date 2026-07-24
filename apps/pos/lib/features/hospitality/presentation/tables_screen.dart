@@ -648,23 +648,24 @@ Future<void> _showOpenTableDialog(
   TableController controller,
   DiningTableFloor table,
 ) async {
-  final guestController = TextEditingController(text: '1');
-  final noteController = TextEditingController();
+  var guestCountText = '1';
+  var noteText = '';
   String? validationMessage;
-  try {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text('Apri ${table.name}'),
-          content: SizedBox(
-            width: 420,
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text('Apri ${table.name}'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
+                TextFormField(
                   key: const Key('table-guest-count-field'),
-                  controller: guestController,
+                  initialValue: guestCountText,
+                  onChanged: (value) => guestCountText = value,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Coperti',
@@ -673,9 +674,10 @@ Future<void> _showOpenTableDialog(
                   ),
                 ),
                 const SizedBox(height: 14),
-                TextField(
+                TextFormField(
                   key: const Key('table-note-field'),
-                  controller: noteController,
+                  initialValue: noteText,
+                  onChanged: (value) => noteText = value,
                   maxLength: 500,
                   maxLines: 3,
                   decoration: const InputDecoration(
@@ -686,41 +688,38 @@ Future<void> _showOpenTableDialog(
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              key: const Key('confirm-open-table-button'),
-              onPressed: () async {
-                final guestCount = int.tryParse(guestController.text.trim());
-                if (guestCount == null || guestCount < 1 || guestCount > 100) {
-                  setState(
-                    () => validationMessage =
-                        'Inserisci un numero di coperti da 1 a 100.',
-                  );
-                  return;
-                }
-                final opened = await controller.openSession(
-                  table: table,
-                  guestCount: guestCount,
-                  note: noteController.text,
-                );
-                if (opened && dialogContext.mounted) {
-                  Navigator.pop(dialogContext);
-                }
-              },
-              child: const Text('Apri'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            key: const Key('confirm-open-table-button'),
+            onPressed: () async {
+              final guestCount = int.tryParse(guestCountText.trim());
+              if (guestCount == null || guestCount < 1 || guestCount > 100) {
+                setState(
+                  () => validationMessage =
+                      'Inserisci un numero di coperti da 1 a 100.',
+                );
+                return;
+              }
+              final opened = await controller.openSession(
+                table: table,
+                guestCount: guestCount,
+                note: noteText,
+              );
+              if (opened && dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('Apri'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    guestController.dispose();
-    noteController.dispose();
-  }
+    ),
+  );
 }
 
 Future<void> _showEditSessionDialog(
@@ -728,24 +727,23 @@ Future<void> _showEditSessionDialog(
   TableController controller,
   TableSessionDetail session,
 ) async {
-  final guestController = TextEditingController(
-    text: session.guestCount.toString(),
-  );
-  final noteController = TextEditingController(text: session.note ?? '');
+  var guestCountText = session.guestCount.toString();
+  var noteText = session.note ?? '';
   String? validationMessage;
-  try {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Modifica tavolo'),
-          content: SizedBox(
-            width: 420,
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Modifica tavolo'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: guestController,
+                TextFormField(
+                  initialValue: guestCountText,
+                  onChanged: (value) => guestCountText = value,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Coperti',
@@ -754,8 +752,9 @@ Future<void> _showEditSessionDialog(
                   ),
                 ),
                 const SizedBox(height: 14),
-                TextField(
-                  controller: noteController,
+                TextFormField(
+                  initialValue: noteText,
+                  onChanged: (value) => noteText = value,
                   maxLength: 500,
                   maxLines: 3,
                   decoration: const InputDecoration(
@@ -766,39 +765,36 @@ Future<void> _showEditSessionDialog(
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final guestCount = int.tryParse(guestController.text.trim());
-                if (guestCount == null || guestCount < 1 || guestCount > 100) {
-                  setState(
-                    () => validationMessage =
-                        'Inserisci un numero di coperti da 1 a 100.',
-                  );
-                  return;
-                }
-                final updated = await controller.updateSession(
-                  guestCount: guestCount,
-                  note: noteController.text,
-                );
-                if (updated && dialogContext.mounted) {
-                  Navigator.pop(dialogContext);
-                }
-              },
-              child: const Text('Salva'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final guestCount = int.tryParse(guestCountText.trim());
+              if (guestCount == null || guestCount < 1 || guestCount > 100) {
+                setState(
+                  () => validationMessage =
+                      'Inserisci un numero di coperti da 1 a 100.',
+                );
+                return;
+              }
+              final updated = await controller.updateSession(
+                guestCount: guestCount,
+                note: noteText,
+              );
+              if (updated && dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('Salva'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    guestController.dispose();
-    noteController.dispose();
-  }
+    ),
+  );
 }
 
 Future<void> _showMoveDialog(
@@ -916,47 +912,41 @@ Future<void> _confirmCloseSession(
   TableController controller, {
   required bool cancel,
 }) async {
-  final reasonController = TextEditingController();
-  try {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(cancel ? 'Annulla sessione' : 'Libera tavolo'),
-        content: TextField(
-          controller: reasonController,
-          maxLength: 500,
-          maxLines: 3,
-          decoration: InputDecoration(
-            labelText: cancel ? 'Motivo (facoltativo)' : 'Nota (facoltativa)',
-            border: const OutlineInputBorder(),
-          ),
+  var reasonText = '';
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(cancel ? 'Annulla sessione' : 'Libera tavolo'),
+      content: TextFormField(
+        key: const Key('table-close-reason-field'),
+        initialValue: reasonText,
+        onChanged: (value) => reasonText = value,
+        maxLength: 500,
+        maxLines: 3,
+        decoration: InputDecoration(
+          labelText: cancel ? 'Motivo (facoltativo)' : 'Nota (facoltativa)',
+          border: const OutlineInputBorder(),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Indietro'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final completed = cancel
-                  ? await controller.cancelSession(
-                      reason: reasonController.text,
-                    )
-                  : await controller.closeSession(
-                      reason: reasonController.text,
-                    );
-              if (completed && dialogContext.mounted) {
-                Navigator.pop(dialogContext);
-              }
-            },
-            child: Text(cancel ? 'Annulla sessione' : 'Libera'),
-          ),
-        ],
       ),
-    );
-  } finally {
-    reasonController.dispose();
-  }
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Indietro'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            final completed = cancel
+                ? await controller.cancelSession(reason: reasonText)
+                : await controller.closeSession(reason: reasonText);
+            if (completed && dialogContext.mounted) {
+              Navigator.pop(dialogContext);
+            }
+          },
+          child: Text(cancel ? 'Annulla sessione' : 'Libera'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _MessageCard extends StatelessWidget {

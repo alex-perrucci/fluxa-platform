@@ -382,76 +382,73 @@ Future<void> showNewOrderDialog(
   OrderController controller,
 ) async {
   var mode = OrderServiceMode.counter;
-  final noteController = TextEditingController();
-  try {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Nuovo ordine'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<OrderServiceMode>(
-                  key: const Key('order-service-mode-field'),
-                  value: mode,
-                  decoration: const InputDecoration(
-                    labelText: 'Modalità di servizio',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: OrderServiceMode.values
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value.label),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => mode = value);
-                    }
-                  },
+  var customerNote = '';
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Nuovo ordine'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<OrderServiceMode>(
+                key: const Key('order-service-mode-field'),
+                value: mode,
+                decoration: const InputDecoration(
+                  labelText: 'Modalità di servizio',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  key: const Key('order-customer-note-field'),
-                  controller: noteController,
-                  maxLength: 1000,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Nota cliente (facoltativa)',
-                    border: OutlineInputBorder(),
-                  ),
+                items: OrderServiceMode.values
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value.label),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => mode = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const Key('order-customer-note-field'),
+                initialValue: customerNote,
+                onChanged: (value) => customerNote = value,
+                maxLength: 1000,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Nota cliente (facoltativa)',
+                  border: OutlineInputBorder(),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              key: const Key('confirm-new-order-button'),
-              onPressed: () {
-                controller.startDraft(
-                  serviceMode: mode,
-                  customerNote: noteController.text,
-                );
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Crea bozza'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            key: const Key('confirm-new-order-button'),
+            onPressed: () {
+              controller.startDraft(
+                serviceMode: mode,
+                customerNote: customerNote,
+              );
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Crea bozza'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    noteController.dispose();
-  }
+    ),
+  );
 }
 
 Future<void> showAddProductDialog(
@@ -488,157 +485,152 @@ Future<void> showAddProductDialog(
     return;
   }
   var selectedKey = options.first.keyValue;
-  final quantityController = TextEditingController(text: '1');
-  final noteController = TextEditingController();
+  var quantityText = '1';
+  var noteText = '';
   String? validationMessage;
-  try {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setState) {
-          final selected = options.firstWhere(
-            (option) => option.keyValue == selectedKey,
-          );
-          return SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                0,
-                24,
-                24 + MediaQuery.viewInsetsOf(context).bottom,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  Text('${product.code} · ${product.unit.label}'),
-                  if (product.description != null) ...[
-                    const SizedBox(height: 12),
-                    Text(product.description!),
-                  ],
-                  const SizedBox(height: 20),
-                  if (options.length > 1)
-                    DropdownButtonFormField<String>(
-                      key: const Key('order-product-option-field'),
-                      value: selectedKey,
-                      decoration: const InputDecoration(
-                        labelText: 'Formato o variante',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: options
-                          .map(
-                            (option) => DropdownMenuItem(
-                              value: option.keyValue,
-                              child: Text(
-                                '${option.label} · '
-                                '${formatOrderMoney(option.price.amountCents, currency)}',
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => selectedKey = value);
-                        }
-                      },
-                    )
-                  else
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(selected.label),
-                      trailing: Text(
-                        formatOrderMoney(selected.price.amountCents, currency),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    key: const Key('order-item-quantity-field'),
-                    controller: quantityController,
-                    keyboardType: TextInputType.numberWithOptions(
-                      decimal: product.quantityScale > 0,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: product.quantityScale == 0
-                          ? 'Quantità'
-                          : 'Quantità (${product.quantityScale} decimali max)',
-                      border: const OutlineInputBorder(),
-                      errorText: validationMessage,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    key: const Key('order-item-note-field'),
-                    controller: noteController,
-                    maxLength: 500,
-                    maxLines: 2,
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => StatefulBuilder(
+      builder: (context, setState) {
+        final selected = options.firstWhere(
+          (option) => option.keyValue == selectedKey,
+        );
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              24,
+              0,
+              24,
+              24 + MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                Text('${product.code} · ${product.unit.label}'),
+                if (product.description != null) ...[
+                  const SizedBox(height: 12),
+                  Text(product.description!),
+                ],
+                const SizedBox(height: 20),
+                if (options.length > 1)
+                  DropdownButtonFormField<String>(
+                    key: const Key('order-product-option-field'),
+                    value: selectedKey,
                     decoration: const InputDecoration(
-                      labelText: 'Nota riga (facoltativa)',
+                      labelText: 'Formato o variante',
                       border: OutlineInputBorder(),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (!controller.canAddItems)
-                    const Text(
-                      'Crea prima un nuovo ordine oppure riprendine uno in attesa.',
+                    items: options
+                        .map(
+                          (option) => DropdownMenuItem(
+                            value: option.keyValue,
+                            child: Text(
+                              '${option.label} · '
+                              '${formatOrderMoney(option.price.amountCents, currency)}',
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selectedKey = value);
+                      }
+                    },
+                  )
+                else
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(selected.label),
+                    trailing: Text(
+                      formatOrderMoney(selected.price.amountCents, currency),
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      key: const Key('confirm-add-order-item-button'),
-                      onPressed: !controller.canAddItems || controller.busy
-                          ? null
-                          : () async {
-                              try {
-                                final quantity = QuantityCodec.parse(
-                                  quantityController.text,
-                                  product.quantityScale,
-                                );
-                                setState(() => validationMessage = null);
-                                final added = await controller.addCatalogItem(
-                                  product: product,
-                                  variant: selected.variant,
-                                  quantityAmount: quantity,
-                                  note: noteController.text,
-                                );
-                                if (added && sheetContext.mounted) {
-                                  Navigator.pop(sheetContext);
-                                } else if (sheetContext.mounted) {
-                                  setState(
-                                    () => validationMessage =
-                                        controller.errorMessage,
-                                  );
-                                }
-                              } on FormatException catch (error) {
+                  ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const Key('order-item-quantity-field'),
+                  initialValue: quantityText,
+                  onChanged: (value) => quantityText = value,
+                  keyboardType: TextInputType.numberWithOptions(
+                    decimal: product.quantityScale > 0,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: product.quantityScale == 0
+                        ? 'Quantità'
+                        : 'Quantità (${product.quantityScale} decimali max)',
+                    border: const OutlineInputBorder(),
+                    errorText: validationMessage,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const Key('order-item-note-field'),
+                  initialValue: noteText,
+                  onChanged: (value) => noteText = value,
+                  maxLength: 500,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Nota riga (facoltativa)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (!controller.canAddItems)
+                  const Text(
+                    'Crea prima un nuovo ordine oppure riprendine uno in attesa.',
+                  ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const Key('confirm-add-order-item-button'),
+                    onPressed: !controller.canAddItems || controller.busy
+                        ? null
+                        : () async {
+                            try {
+                              final quantity = QuantityCodec.parse(
+                                quantityText,
+                                product.quantityScale,
+                              );
+                              setState(() => validationMessage = null);
+                              final added = await controller.addCatalogItem(
+                                product: product,
+                                variant: selected.variant,
+                                quantityAmount: quantity,
+                                note: noteText,
+                              );
+                              if (added && sheetContext.mounted) {
+                                Navigator.pop(sheetContext);
+                              } else if (sheetContext.mounted) {
                                 setState(
-                                  () => validationMessage = error.message,
+                                  () => validationMessage =
+                                      controller.errorMessage,
                                 );
                               }
-                            },
-                      icon: const Icon(Icons.add_shopping_cart),
-                      label: Text(
-                        'Aggiungi · '
-                        '${formatOrderMoney(selected.price.amountCents, currency)}',
-                      ),
+                            } on FormatException catch (error) {
+                              setState(() => validationMessage = error.message);
+                            }
+                          },
+                    icon: const Icon(Icons.add_shopping_cart),
+                    label: Text(
+                      'Aggiungi · '
+                      '${formatOrderMoney(selected.price.amountCents, currency)}',
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          );
-        },
-      ),
-    );
-  } finally {
-    quantityController.dispose();
-    noteController.dispose();
-  }
+          ),
+        );
+      },
+    ),
+  );
 }
 
 Future<void> showEditOrderItemDialog(
@@ -646,88 +638,86 @@ Future<void> showEditOrderItemDialog(
   OrderController controller,
   OrderItem item,
 ) async {
-  final quantityController = TextEditingController(
-    text: QuantityCodec.format(item.quantityAmount, item.quantityScale),
+  var quantityText = QuantityCodec.format(
+    item.quantityAmount,
+    item.quantityScale,
   );
-  final noteController = TextEditingController(text: item.note ?? '');
+  var noteText = item.note ?? '';
   String? validationMessage;
-  try {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(item.displayName),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const Key('edit-order-item-quantity-field'),
-                  controller: quantityController,
-                  keyboardType: TextInputType.numberWithOptions(
-                    decimal: item.quantityScale > 0,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Quantità',
-                    border: const OutlineInputBorder(),
-                    errorText: validationMessage,
-                  ),
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text(item.displayName),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                key: const Key('edit-order-item-quantity-field'),
+                initialValue: quantityText,
+                onChanged: (value) => quantityText = value,
+                keyboardType: TextInputType.numberWithOptions(
+                  decimal: item.quantityScale > 0,
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  key: const Key('edit-order-item-note-field'),
-                  controller: noteController,
-                  maxLength: 500,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Nota riga',
-                    border: OutlineInputBorder(),
-                  ),
+                decoration: InputDecoration(
+                  labelText: 'Quantità',
+                  border: const OutlineInputBorder(),
+                  errorText: validationMessage,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const Key('edit-order-item-note-field'),
+                initialValue: noteText,
+                onChanged: (value) => noteText = value,
+                maxLength: 500,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Nota riga',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              onPressed: controller.busy
-                  ? null
-                  : () async {
-                      try {
-                        final quantity = QuantityCodec.parse(
-                          quantityController.text,
-                          item.quantityScale,
-                        );
-                        final updated = await controller.updateItem(
-                          item: item,
-                          quantityAmount: quantity,
-                          note: noteController.text,
-                        );
-                        if (updated && dialogContext.mounted) {
-                          Navigator.pop(dialogContext);
-                        } else if (dialogContext.mounted) {
-                          setState(
-                            () => validationMessage = controller.errorMessage,
-                          );
-                        }
-                      } on FormatException catch (error) {
-                        setState(() => validationMessage = error.message);
-                      }
-                    },
-              child: const Text('Salva'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: controller.busy
+                ? null
+                : () async {
+                    try {
+                      final quantity = QuantityCodec.parse(
+                        quantityText,
+                        item.quantityScale,
+                      );
+                      final updated = await controller.updateItem(
+                        item: item,
+                        quantityAmount: quantity,
+                        note: noteText,
+                      );
+                      if (updated && dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      } else if (dialogContext.mounted) {
+                        setState(
+                          () => validationMessage = controller.errorMessage,
+                        );
+                      }
+                    } on FormatException catch (error) {
+                      setState(() => validationMessage = error.message);
+                    }
+                  },
+            child: const Text('Salva'),
+          ),
+        ],
       ),
-    );
-  } finally {
-    quantityController.dispose();
-    noteController.dispose();
-  }
+    ),
+  );
 }
 
 Future<void> confirmDeleteOrderItem(

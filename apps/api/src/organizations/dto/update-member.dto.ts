@@ -1,4 +1,4 @@
-import { IsIn, IsOptional } from 'class-validator';
+import { IsIn, IsOptional, IsUUID } from 'class-validator';
 import {
   membershipRole,
   membershipStatus,
@@ -14,4 +14,8 @@ export class UpdateMemberDto {
   @IsOptional()
   @IsIn(membershipStatus.enumValues)
   status?: MembershipStatus;
+
+  @IsOptional()
+  @IsUUID()
+  locationId?: string | null;
 }

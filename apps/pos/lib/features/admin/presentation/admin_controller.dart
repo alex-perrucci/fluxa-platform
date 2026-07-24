@@ -103,7 +103,8 @@ class AdminController extends ChangeNotifier {
     required String displayName,
     required String role,
     required String temporaryPassword,
-  }) => _mutate('Utente creato e associato all’organizzazione.', () async {
+    required String locationId,
+  }) => _mutate('Utente creato e assegnato alla location.', () async {
     await _api.post(
       'organizations/${_requiredOrganizationId()}/members',
       data: {
@@ -111,7 +112,18 @@ class AdminController extends ChangeNotifier {
         'displayName': displayName.trim(),
         'role': role,
         'temporaryPassword': temporaryPassword,
+        'locationId': locationId,
       },
+    );
+  });
+
+  Future<bool> assignMemberLocation({
+    required String membershipId,
+    required String locationId,
+  }) => _mutate('Location del membro aggiornata.', () async {
+    await _api.patch(
+      'organizations/${_requiredOrganizationId()}/members/$membershipId',
+      data: {'locationId': locationId},
     );
   });
 

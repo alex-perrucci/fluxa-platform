@@ -29,3 +29,20 @@ The page supports creation of:
 
 The guided demo setup creates a coherent test configuration using stable codes,
 reusing existing records when they already exist.
+
+
+## Location predefinita dei membri
+
+Owner e amministratori assegnano una location durante la creazione di
+cassieri e camerieri. La membership conserva la location predefinita e
+il primo device registrato la eredita automaticamente.
+
+L’azione **Assegna sede** aggiorna anche le assegnazioni attive dei
+device già registrati. Un operatore bloccato nella schermata di setup può
+quindi premere **Riprova** senza reinstallare l’app o ripetere il login.
+
+## Layout compatti
+
+Le schermate Ordini e Stampa usano varianti dedicate ai viewport stretti:
+filtri impilati, chip spostati sotto i contenuti e dettagli verticalmente
+scorrevoli.

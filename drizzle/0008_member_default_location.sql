@@ -1,0 +1,3 @@
+ALTER TABLE "organization_memberships" ADD COLUMN "default_location_id" uuid;--> statement-breakpoint
+ALTER TABLE "organization_memberships" ADD CONSTRAINT "organization_memberships_default_location_id_locations_id_fk" FOREIGN KEY ("default_location_id") REFERENCES "public"."locations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "organization_memberships_default_location_idx" ON "organization_memberships" USING btree ("default_location_id");

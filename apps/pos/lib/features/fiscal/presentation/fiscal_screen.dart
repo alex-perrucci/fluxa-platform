@@ -619,13 +619,14 @@ Future<String?> showLotteryCodeDialog(
   BuildContext context,
   String orderNumber,
 ) async {
-  final controller = TextEditingController();
-  final result = await showDialog<String>(
+  var lotteryCode = '';
+  return showDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (dialogContext) => AlertDialog(
       title: Text('Fiscalizza $orderNumber'),
-      content: TextField(
-        controller: controller,
+      content: TextFormField(
+        initialValue: lotteryCode,
+        onChanged: (value) => lotteryCode = value,
         textCapitalization: TextCapitalization.characters,
         maxLength: 8,
         decoration: const InputDecoration(
@@ -635,28 +636,27 @@ Future<String?> showLotteryCodeDialog(
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(dialogContext),
           child: const Text('Annulla'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          onPressed: () => Navigator.pop(dialogContext, lotteryCode.trim()),
           child: const Text('Fiscalizza'),
         ),
       ],
     ),
   );
-  controller.dispose();
-  return result;
 }
 
 Future<String?> showVoidFiscalDialog(BuildContext context) async {
-  final controller = TextEditingController();
-  final result = await showDialog<String>(
+  var reasonText = '';
+  return showDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (dialogContext) => AlertDialog(
       title: const Text('Annullamento fiscale'),
-      content: TextField(
-        controller: controller,
+      content: TextFormField(
+        initialValue: reasonText,
+        onChanged: (value) => reasonText = value,
         maxLength: 300,
         minLines: 2,
         maxLines: 4,
@@ -664,18 +664,16 @@ Future<String?> showVoidFiscalDialog(BuildContext context) async {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(dialogContext),
           child: const Text('Indietro'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          onPressed: () => Navigator.pop(dialogContext, reasonText.trim()),
           child: const Text('Conferma'),
         ),
       ],
     ),
   );
-  controller.dispose();
-  return result;
 }
 
 class AcubeSandboxValues {
@@ -693,64 +691,67 @@ Future<AcubeSandboxValues?> showAcubeSandboxDialog(
   BuildContext context,
   FiscalProfile? profile,
 ) async {
-  final fiscalId = TextEditingController(text: profile?.fiscalId ?? '');
-  final email = TextEditingController(text: profile?.receiptEmail ?? '');
-  final name = TextEditingController(text: profile?.displayName ?? '');
-  final result = await showDialog<AcubeSandboxValues>(
+  var fiscalIdText = profile?.fiscalId ?? '';
+  var emailText = profile?.receiptEmail ?? '';
+  var nameText = profile?.displayName ?? '';
+  return showDialog<AcubeSandboxValues>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (dialogContext) => AlertDialog(
       title: const Text('Configura A-Cube sandbox'),
       content: SizedBox(
         width: 460,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.science_outlined),
-              title: Text('Ambiente SANDBOX'),
-              subtitle: Text(
-                'Le credenziali A-Cube restano nei segreti del fiscal-worker.',
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.science_outlined),
+                title: Text('Ambiente SANDBOX'),
+                subtitle: Text(
+                  'Le credenziali A-Cube restano nei segreti del fiscal-worker.',
+                ),
               ),
-            ),
-            TextField(
-              controller: fiscalId,
-              keyboardType: TextInputType.number,
-              maxLength: 11,
-              decoration: const InputDecoration(
-                labelText: 'Partita IVA / fiscal ID',
+              TextFormField(
+                initialValue: fiscalIdText,
+                onChanged: (value) => fiscalIdText = value,
+                keyboardType: TextInputType.number,
+                maxLength: 11,
+                decoration: const InputDecoration(
+                  labelText: 'Partita IVA / fiscal ID',
+                ),
               ),
-            ),
-            TextField(
-              controller: name,
-              decoration: const InputDecoration(
-                labelText: 'Denominazione facoltativa',
+              TextFormField(
+                initialValue: nameText,
+                onChanged: (value) => nameText = value,
+                decoration: const InputDecoration(
+                  labelText: 'Denominazione facoltativa',
+                ),
               ),
-            ),
-            TextField(
-              controller: email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email ricevute facoltativa',
+              TextFormField(
+                initialValue: emailText,
+                onChanged: (value) => emailText = value,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email ricevute facoltativa',
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(dialogContext),
           child: const Text('Annulla'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(
-            context,
+            dialogContext,
             AcubeSandboxValues(
-              fiscalId: fiscalId.text.trim(),
-              receiptEmail: email.text.trim().isEmpty
-                  ? null
-                  : email.text.trim(),
-              displayName: name.text.trim().isEmpty ? null : name.text.trim(),
+              fiscalId: fiscalIdText.trim(),
+              receiptEmail: emailText.trim().isEmpty ? null : emailText.trim(),
+              displayName: nameText.trim().isEmpty ? null : nameText.trim(),
             ),
           ),
           child: const Text('Salva'),
@@ -758,8 +759,4 @@ Future<AcubeSandboxValues?> showAcubeSandboxDialog(
       ],
     ),
   );
-  fiscalId.dispose();
-  email.dispose();
-  name.dispose();
-  return result;
 }
