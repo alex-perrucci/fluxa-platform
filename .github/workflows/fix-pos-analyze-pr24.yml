@@ -129,3 +129,5 @@ jobs:
             apps/pos/lib/features/payments/presentation/checkout_screen.dart
           git commit -m "fix(pos): resolve Flutter analyzer errors"
           git push origin HEAD:feature/admin-management-ui
+
+# retrigger
