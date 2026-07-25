@@ -616,28 +616,36 @@ Future<String?> _showPrinterDialog(
         content: SizedBox(
           width: 480,
           child: SingleChildScrollView(
-            child: RadioGroup<String>(
-              groupValue: selected,
-              onChanged: (value) {
-                if (value != null) setState(() => selected = value);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (options.defaultRouteConfigured)
-                    const RadioListTile<String>(
-                      value: _defaultRouteChoice,
-                      title: Text('Rotta predefinita'),
-                      subtitle: Text('Usa la configurazione amministrativa'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (options.defaultRouteConfigured)
+                  RadioListTile<String>(
+                    value: _defaultRouteChoice,
+                    groupValue: selected,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selected = value);
+                      }
+                    },
+                    title: const Text('Rotta predefinita'),
+                    subtitle: const Text(
+                      'Usa la configurazione amministrativa',
                     ),
-                  for (final printer in options.printers)
-                    RadioListTile<String>(
-                      value: printer.id,
-                      title: Text(printer.name),
-                      subtitle: Text('${printer.code} · ${printer.purpose}'),
-                    ),
-                ],
-              ),
+                  ),
+                for (final printer in options.printers)
+                  RadioListTile<String>(
+                    value: printer.id,
+                    groupValue: selected,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selected = value);
+                      }
+                    },
+                    title: Text(printer.name),
+                    subtitle: Text('${printer.code} · ${printer.purpose}'),
+                  ),
+              ],
             ),
           ),
         ),
@@ -780,8 +788,9 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
           FilledButton(
             onPressed: () {
               final parsed = int.tryParse(amount.text);
-              if (parsed != null)
+              if (parsed != null) {
                 Navigator.pop(context, (method, provider, parsed));
+              }
             },
             child: const Text('Registra'),
           ),
