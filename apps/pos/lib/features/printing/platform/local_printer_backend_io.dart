@@ -12,6 +12,9 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
   const _AndroidLocalPrinterBackend();
 
   static const _channel = MethodChannel('it.fluxa.fluxa_pos/printing');
+  static const _pairedTimeout = Duration(seconds: 4);
+  static const _bluetoothDiscoveryTimeout = Duration(seconds: 16);
+  static const _wifiDiscoveryTimeout = Duration(seconds: 12);
 
   @override
   bool get isSupported => Platform.isAndroid;
@@ -22,41 +25,45 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
       return const [];
     }
 
-    final permitted =
-        await _channel.invokeMethod<bool>('ensureBluetoothPermission') ?? false;
+    final bluetoothPermitted = await _ensureBluetoothPermissionSafely();
+
+    final pairedFuture = bluetoothPermitted
+        ? _invokeListSafely(
+            'listPairedBluetoothPrinters',
+            timeout: _pairedTimeout,
+          )
+        : Future.value(const <Object?>[]);
+
+    final nearbyFuture = bluetoothPermitted
+        ? _invokeListSafely(
+            'discoverBluetoothPrinters',
+            timeout: _bluetoothDiscoveryTimeout,
+          )
+        : Future.value(const <Object?>[]);
+
+    final wifiFuture = _invokeListSafely(
+      'discoverWifiPrinters',
+      timeout: _wifiDiscoveryTimeout,
+    );
 
     final results = await Future.wait<List<Object?>>([
-      if (permitted)
-        _channel
-            .invokeListMethod<Object?>('discoverBluetoothPrinters')
-            .then((value) => value ?? const <Object?>[])
-      else
-        Future.value(const <Object?>[]),
-      _channel
-          .invokeListMethod<Object?>('discoverWifiPrinters')
-          .then((value) => value ?? const <Object?>[]),
+      pairedFuture,
+      nearbyFuture,
+      wifiFuture,
     ]);
 
-    final targets = <String>{};
+    final bluetoothByAddress = <String, String>{};
+    _mergeBluetoothResults(bluetoothByAddress, results[1]);
+    // I dispositivi associati sono la fonte più affidabile per nome e
+    // compatibilità SPP. Vengono applicati per ultimi per avere precedenza.
+    _mergeBluetoothResults(bluetoothByAddress, results[0]);
 
-    for (final value in results[0]) {
-      if (value is! Map) {
-        continue;
-      }
-      final address = value['address']?.toString().trim() ?? '';
-      final name = value['name']?.toString().trim() ?? '';
-      if (address.isEmpty) {
-        continue;
-      }
-      targets.add(
-        buildBluetoothPrinterTarget(
-          address: address,
-          name: name.isEmpty ? address : name,
-        ),
-      );
-    }
+    final targets = <String>{
+      for (final entry in bluetoothByAddress.entries)
+        buildBluetoothPrinterTarget(address: entry.key, name: entry.value),
+    };
 
-    for (final value in results[1]) {
+    for (final value in results[2]) {
       if (value is! Map) {
         continue;
       }
@@ -73,6 +80,52 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
         left,
       ).compareTo(localPrinterTargetLabel(right)),
     );
+  }
+
+  Future<bool> _ensureBluetoothPermissionSafely() async {
+    try {
+      return await _channel
+              .invokeMethod<bool>('ensureBluetoothPermission')
+              .timeout(const Duration(seconds: 15)) ??
+          false;
+    } on Object {
+      // La ricerca Wi-Fi deve continuare anche se Bluetooth non è disponibile,
+      // disattivato o se il permesso viene negato.
+      return false;
+    }
+  }
+
+  Future<List<Object?>> _invokeListSafely(
+    String method, {
+    required Duration timeout,
+  }) async {
+    try {
+      return await _channel
+              .invokeListMethod<Object?>(method)
+              .timeout(timeout) ??
+          const <Object?>[];
+    } on Object {
+      // Ogni trasporto è indipendente: un errore o timeout non deve eliminare
+      // i risultati già disponibili dagli altri metodi di rilevamento.
+      return const <Object?>[];
+    }
+  }
+
+  void _mergeBluetoothResults(
+    Map<String, String> devicesByAddress,
+    List<Object?> values,
+  ) {
+    for (final value in values) {
+      if (value is! Map) {
+        continue;
+      }
+      final address = value['address']?.toString().trim() ?? '';
+      final name = value['name']?.toString().trim() ?? '';
+      if (address.isEmpty) {
+        continue;
+      }
+      devicesByAddress[address.toUpperCase()] = name.isEmpty ? address : name;
+    }
   }
 
   @override
