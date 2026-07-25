@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -20,18 +21,25 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
     if (!Platform.isAndroid) {
       return const [];
     }
+
     final permitted =
         await _channel.invokeMethod<bool>('ensureBluetoothPermission') ?? false;
-    if (!permitted) {
-      return const [];
-    }
-    final raw =
-        await _channel.invokeListMethod<Object?>(
-          'listPairedBluetoothPrinters',
-        ) ??
-        const [];
+
+    final results = await Future.wait<List<Object?>>([
+      if (permitted)
+        _channel
+            .invokeListMethod<Object?>('discoverBluetoothPrinters')
+            .then((value) => value ?? const <Object?>[])
+      else
+        Future.value(const <Object?>[]),
+      _channel
+          .invokeListMethod<Object?>('discoverWifiPrinters')
+          .then((value) => value ?? const <Object?>[]),
+    ]);
+
     final targets = <String>{};
-    for (final value in raw) {
+
+    for (final value in results[0]) {
       if (value is! Map) {
         continue;
       }
@@ -47,11 +55,25 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
         ),
       );
     }
-    return targets.toList(growable: false)..sort(
-      (left, right) => localPrinterTargetLabel(
-        left,
-      ).compareTo(localPrinterTargetLabel(right)),
-    );
+
+    for (final value in results[1]) {
+      if (value is! Map) {
+        continue;
+      }
+      final host = value['host']?.toString().trim() ?? '';
+      final port = int.tryParse(value['port']?.toString() ?? '');
+      if (host.isEmpty || port == null || port < 1 || port > 65535) {
+        continue;
+      }
+      targets.add(buildWifiPrinterTarget(host: host, port: port));
+    }
+
+    return targets.toList(growable: false)
+      ..sort(
+        (left, right) => localPrinterTargetLabel(
+          left,
+        ).compareTo(localPrinterTargetLabel(right)),
+      );
   }
 
   @override
