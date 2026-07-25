@@ -34,12 +34,9 @@ abstract interface class PrintingGateway {
     int copies = 1,
   });
 
-  Future<PaymentReceiptPrintOptions> paymentReceiptOptions(String checkoutId);
-
   Future<PrintRequestResult> requestPaymentReceipt({
     required String checkoutId,
     required String clientRequestId,
-    String? printerId,
     int copies = 1,
   });
 
@@ -86,7 +83,19 @@ abstract interface class PrintingGateway {
   });
 }
 
-class PrintingApi implements PrintingGateway {
+abstract interface class PaymentReceiptPrinterSelectionGateway {
+  Future<PaymentReceiptPrintOptions> paymentReceiptOptions(String checkoutId);
+
+  Future<PrintRequestResult> requestPaymentReceiptToPrinter({
+    required String checkoutId,
+    required String clientRequestId,
+    required String printerId,
+    int copies = 1,
+  });
+}
+
+class PrintingApi
+    implements PrintingGateway, PaymentReceiptPrinterSelectionGateway {
   PrintingApi(this._dio);
 
   final Dio _dio;
@@ -191,7 +200,18 @@ class PrintingApi implements PrintingGateway {
   Future<PrintRequestResult> requestPaymentReceipt({
     required String checkoutId,
     required String clientRequestId,
-    String? printerId,
+    int copies = 1,
+  }) async => _request(
+    path: 'checkouts/$checkoutId/print-receipt',
+    clientRequestId: clientRequestId,
+    copies: copies,
+  );
+
+  @override
+  Future<PrintRequestResult> requestPaymentReceiptToPrinter({
+    required String checkoutId,
+    required String clientRequestId,
+    required String printerId,
     int copies = 1,
   }) async => _request(
     path: 'checkouts/$checkoutId/print-receipt',
@@ -337,7 +357,7 @@ class PrintingApi implements PrintingGateway {
         data: {
           'clientRequestId': clientRequestId,
           'copies': copies,
-          if (printerId != null) 'printerId': printerId,
+          'printerId': ?printerId,
         },
       );
       return PrintRequestResult.fromJson(_requireMap(response.data));
