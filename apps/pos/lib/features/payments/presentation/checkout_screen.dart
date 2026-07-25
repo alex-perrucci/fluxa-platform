@@ -197,11 +197,7 @@ class CheckoutView extends StatelessWidget {
         }
         return ListView(
           padding: const EdgeInsets.all(16),
-          children: [
-            summary,
-            const SizedBox(height: 16),
-            payments,
-          ],
+          children: [summary, const SizedBox(height: 16), payments],
         );
       },
     );
@@ -257,7 +253,10 @@ class _CheckoutSummary extends StatelessWidget {
           if (checkout.pendingCents > 0)
             _MoneyRow(
               label: 'In attesa terminale',
-              value: formatPaymentMoney(checkout.pendingCents, checkout.currency),
+              value: formatPaymentMoney(
+                checkout.pendingCents,
+                checkout.currency,
+              ),
             ),
           _MoneyRow(
             label: 'Residuo',
@@ -270,7 +269,10 @@ class _CheckoutSummary extends StatelessWidget {
           if (checkout.changeCents > 0)
             _MoneyRow(
               label: 'Resto',
-              value: formatPaymentMoney(checkout.changeCents, checkout.currency),
+              value: formatPaymentMoney(
+                checkout.changeCents,
+                checkout.currency,
+              ),
             ),
           const SizedBox(height: 12),
           Chip(label: Text(checkout.status.label)),
@@ -386,12 +388,10 @@ class _CheckoutSummary extends StatelessWidget {
       final success = choice == _defaultRouteChoice
           ? await printingController!.requestPaymentReceipt(checkout.id)
           : (await gateway.requestPaymentReceiptToPrinter(
-                  checkoutId: checkout.id,
-                  clientRequestId: UuidV4.generate(),
-                  printerId: choice,
-                ))
-                .jobs
-                .isNotEmpty;
+              checkoutId: checkout.id,
+              clientRequestId: UuidV4.generate(),
+              printerId: choice,
+            )).jobs.isNotEmpty;
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -405,9 +405,9 @@ class _CheckoutSummary extends StatelessWidget {
       }
     } on BackendError catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     }
   }
@@ -660,8 +660,12 @@ Future<(int, int)?> _showCashDialog(
   BuildContext context,
   CheckoutSession checkout,
 ) async {
-  final amount = TextEditingController(text: checkout.availableCents.toString());
-  final tendered = TextEditingController(text: checkout.availableCents.toString());
+  final amount = TextEditingController(
+    text: checkout.availableCents.toString(),
+  );
+  final tendered = TextEditingController(
+    text: checkout.availableCents.toString(),
+  );
   final result = await showDialog<(int, int)>(
     context: context,
     builder: (context) => AlertDialog(
@@ -672,12 +676,16 @@ Future<(int, int)?> _showCashDialog(
           TextField(
             controller: amount,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Importo in centesimi'),
+            decoration: const InputDecoration(
+              labelText: 'Importo in centesimi',
+            ),
           ),
           TextField(
             controller: tendered,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Ricevuto in centesimi'),
+            decoration: const InputDecoration(
+              labelText: 'Ricevuto in centesimi',
+            ),
           ),
         ],
       ),
@@ -710,7 +718,9 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
 ) async {
   var method = PaymentMethod.card;
   var provider = PaymentProvider.manualTerminal;
-  final amount = TextEditingController(text: checkout.availableCents.toString());
+  final amount = TextEditingController(
+    text: checkout.availableCents.toString(),
+  );
   final result = await showDialog<(PaymentMethod, PaymentProvider, int)>(
     context: context,
     builder: (context) => StatefulBuilder(
@@ -736,17 +746,18 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
             ),
             DropdownButtonFormField<PaymentProvider>(
               value: provider,
-              items: const [
-                PaymentProvider.manualTerminal,
-                PaymentProvider.externalTerminal,
-              ]
-                  .map(
-                    (value) => DropdownMenuItem(
-                      value: value,
-                      child: Text(value.label),
-                    ),
-                  )
-                  .toList(growable: false),
+              items:
+                  const [
+                        PaymentProvider.manualTerminal,
+                        PaymentProvider.externalTerminal,
+                      ]
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(value.label),
+                        ),
+                      )
+                      .toList(growable: false),
               onChanged: (value) {
                 if (value != null) setState(() => provider = value);
               },
@@ -755,7 +766,9 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
             TextField(
               controller: amount,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Importo in centesimi'),
+              decoration: const InputDecoration(
+                labelText: 'Importo in centesimi',
+              ),
             ),
           ],
         ),
@@ -767,7 +780,8 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
           FilledButton(
             onPressed: () {
               final parsed = int.tryParse(amount.text);
-              if (parsed != null) Navigator.pop(context, (method, provider, parsed));
+              if (parsed != null)
+                Navigator.pop(context, (method, provider, parsed));
             },
             child: const Text('Registra'),
           ),

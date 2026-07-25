@@ -13,8 +13,7 @@ class AdminManagementScreen extends ConsumerStatefulWidget {
       _AdminManagementScreenState();
 }
 
-class _AdminManagementScreenState
-    extends ConsumerState<AdminManagementScreen> {
+class _AdminManagementScreenState extends ConsumerState<AdminManagementScreen> {
   bool _loading = true;
   String? _error;
   String? _notice;
@@ -187,15 +186,14 @@ class _AdminManagementScreenState
     try {
       for (final spec in _specs) {
         final query = switch (spec.keyName) {
-          'areas' || 'tables' || 'stations' || 'printers' => {
-            'locationId': locationId,
-            'page': 1,
-            'pageSize': 100,
-          },
-          'vatRates' || 'categories' || 'products' || 'priceLists' => {
-            'page': 1,
-            'pageSize': 100,
-          },
+          'areas' ||
+          'tables' ||
+          'stations' ||
+          'printers' => {'locationId': locationId, 'page': 1, 'pageSize': 100},
+          'vatRates' ||
+          'categories' ||
+          'products' ||
+          'priceLists' => {'page': 1, 'pageSize': 100},
           _ => null,
         };
         _items[spec.keyName] = await api.list(
@@ -349,16 +347,15 @@ class _AdminManagementScreenState
     );
   }
 
-  Future<void> _editEntity(
-    _EntitySpec spec,
-    Map<String, Object?> value,
-  ) async {
+  Future<void> _editEntity(_EntitySpec spec, Map<String, Object?> value) async {
     final result = await _showEntityDialog(context, spec, value);
     if (result == null) return;
     final id = value['id']?.toString();
     if (id == null) return;
     await _runMutation(() async {
-      await ref.read(adminApiProvider).patch('${spec.endpoint}/$id', data: result);
+      await ref
+          .read(adminApiProvider)
+          .patch('${spec.endpoint}/$id', data: result);
     }, '${spec.title}: modifiche salvate.');
   }
 
@@ -369,7 +366,9 @@ class _AdminManagementScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(spec.softDelete ? 'Disattivare elemento?' : 'Archiviare elemento?'),
+        title: Text(
+          spec.softDelete ? 'Disattivare elemento?' : 'Archiviare elemento?',
+        ),
         content: Text(_entityTitle(value)),
         actions: [
           TextButton(
@@ -388,10 +387,12 @@ class _AdminManagementScreenState
     if (id == null) return;
     await _runMutation(() async {
       if (spec.softDelete) {
-        await ref.read(adminApiProvider).patch(
-          '${spec.endpoint}/$id',
-          data: {'status': spec.inactiveValue},
-        );
+        await ref
+            .read(adminApiProvider)
+            .patch(
+              '${spec.endpoint}/$id',
+              data: {'status': spec.inactiveValue},
+            );
       } else {
         await ref.read(adminApiProvider).delete('${spec.endpoint}/$id');
       }
@@ -417,18 +418,20 @@ class _AdminManagementScreenState
       if (route != null && route['id'] != null) {
         await ref.read(adminApiProvider).delete('print-routes/${route['id']}');
       }
-      await ref.read(adminApiProvider).put(
-        'print-routes',
-        data: {
-          'locationId': locationId,
-          'documentType': values['documentType'],
-          'printerId': values['printerId'],
-          'copies': int.parse(values['copies']!),
-          'active': values['active'] == 'true',
-          if (values['documentType'] == 'KITCHEN_TICKET')
-            'kitchenStationId': values['kitchenStationId'],
-        },
-      );
+      await ref
+          .read(adminApiProvider)
+          .put(
+            'print-routes',
+            data: {
+              'locationId': locationId,
+              'documentType': values['documentType'],
+              'printerId': values['printerId'],
+              'copies': int.parse(values['copies']!),
+              'active': values['active'] == 'true',
+              if (values['documentType'] == 'KITCHEN_TICKET')
+                'kitchenStationId': values['kitchenStationId'],
+            },
+          );
     }, 'Rotta di stampa salvata.');
   }
 
@@ -472,10 +475,7 @@ class _AdminManagementScreenState
   String _entitySubtitle(Map<String, Object?> value) {
     final code = value['code']?.toString();
     final status = value['status']?.toString();
-    return [
-      if (code != null) code,
-      if (status != null) status,
-    ].join(' · ');
+    return [if (code != null) code, if (status != null) status].join(' · ');
   }
 
   String _message(Object error) => switch (error) {
@@ -576,7 +576,8 @@ Future<Map<String, Object?>?> _showEntityDialog(
                             ),
                           )
                         : DropdownButtonFormField<String>(
-                            value: field.options!.contains(values[field.keyName])
+                            value:
+                                field.options!.contains(values[field.keyName])
                                 ? values[field.keyName]
                                 : field.options!.first,
                             decoration: InputDecoration(
@@ -643,8 +644,10 @@ Future<Map<String, String>?> _showRouteDialog(
   Map<String, Object?>? route,
 }) async {
   var documentType = route?['documentType']?.toString() ?? 'PAYMENT_RECEIPT';
-  var printerId = route?['printerId']?.toString() ?? printers.first['id'].toString();
-  var stationId = route?['kitchenStationId']?.toString() ??
+  var printerId =
+      route?['printerId']?.toString() ?? printers.first['id'].toString();
+  var stationId =
+      route?['kitchenStationId']?.toString() ??
       (stations.isEmpty ? '' : stations.first['id'].toString());
   var copies = route?['copies']?.toString() ?? '1';
   var active = route?['active'] == false ? 'false' : 'true';
@@ -717,7 +720,9 @@ Future<Map<String, String>?> _showRouteDialog(
                         .map(
                           (station) => DropdownMenuItem(
                             value: station['id'].toString(),
-                            child: Text('${station['name'] ?? station['code']}'),
+                            child: Text(
+                              '${station['name'] ?? station['code']}',
+                            ),
                           ),
                         )
                         .toList(growable: false),
@@ -735,10 +740,8 @@ Future<Map<String, String>?> _showRouteDialog(
                   ),
                   items: const ['1', '2', '3', '4', '5']
                       .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value),
-                        ),
+                        (value) =>
+                            DropdownMenuItem(value: value, child: Text(value)),
                       )
                       .toList(growable: false),
                   onChanged: (value) {
@@ -754,7 +757,10 @@ Future<Map<String, String>?> _showRouteDialog(
                   ),
                   items: const [
                     DropdownMenuItem(value: 'true', child: Text('Attiva')),
-                    DropdownMenuItem(value: 'false', child: Text('Disattivata')),
+                    DropdownMenuItem(
+                      value: 'false',
+                      child: Text('Disattivata'),
+                    ),
                   ],
                   onChanged: (value) {
                     if (value != null) setState(() => active = value);
