@@ -68,12 +68,11 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
       targets.add(buildWifiPrinterTarget(host: host, port: port));
     }
 
-    return targets.toList(growable: false)
-      ..sort(
-        (left, right) => localPrinterTargetLabel(
-          left,
-        ).compareTo(localPrinterTargetLabel(right)),
-      );
+    return targets.toList(growable: false)..sort(
+      (left, right) => localPrinterTargetLabel(
+        left,
+      ).compareTo(localPrinterTargetLabel(right)),
+    );
   }
 
   @override
