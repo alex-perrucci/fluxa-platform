@@ -40,34 +40,22 @@ jobs:
         with:
           ref: feature/admin-management-ui
           fetch-depth: 0
-      - name: Apply and publish PR 24 analyzer fixes
+      - name: Apply source fix and restore CI
         working-directory: .
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          admin_path = Path('apps/pos/lib/features/admin/presentation/admin_management_screen.dart')
-          admin = admin_path.read_text(encoding='utf-8')
-          admin = admin.replace(
-              "    return [if (code != null) code, if (status != null) status].join(' · ');",
-              "    return [code, status].whereType<String>().join(' · ');",
-          )
-          admin_path.write_text(admin, encoding='utf-8')
+          import re
 
           checkout_path = Path('apps/pos/lib/features/payments/presentation/checkout_screen.dart')
           checkout = checkout_path.read_text(encoding='utf-8')
 
-          start_marker = '            child: RadioGroup<String>('
-          end_marker = '            ),\n          ),\n        ),\n        actions:'
-          start = checkout.find(start_marker)
-          if start == -1:
-              raise SystemExit('RadioGroup start marker not found')
-          end = checkout.find(end_marker, start)
-          if end == -1:
-              raise SystemExit('RadioGroup end marker not found')
-
-          replacement = """            child: Column(
+          radio_pattern = re.compile(
+              r"            child: RadioGroup<String>\(\n.*?            \),\n          \),\n        \),\n        actions:",
+              re.DOTALL,
+          )
+          radio_replacement = """            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (options.defaultRouteConfigured)
@@ -97,32 +85,109 @@ jobs:
                     subtitle: Text('${printer.code} · ${printer.purpose}'),
                   ),
               ],
-            )"""
-          checkout = checkout[:start] + replacement + checkout[end + len('            ),'):]
+            ),
+          ),
+        ),
+        actions:"""
+          checkout, radio_count = radio_pattern.subn(radio_replacement, checkout, count=1)
+          if radio_count != 1:
+              raise SystemExit(f'Expected one RadioGroup replacement, got {radio_count}')
 
-          old_if = """              if (parsed != null)
-                Navigator.pop(context, (method, provider, parsed));"""
-          new_if = """              if (parsed != null) {
+          if_pattern = re.compile(
+              r"              if \(parsed != null\)\n                Navigator\.pop\(context, \(method, provider, parsed\)\);"
+          )
+          checkout, if_count = if_pattern.subn(
+              """              if (parsed != null) {
                 Navigator.pop(context, (method, provider, parsed));
-              }"""
-          if old_if not in checkout:
-              raise SystemExit('Terminal parsed if marker not found')
-          checkout = checkout.replace(old_if, new_if, 1)
-
+              }""",
+              checkout,
+              count=1,
+          )
+          if if_count != 1:
+              raise SystemExit(f'Expected one terminal if replacement, got {if_count}')
           if 'RadioGroup<String>' in checkout:
-              raise SystemExit('RadioGroup is still present after replacement')
+              raise SystemExit('RadioGroup still present')
           checkout_path.write_text(checkout, encoding='utf-8')
+
+          admin_path = Path('apps/pos/lib/features/admin/presentation/admin_management_screen.dart')
+          admin = admin_path.read_text(encoding='utf-8')
+          old_admin = "    return [if (code != null) code, if (status != null) status].join(' · ');"
+          new_admin = "    return [code, status].whereType<String>().join(' · ');"
+          if old_admin in admin:
+              admin = admin.replace(old_admin, new_admin, 1)
+          admin_path.write_text(admin, encoding='utf-8')
+
+          original_ci = """name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run security:secrets
+      - run: node scripts/check-secrets.mjs --self-test
+      - run: node scripts/verify-production-config.mjs --self-test
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: docker build --build-arg FLUXA_APP=api -t fluxa-api:${{ github.sha }} .
+
+  pos:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-36' 'ndk;27.0.12077973'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.5'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --debug
+      - run: flutter build web --dart-define=FLUXA_ENV=test --dart-define=API_BASE_URL=https://test.invalid/api/v1
+      # The debug APK is built and validated but is not uploaded on every PR.
+      # Signed downloadable artifacts are produced only by android-release.yml.
+"""
+          Path('.github/workflows/ci.yml').write_text(original_ci, encoding='utf-8')
+          Path('.github/workflows/fix-pos-analyze-pr24.yml').unlink(missing_ok=True)
           PY
 
-          dart format apps/pos/lib apps/pos/test
+          dart format apps/pos/lib/features/admin/presentation/admin_management_screen.dart apps/pos/lib/features/payments/presentation/checkout_screen.dart
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/pos/lib/features/admin/presentation/admin_management_screen.dart apps/pos/lib/features/payments/presentation/checkout_screen.dart
-          if ! git diff --cached --quiet; then
-            git commit -m "fix(pos): resolve Flutter analyzer errors"
-            git push origin HEAD:feature/admin-management-ui
-          fi
+          git add .github/workflows/ci.yml apps/pos/lib/features/admin/presentation/admin_management_screen.dart apps/pos/lib/features/payments/presentation/checkout_screen.dart
+          git add -u .github/workflows
+          git commit -m "fix(pos): resolve analyzer errors"
+          git push origin HEAD:feature/admin-management-ui
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
