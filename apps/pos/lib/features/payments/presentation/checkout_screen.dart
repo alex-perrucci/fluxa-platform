@@ -671,8 +671,8 @@ Future<(int, int)?> _showCashDialog(
   return showDialog<(int, int)>(
     context: context,
     builder: (context) {
-      var amount = checkout.availableCents.toString();
-      var tendered = checkout.availableCents.toString();
+      var amount = moneyInputValue(checkout.availableCents);
+      var tendered = moneyInputValue(checkout.availableCents);
 
       return AlertDialog(
         title: const Text('Pagamento in contanti'),
@@ -682,17 +682,20 @@ Future<(int, int)?> _showCashDialog(
             TextFormField(
               initialValue: amount,
               onChanged: (value) => amount = value,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                labelText: 'Importo in centesimi',
+                labelText: 'Importo (€)',
+                prefixText: '€ ',
               ),
             ),
+            const SizedBox(height: 12),
             TextFormField(
               initialValue: tendered,
               onChanged: (value) => tendered = value,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                labelText: 'Ricevuto in centesimi',
+                labelText: 'Ricevuto (€)',
+                prefixText: '€ ',
               ),
             ),
           ],
@@ -704,10 +707,12 @@ Future<(int, int)?> _showCashDialog(
           ),
           FilledButton(
             onPressed: () {
-              final parsedAmount = int.tryParse(amount);
-              final parsedTendered = int.tryParse(tendered);
-              if (parsedAmount != null && parsedTendered != null) {
+              try {
+                final parsedAmount = parseMoneyInput(amount);
+                final parsedTendered = parseMoneyInput(tendered);
                 Navigator.pop(context, (parsedAmount, parsedTendered));
+              } on FormatException {
+                // Il dialogo rimane aperto finché entrambi gli importi non sono validi.
               }
             },
             child: const Text('Registra'),
@@ -727,7 +732,7 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
     builder: (context) {
       var method = PaymentMethod.card;
       var provider = PaymentProvider.manualTerminal;
-      var amount = checkout.availableCents.toString();
+      var amount = moneyInputValue(checkout.availableCents);
 
       return StatefulBuilder(
         builder: (context, setState) => AlertDialog(
@@ -750,6 +755,7 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
                 },
                 decoration: const InputDecoration(labelText: 'Metodo'),
               ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<PaymentProvider>(
                 value: provider,
                 items:
@@ -769,12 +775,14 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
                 },
                 decoration: const InputDecoration(labelText: 'Provider'),
               ),
+              const SizedBox(height: 12),
               TextFormField(
                 initialValue: amount,
                 onChanged: (value) => amount = value,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
-                  labelText: 'Importo in centesimi',
+                  labelText: 'Importo (€)',
+                  prefixText: '€ ',
                 ),
               ),
             ],
@@ -786,9 +794,11 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
             ),
             FilledButton(
               onPressed: () {
-                final parsed = int.tryParse(amount);
-                if (parsed != null) {
+                try {
+                  final parsed = parseMoneyInput(amount);
                   Navigator.pop(context, (method, provider, parsed));
+                } on FormatException {
+                  // Il dialogo rimane aperto finché l'importo non è valido.
                 }
               },
               child: const Text('Registra'),
