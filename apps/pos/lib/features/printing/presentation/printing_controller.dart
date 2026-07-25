@@ -273,11 +273,11 @@ class PrintingController extends ChangeNotifier {
     _setBusy();
     try {
       _localQueues = await _localBackend.listQueues();
-      _noticeMessage =
-          '${_localQueues.length} stampanti Bluetooth abbinate rilevate.';
+      _noticeMessage = _localQueues.isEmpty
+          ? 'Nessuna stampante locale rilevata. Per il Bluetooth verifica prima l’abbinamento nelle impostazioni Android.'
+          : '${_localQueues.length} stampanti locali rilevate.';
     } catch (error) {
-      _errorMessage =
-          'Impossibile leggere le stampanti Bluetooth abbinate: $error';
+      _errorMessage = 'Impossibile rilevare le stampanti locali: $error';
     } finally {
       _finishBusy();
     }
@@ -388,118 +388,227 @@ class PrintingController extends ChangeNotifier {
     _agentEnabled = enabled;
     await _mappingStore.saveAgentEnabled(enabled);
     if (enabled) {
-      _agentMessage = 'Agente locale attivo.';
       _startPolling();
+      await pollAgentNow();
     } else {
-      _agentMessage = 'Agente locale fermato.';
       _stopPolling();
-    }
-    _notify();
-  }
-
-  Future<bool> requestTestPage(PrinterDevice printer, {int copies = 1}) async =>
-      _requestDocument(
-        action: () => _gateway.requestTestPage(
-          printerId: printer.id,
-          clientRequestId: UuidV4.generate(),
-          copies: copies,
-        ),
-        successMessage: 'Pagina di test accodata per ${printer.name}.',
-      );
-
-  Future<bool> requestOrderReceipt(String orderId, {int copies = 1}) async =>
-      _requestDocument(
-        action: () => _gateway.requestOrderReceipt(
-          orderId: orderId,
-          clientRequestId: UuidV4.generate(),
-          copies: copies,
-        ),
-        successMessage: 'Riepilogo ordine accodato.',
-      );
-
-  Future<bool> requestPaymentReceipt(
-    String checkoutId, {
-    int copies = 1,
-  }) async => _requestDocument(
-    action: () => _gateway.requestPaymentReceipt(
-      checkoutId: checkoutId,
-      clientRequestId: UuidV4.generate(),
-      copies: copies,
-    ),
-    successMessage: 'Riepilogo pagamento accodato.',
-  );
-
-  Future<bool> requestKitchenTicket(String ticketId, {int copies = 1}) async =>
-      _requestDocument(
-        action: () => _gateway.requestKitchenTicket(
-          ticketId: ticketId,
-          clientRequestId: UuidV4.generate(),
-          copies: copies,
-        ),
-        successMessage: 'Ristampa della comanda accodata.',
-      );
-
-  Future<bool> reprintJob(PrintJob job) async {
-    final sourceId = job.sourceEntityId;
-    if (sourceId == null) {
-      _errorMessage = 'Il lavoro non contiene un riferimento ristampabile.';
+      _agentMessage = 'Agente di stampa disattivato.';
       _notify();
-      return false;
     }
-    return switch (job.documentType) {
-      PrintDocumentType.kitchenTicket => requestKitchenTicket(
-        sourceId,
-        copies: job.copies,
-      ),
-      PrintDocumentType.orderReceipt => requestOrderReceipt(
-        sourceId,
-        copies: job.copies,
-      ),
-      PrintDocumentType.paymentReceipt => requestPaymentReceipt(
-        sourceId,
-        copies: job.copies,
-      ),
-      PrintDocumentType.testPage => _requestTestPageForSource(
-        sourceId,
-        copies: job.copies,
-      ),
-    };
   }
 
-  Future<bool> _requestTestPageForSource(
-    String printerId, {
-    required int copies,
-  }) async {
-    for (final printer in _printers) {
-      if (printer.id == printerId) {
-        return requestTestPage(printer, copies: copies);
+  Future<void> pollAgentNow() async {
+    if (!_agentEnabled || _agentPolling || !_localBackend.isSupported) {
+      return;
+    }
+    if (!canEnableAgent) {
+      _agentMessage =
+          'Agente sospeso: associa una stampante locale al dispositivo.';
+      _notify();
+      return;
+    }
+    _agentPolling = true;
+    _agentMessage = 'Controllo lavori di stampa…';
+    _notify();
+    try {
+      var processed = 0;
+      for (final printer in assignedPrinters) {
+        final queueName = _queueMappings[printer.id];
+        if (queueName == null || queueName.trim().isEmpty) {
+          continue;
+        }
+        await _sendHeartbeatIfNeeded(printer);
+        final job = await _gateway.claimPrintJob(printerId: printer.id);
+        if (job == null) {
+          continue;
+        }
+        processed += 1;
+        await _executeClaimedJob(printer, queueName, job);
+      }
+      _lastAgentPollAt = DateTime.now();
+      _agentMessage = processed == 0
+          ? 'Nessun lavoro in attesa.'
+          : '$processed lavori elaborati.';
+      await refreshJobs();
+    } catch (error) {
+      _agentMessage = 'Errore agente di stampa: $error';
+    } finally {
+      _agentPolling = false;
+      _notify();
+    }
+  }
+
+  Future<void> _executeClaimedJob(
+    PrinterDevice printer,
+    String queueName,
+    PrintJob job,
+  ) async {
+    final leaseToken = job.leaseToken;
+    if (leaseToken == null || leaseToken.isEmpty) {
+      _agentMessage = 'Lavoro ${job.id} senza lease token valido.';
+      return;
+    }
+    try {
+      await _localBackend.printText(
+        queueName: queueName,
+        text: job.renderedText,
+        copies: job.copies,
+        supportsCut: printer.supportsCut,
+      );
+      await _gateway.completePrintJob(
+        jobId: job.id,
+        leaseToken: leaseToken,
+      );
+    } catch (error) {
+      try {
+        await _gateway.failPrintJob(
+          jobId: job.id,
+          leaseToken: leaseToken,
+          errorMessage: error.toString(),
+        );
+      } catch (_) {
+        _agentMessage =
+            'Stampa fallita e impossibile registrare l’errore per ${printer.name}.';
       }
     }
-    _errorMessage = 'La stampante della pagina di test non è più disponibile.';
-    _notify();
-    return false;
   }
 
-  Future<bool> retryJob(PrintJob job) async {
-    if (_busy || !job.status.canRetry) {
+  Future<void> _sendHeartbeatIfNeeded(PrinterDevice printer) async {
+    final lastHeartbeat = _lastHeartbeatAt[printer.id];
+    if (lastHeartbeat != null &&
+        DateTime.now().difference(lastHeartbeat) < const Duration(seconds: 30)) {
+      return;
+    }
+    await _gateway.heartbeat(
+      printerId: printer.id,
+      agentVersion: 'fluxa-pos',
+      statusMessage: connectionLabel(printer.id),
+    );
+    _lastHeartbeatAt[printer.id] = DateTime.now();
+  }
+
+  Future<bool> requestOrderReceipt(String orderId) async {
+    if (_busy) {
       return false;
     }
     _setBusy();
     try {
-      final updated = await _gateway.retryPrintJob(
-        jobId: job.id,
-        mutationId: UuidV4.generate(),
-        expectedVersion: job.version,
+      final result = await _gateway.requestOrderReceipt(
+        orderId: orderId,
+        clientRequestId: newUuidV4(),
       );
-      _replaceJob(updated);
-      _noticeMessage = 'Lavoro rimesso in coda.';
-      await _refreshJobsSilently();
+      _noticeMessage = '${result.jobs.length} stampe accodate.';
+      await refreshJobs();
       return true;
     } on BackendError catch (error) {
-      await _handleMutationError(error, job.id);
+      _errorMessage = error.message;
       return false;
     } catch (_) {
-      _errorMessage = 'Impossibile ritentare il lavoro di stampa.';
+      _errorMessage = 'Impossibile accodare la stampa dell’ordine.';
+      return false;
+    } finally {
+      _finishBusy();
+    }
+  }
+
+  Future<bool> requestPaymentReceipt(String checkoutId) async {
+    if (_busy) {
+      return false;
+    }
+    _setBusy();
+    try {
+      final result = await _gateway.requestPaymentReceipt(
+        checkoutId: checkoutId,
+        clientRequestId: newUuidV4(),
+      );
+      _noticeMessage = '${result.jobs.length} stampe accodate.';
+      await refreshJobs();
+      return true;
+    } on BackendError catch (error) {
+      _errorMessage = error.message;
+      return false;
+    } catch (_) {
+      _errorMessage = 'Impossibile accodare la ricevuta di pagamento.';
+      return false;
+    } finally {
+      _finishBusy();
+    }
+  }
+
+  Future<bool> requestKitchenTicket(String ticketId) async {
+    if (_busy) {
+      return false;
+    }
+    _setBusy();
+    try {
+      final result = await _gateway.requestKitchenTicket(
+        ticketId: ticketId,
+        clientRequestId: newUuidV4(),
+      );
+      _noticeMessage = '${result.jobs.length} stampe accodate.';
+      await refreshJobs();
+      return true;
+    } on BackendError catch (error) {
+      _errorMessage = error.message;
+      return false;
+    } catch (_) {
+      _errorMessage = 'Impossibile accodare il ticket cucina.';
+      return false;
+    } finally {
+      _finishBusy();
+    }
+  }
+
+  Future<bool> requestTestPage(PrinterDevice printer) async {
+    if (_busy) {
+      return false;
+    }
+    _setBusy();
+    try {
+      final result = await _gateway.requestTestPage(
+        printerId: printer.id,
+        clientRequestId: newUuidV4(),
+      );
+      _noticeMessage = result.jobs.isEmpty
+          ? 'Nessuna pagina di test generata.'
+          : 'Pagina di test accodata.';
+      await refreshJobs();
+      return result.jobs.isNotEmpty;
+    } on BackendError catch (error) {
+      _errorMessage = error.message;
+      return false;
+    } catch (_) {
+      _errorMessage = 'Impossibile accodare la pagina di test.';
+      return false;
+    } finally {
+      _finishBusy();
+    }
+  }
+
+  Future<bool> retryJob(PrintJob job) async {
+    if (_busy) {
+      return false;
+    }
+    _setBusy();
+    try {
+      _selectedJob = await _gateway.retryPrintJob(
+        jobId: job.id,
+        mutationId: newUuidV4(),
+        expectedVersion: job.version,
+      );
+      _noticeMessage = 'Lavoro rimesso in coda.';
+      await refreshJobs();
+      return true;
+    } on BackendError catch (error) {
+      if (error.isConflict) {
+        await _reloadSelectedJob(job.id);
+        _errorMessage = '${error.message} Dati ricaricati.';
+      } else {
+        _errorMessage = error.message;
+      }
+      return false;
+    } catch (_) {
+      _errorMessage = 'Impossibile riprovare la stampa.';
       return false;
     } finally {
       _finishBusy();
@@ -507,287 +616,80 @@ class PrintingController extends ChangeNotifier {
   }
 
   Future<bool> cancelJob(PrintJob job, String reason) async {
-    final normalized = reason.trim();
-    if (_busy || !job.status.canCancel) {
-      return false;
-    }
-    if (normalized.length < 2) {
-      _errorMessage = 'Inserisci un motivo di almeno due caratteri.';
-      _notify();
-      return false;
-    }
-    _setBusy();
-    try {
-      final updated = await _gateway.cancelPrintJob(
-        jobId: job.id,
-        mutationId: UuidV4.generate(),
-        expectedVersion: job.version,
-        reason: normalized,
-      );
-      _replaceJob(updated);
-      _noticeMessage = 'Lavoro di stampa annullato.';
-      await _refreshJobsSilently();
-      return true;
-    } on BackendError catch (error) {
-      await _handleMutationError(error, job.id);
-      return false;
-    } catch (_) {
-      _errorMessage = 'Impossibile annullare il lavoro di stampa.';
-      return false;
-    } finally {
-      _finishBusy();
-    }
-  }
-
-  Future<void> pollAgentNow() => _pollAgent();
-
-  void clearMessages() {
-    if (_errorMessage == null && _noticeMessage == null) {
-      return;
-    }
-    _errorMessage = null;
-    _noticeMessage = null;
-    _notify();
-  }
-
-  Future<bool> _requestDocument({
-    required Future<PrintRequestResult> Function() action,
-    required String successMessage,
-  }) async {
-    if (_locationId == null) {
-      _errorMessage = 'Location operativa non disponibile.';
-      _notify();
-      return false;
-    }
     if (_busy) {
       return false;
     }
     _setBusy();
     try {
-      final result = await action();
-      if (result.jobs.isEmpty) {
-        throw const BackendError(
-          message:
-              'Nessun lavoro creato: configura una rotta di stampa attiva.',
-          code: 'PRINT_ROUTE_NOT_CONFIGURED',
-        );
-      }
-      _noticeMessage =
-          '$successMessage ${result.jobs.length} lavoro/i creato/i.';
-      await _refreshJobsSilently();
+      _selectedJob = await _gateway.cancelPrintJob(
+        jobId: job.id,
+        mutationId: newUuidV4(),
+        expectedVersion: job.version,
+        reason: reason,
+      );
+      _noticeMessage = 'Lavoro annullato.';
+      await refreshJobs();
       return true;
     } on BackendError catch (error) {
-      _errorMessage = error.message;
+      if (error.isConflict) {
+        await _reloadSelectedJob(job.id);
+        _errorMessage = '${error.message} Dati ricaricati.';
+      } else {
+        _errorMessage = error.message;
+      }
       return false;
     } catch (_) {
-      _errorMessage = 'Impossibile accodare il documento.';
+      _errorMessage = 'Impossibile annullare la stampa.';
       return false;
     } finally {
       _finishBusy();
     }
   }
 
-  Future<void> _handleMutationError(BackendError error, String jobId) async {
-    if (error.code == 'PRINT_JOB_VERSION_CONFLICT') {
-      try {
-        final authoritative = await _gateway.getPrintJob(jobId);
-        _replaceJob(authoritative);
-        _errorMessage =
-            'Il lavoro è stato modificato da un altro client. Dati ricaricati.';
-        await _refreshJobsSilently();
-        return;
-      } catch (_) {
-        _errorMessage = error.message;
-        return;
-      }
-    }
-    _errorMessage = error.message;
+  void clearMessages() {
+    _errorMessage = null;
+    _noticeMessage = null;
+    _notify();
   }
 
-  void _replaceJob(PrintJob updated) {
-    if (_selectedJob?.id == updated.id) {
-      _selectedJob = updated;
+  Future<void> _reloadSelectedJob(String jobId) async {
+    try {
+      _selectedJob = await _gateway.getPrintJob(jobId);
+    } catch (_) {
+      _selectedJob = null;
     }
-    _jobs = [
-      for (final job in _jobs)
-        if (job.id == updated.id) updated else job,
-    ];
   }
 
   Future<void> _loadQueueMappings() async {
-    final mappings = <String, String>{};
-    for (final printer in _printers) {
+    final next = <String, String>{};
+    for (final printer in assignedPrinters) {
       final queue = await _mappingStore.readQueue(printer.id);
-      if (queue != null) {
-        mappings[printer.id] = queue;
+      if (queue != null && queue.isNotEmpty) {
+        next[printer.id] = queue;
       }
     }
-    _queueMappings = Map<String, String>.unmodifiable(mappings);
+    _queueMappings = Map<String, String>.unmodifiable(next);
   }
-
-  void _startPolling() {
-    if (!_agentEnabled || !canEnableAgent || _pollTimer != null) {
-      return;
-    }
-    _pollTimer = Timer.periodic(
-      const Duration(seconds: 4),
-      (_) => unawaited(_pollAgent()),
-    );
-    unawaited(_pollAgent());
-  }
-
-  void _stopPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
-    _agentPolling = false;
-  }
-
-  Future<void> _pollAgent() async {
-    if (!_agentEnabled ||
-        !canEnableAgent ||
-        _agentPolling ||
-        _locationId == null ||
-        _deviceId == null) {
-      return;
-    }
-    _agentPolling = true;
-    _notify();
-    var processed = false;
-    try {
-      for (final printer in assignedPrinters) {
-        final queueName = _queueMappings[printer.id];
-        if (queueName == null || queueName.isEmpty) {
-          continue;
-        }
-        await _sendHeartbeatIfDue(printer, queueName);
-        final job = await _gateway.claimPrintJob(
-          printerId: printer.id,
-          leaseSeconds: 60,
-        );
-        if (job == null) {
-          continue;
-        }
-        processed = true;
-        final leaseToken = job.leaseToken;
-        if (leaseToken == null) {
-          throw const BackendError(
-            message: 'Il backend non ha restituito il lease di stampa.',
-            code: 'PRINT_LEASE_INVALID',
-          );
-        }
-        try {
-          await _localBackend.printText(
-            queueName: queueName,
-            text: job.renderedText,
-            copies: job.copies,
-            supportsCut: printer.supportsCut,
-          );
-          await _gateway.completePrintJob(
-            jobId: job.id,
-            leaseToken: leaseToken,
-          );
-          _agentMessage =
-              '${job.documentType.label} stampato su ${printer.name}.';
-        } catch (error) {
-          final message = error.toString();
-          try {
-            await _gateway.failPrintJob(
-              jobId: job.id,
-              leaseToken: leaseToken,
-              errorMessage: message.length > 500
-                  ? message.substring(0, 500)
-                  : message,
-              retryable: true,
-            );
-          } catch (_) {
-            // The original local printing error remains the useful signal.
-          }
-          _agentMessage = 'Stampa fallita su ${printer.name}: $message';
-        }
-      }
-      _lastAgentPollAt = DateTime.now();
-      if (processed) {
-        await _refreshJobsSilently();
-      }
-    } on BackendError catch (error) {
-      _agentMessage = error.message;
-    } catch (error) {
-      _agentMessage = 'Errore agente locale: $error';
-    } finally {
-      _agentPolling = false;
-      _notify();
-    }
-  }
-
-  Future<void> _sendHeartbeatIfDue(
-    PrinterDevice printer,
-    String queueName,
-  ) async {
-    final now = DateTime.now();
-    final previous = _lastHeartbeatAt[printer.id];
-    if (previous != null &&
-        now.difference(previous) < const Duration(seconds: 30)) {
-      return;
-    }
-    await _gateway.heartbeat(
-      printerId: printer.id,
-      agentVersion: 'fluxa-pos-android/1.0',
-      statusMessage: 'ONLINE · ${localPrinterTargetLabel(queueName)}',
-    );
-    _lastHeartbeatAt[printer.id] = now;
-  }
-
-  Future<void> _refreshJobsSilently() async {
-    final currentLocationId = _locationId;
-    if (currentLocationId == null) {
-      return;
-    }
-    try {
-      final page = await _gateway.listPrintJobs(
-        locationId: currentLocationId,
-        printerId: _printerFilterId,
-        status: _statusFilter,
-      );
-      if (_locationId == currentLocationId) {
-        _assertJobLocations(page.items, currentLocationId);
-        _jobs = page.items;
-        if (_selectedJob != null) {
-          try {
-            _selectedJob = await _gateway.getPrintJob(_selectedJob!.id);
-          } catch (_) {
-            // The list refresh is still useful if the detail was removed.
-          }
-        }
-        _status = PrintingLoadStatus.ready;
-      }
-    } catch (_) {
-      // User-triggered operations remain authoritative; refresh is retryable.
-    }
-  }
-
-  bool _isCurrent(int requestVersion, String locationId, String deviceId) =>
-      requestVersion == _requestVersion &&
-      _locationId == locationId &&
-      _deviceId == deviceId;
 
   void _assertPrinterLocations(
     List<PrinterDevice> printers,
     String locationId,
   ) {
     if (printers.any((printer) => printer.locationId != locationId)) {
-      throw const BackendError(
-        message: 'Il backend ha restituito stampanti di un’altra location.',
-      );
+      throw const FormatException('Printer location mismatch.');
     }
   }
 
   void _assertJobLocations(List<PrintJob> jobs, String locationId) {
     if (jobs.any((job) => job.locationId != locationId)) {
-      throw const BackendError(
-        message: 'Il backend ha restituito lavori di un’altra location.',
-      );
+      throw const FormatException('Print job location mismatch.');
     }
   }
+
+  bool _isCurrent(int version, String locationId, String deviceId) =>
+      version == _requestVersion &&
+      locationId == _locationId &&
+      deviceId == _deviceId;
 
   void _setBusy() {
     _busy = true;
@@ -799,6 +701,20 @@ class PrintingController extends ChangeNotifier {
   void _finishBusy() {
     _busy = false;
     _notify();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => unawaited(pollAgentNow()),
+    );
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _agentPolling = false;
   }
 
   void _notify() {
