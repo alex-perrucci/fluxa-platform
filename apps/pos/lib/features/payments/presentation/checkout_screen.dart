@@ -682,7 +682,9 @@ Future<(int, int)?> _showCashDialog(
             TextFormField(
               initialValue: amount,
               onChanged: (value) => amount = value,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Importo (€)',
                 prefixText: '€ ',
@@ -692,7 +694,9 @@ Future<(int, int)?> _showCashDialog(
             TextFormField(
               initialValue: tendered,
               onChanged: (value) => tendered = value,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Ricevuto (€)',
                 prefixText: '€ ',
@@ -779,7 +783,9 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
               TextFormField(
                 initialValue: amount,
                 onChanged: (value) => amount = value,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: 'Importo (€)',
                   prefixText: '€ ',
