@@ -136,15 +136,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         if ({'OWNER', 'ADMIN', 'MANAGER'}.contains(session.role)) ...[
           const SizedBox(height: 16),
           Card(
-            child: ListTile(
-              key: const Key('open-admin-page'),
-              leading: const Icon(Icons.admin_panel_settings_outlined),
-              title: const Text('Amministrazione'),
-              subtitle: const Text(
-                'Crea utenti, catalogo, listini, tavoli, cucina, stampanti e configurazione fiscale.',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/admin'),
+            child: Column(
+              children: [
+                ListTile(
+                  key: const Key('open-admin-page'),
+                  leading: const Icon(Icons.admin_panel_settings_outlined),
+                  title: const Text('Configurazione amministrativa'),
+                  subtitle: const Text(
+                    'Crea utenti, catalogo, listini, tavoli, cucina, stampanti e configurazione fiscale.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/admin'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  key: const Key('open-admin-management-page'),
+                  leading: const Icon(Icons.tune_outlined),
+                  title: const Text('Gestisci e modifica dati'),
+                  subtitle: const Text(
+                    'Modifica, archivia o disattiva entità e configura graficamente le rotte di stampa.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/admin/manage'),
+                ),
+              ],
             ),
           ),
         ],
