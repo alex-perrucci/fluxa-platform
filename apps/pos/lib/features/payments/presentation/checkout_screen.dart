@@ -667,115 +667,32 @@ Future<String?> _showPrinterDialog(
 Future<(int, int)?> _showCashDialog(
   BuildContext context,
   CheckoutSession checkout,
-) async {
-  final amount = TextEditingController(
-    text: checkout.availableCents.toString(),
-  );
-  final tendered = TextEditingController(
-    text: checkout.availableCents.toString(),
-  );
-  final result = await showDialog<(int, int)>(
+) {
+  return showDialog<(int, int)>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Pagamento in contanti'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: amount,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Importo in centesimi',
-            ),
-          ),
-          TextField(
-            controller: tendered,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Ricevuto in centesimi',
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Annulla'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final parsedAmount = int.tryParse(amount.text);
-            final parsedTendered = int.tryParse(tendered.text);
-            if (parsedAmount != null && parsedTendered != null) {
-              Navigator.pop(context, (parsedAmount, parsedTendered));
-            }
-          },
-          child: const Text('Registra'),
-        ),
-      ],
-    ),
-  );
-  amount.dispose();
-  tendered.dispose();
-  return result;
-}
+    builder: (context) {
+      var amount = checkout.availableCents.toString();
+      var tendered = checkout.availableCents.toString();
 
-Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
-  BuildContext context,
-  CheckoutSession checkout,
-) async {
-  var method = PaymentMethod.card;
-  var provider = PaymentProvider.manualTerminal;
-  final amount = TextEditingController(
-    text: checkout.availableCents.toString(),
-  );
-  final result = await showDialog<(PaymentMethod, PaymentProvider, int)>(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Carta o altro'),
+      return AlertDialog(
+        title: const Text('Pagamento in contanti'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DropdownButtonFormField<PaymentMethod>(
-              value: method,
-              items: const [PaymentMethod.card, PaymentMethod.other]
-                  .map(
-                    (value) => DropdownMenuItem(
-                      value: value,
-                      child: Text(value.label),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (value) {
-                if (value != null) setState(() => method = value);
-              },
-              decoration: const InputDecoration(labelText: 'Metodo'),
-            ),
-            DropdownButtonFormField<PaymentProvider>(
-              value: provider,
-              items:
-                  const [
-                        PaymentProvider.manualTerminal,
-                        PaymentProvider.externalTerminal,
-                      ]
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value.label),
-                        ),
-                      )
-                      .toList(growable: false),
-              onChanged: (value) {
-                if (value != null) setState(() => provider = value);
-              },
-              decoration: const InputDecoration(labelText: 'Provider'),
-            ),
-            TextField(
-              controller: amount,
+            TextFormField(
+              initialValue: amount,
+              onChanged: (value) => amount = value,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'Importo in centesimi',
+              ),
+            ),
+            TextFormField(
+              initialValue: tendered,
+              onChanged: (value) => tendered = value,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Ricevuto in centesimi',
               ),
             ),
           ],
@@ -787,47 +704,129 @@ Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
           ),
           FilledButton(
             onPressed: () {
-              final parsed = int.tryParse(amount.text);
-              if (parsed != null) {
-                Navigator.pop(context, (method, provider, parsed));
+              final parsedAmount = int.tryParse(amount);
+              final parsedTendered = int.tryParse(tendered);
+              if (parsedAmount != null && parsedTendered != null) {
+                Navigator.pop(context, (parsedAmount, parsedTendered));
               }
             },
             child: const Text('Registra'),
           ),
         ],
-      ),
-    ),
+      );
+    },
   );
-  amount.dispose();
-  return result;
+}
+
+Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
+  BuildContext context,
+  CheckoutSession checkout,
+) {
+  return showDialog<(PaymentMethod, PaymentProvider, int)>(
+    context: context,
+    builder: (context) {
+      var method = PaymentMethod.card;
+      var provider = PaymentProvider.manualTerminal;
+      var amount = checkout.availableCents.toString();
+
+      return StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Carta o altro'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<PaymentMethod>(
+                value: method,
+                items: const [PaymentMethod.card, PaymentMethod.other]
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value.label),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) setState(() => method = value);
+                },
+                decoration: const InputDecoration(labelText: 'Metodo'),
+              ),
+              DropdownButtonFormField<PaymentProvider>(
+                value: provider,
+                items:
+                    const [
+                          PaymentProvider.manualTerminal,
+                          PaymentProvider.externalTerminal,
+                        ]
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value.label),
+                          ),
+                        )
+                        .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) setState(() => provider = value);
+                },
+                decoration: const InputDecoration(labelText: 'Provider'),
+              ),
+              TextFormField(
+                initialValue: amount,
+                onChanged: (value) => amount = value,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Importo in centesimi',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final parsed = int.tryParse(amount);
+                if (parsed != null) {
+                  Navigator.pop(context, (method, provider, parsed));
+                }
+              },
+              child: const Text('Registra'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 Future<String?> _showTextDialog(
   BuildContext context, {
   required String title,
   required String label,
-}) async {
-  final controller = TextEditingController();
-  final result = await showDialog<String>(
+}) {
+  return showDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        decoration: InputDecoration(labelText: label),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Annulla'),
+    builder: (context) {
+      var value = '';
+
+      return AlertDialog(
+        title: Text(title),
+        content: TextFormField(
+          onChanged: (nextValue) => value = nextValue,
+          decoration: InputDecoration(labelText: label),
         ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, controller.text),
-          child: const Text('Conferma'),
-        ),
-      ],
-    ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, value),
+            child: const Text('Conferma'),
+          ),
+        ],
+      );
+    },
   );
-  controller.dispose();
-  return result;
 }
