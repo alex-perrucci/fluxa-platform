@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PaymentReceiptPrinterService } from './payment-receipt-printer.service';
 import { PrintAgentController } from './print-agent.controller';
 import { PrintJobsController } from './print-jobs.controller';
 import { PrintJobsService } from './print-jobs.service';
@@ -19,6 +20,7 @@ import { PrintingAccessService } from './printing-access.service';
     PrintingAccessService,
     PrintersService,
     PrintProducerService,
+    PaymentReceiptPrinterService,
     PrintJobsService,
   ],
   exports: [PrintProducerService],

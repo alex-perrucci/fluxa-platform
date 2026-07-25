@@ -14,6 +14,7 @@ import { CancelPrintJobDto } from './dto/cancel-print-job.dto';
 import { PrintJobListQueryDto } from './dto/print-job-list-query.dto';
 import { PrintJobMutationDto } from './dto/print-job-mutation.dto';
 import { RequestPrintDto } from './dto/request-print.dto';
+import { PaymentReceiptPrinterService } from './payment-receipt-printer.service';
 import { PrintJobsService } from './print-jobs.service';
 import { PrintProducerService } from './print-producer.service';
 
@@ -22,6 +23,7 @@ export class PrintJobsController {
   constructor(
     private readonly jobs: PrintJobsService,
     private readonly producer: PrintProducerService,
+    private readonly paymentReceiptPrinter: PaymentReceiptPrinterService,
   ) {}
 
   @Get('print-jobs')
@@ -58,13 +60,24 @@ export class PrintJobsController {
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
+  @Get('checkouts/:checkoutId/print-options')
+  paymentReceiptOptions(
+    @CurrentAuth() auth: AuthContext,
+    @Param('checkoutId', ParseUUIDPipe) checkoutId: string,
+  ) {
+    return this.paymentReceiptPrinter.listOptions(auth, checkoutId);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
   @Post('checkouts/:checkoutId/print-receipt')
   paymentReceipt(
     @CurrentAuth() auth: AuthContext,
     @Param('checkoutId', ParseUUIDPipe) checkoutId: string,
     @Body() dto: RequestPrintDto,
   ) {
-    return this.producer.requestPaymentReceipt(auth, checkoutId, dto);
+    return dto.printerId
+      ? this.paymentReceiptPrinter.requestExplicit(auth, checkoutId, dto)
+      : this.producer.requestPaymentReceipt(auth, checkoutId, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')

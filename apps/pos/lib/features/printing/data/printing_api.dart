@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../core/network/backend_error.dart';
+import '../domain/payment_receipt_print_options.dart';
 import '../domain/printing_models.dart';
 
 abstract interface class PrintingGateway {
@@ -82,7 +83,19 @@ abstract interface class PrintingGateway {
   });
 }
 
-class PrintingApi implements PrintingGateway {
+abstract interface class PaymentReceiptPrinterSelectionGateway {
+  Future<PaymentReceiptPrintOptions> paymentReceiptOptions(String checkoutId);
+
+  Future<PrintRequestResult> requestPaymentReceiptToPrinter({
+    required String checkoutId,
+    required String clientRequestId,
+    required String printerId,
+    int copies = 1,
+  });
+}
+
+class PrintingApi
+    implements PrintingGateway, PaymentReceiptPrinterSelectionGateway {
   PrintingApi(this._dio);
 
   final Dio _dio;
@@ -170,6 +183,20 @@ class PrintingApi implements PrintingGateway {
   );
 
   @override
+  Future<PaymentReceiptPrintOptions> paymentReceiptOptions(
+    String checkoutId,
+  ) async {
+    try {
+      final response = await _dio.get<Map<String, Object?>>(
+        'checkouts/$checkoutId/print-options',
+      );
+      return PaymentReceiptPrintOptions.fromJson(_requireMap(response.data));
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
+  @override
   Future<PrintRequestResult> requestPaymentReceipt({
     required String checkoutId,
     required String clientRequestId,
@@ -177,6 +204,19 @@ class PrintingApi implements PrintingGateway {
   }) async => _request(
     path: 'checkouts/$checkoutId/print-receipt',
     clientRequestId: clientRequestId,
+    copies: copies,
+  );
+
+  @override
+  Future<PrintRequestResult> requestPaymentReceiptToPrinter({
+    required String checkoutId,
+    required String clientRequestId,
+    required String printerId,
+    int copies = 1,
+  }) async => _request(
+    path: 'checkouts/$checkoutId/print-receipt',
+    clientRequestId: clientRequestId,
+    printerId: printerId,
     copies: copies,
   );
 
@@ -308,12 +348,17 @@ class PrintingApi implements PrintingGateway {
   Future<PrintRequestResult> _request({
     required String path,
     required String clientRequestId,
+    String? printerId,
     required int copies,
   }) async {
     try {
       final response = await _dio.post<Map<String, Object?>>(
         path,
-        data: {'clientRequestId': clientRequestId, 'copies': copies},
+        data: {
+          'clientRequestId': clientRequestId,
+          'copies': copies,
+          'printerId': ?printerId,
+        },
       );
       return PrintRequestResult.fromJson(_requireMap(response.data));
     } on DioException catch (error) {

@@ -9,4 +9,8 @@ export class RequestPrintDto {
   @Min(1)
   @Max(5)
   copies?: number;
+
+  @IsOptional()
+  @IsUUID()
+  printerId?: string;
 }
