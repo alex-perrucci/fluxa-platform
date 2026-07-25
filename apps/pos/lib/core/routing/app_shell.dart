@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class AppShell extends StatelessWidget {
+import '../di/providers.dart';
+
+class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
+
+  static const _printingDestinationIndex = 4;
 
   static const destinations = [
     NavigationDestination(
@@ -45,7 +50,7 @@ class AppShell extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final body = navigationShell;
     return Scaffold(
@@ -55,7 +60,7 @@ class AppShell extends StatelessWidget {
               children: [
                 NavigationRail(
                   selectedIndex: navigationShell.currentIndex,
-                  onDestinationSelected: _go,
+                  onDestinationSelected: (index) => _go(ref, index),
                   labelType: NavigationRailLabelType.all,
                   destinations: destinations
                       .map(
@@ -76,14 +81,23 @@ class AppShell extends StatelessWidget {
           ? null
           : NavigationBar(
               selectedIndex: navigationShell.currentIndex,
-              onDestinationSelected: _go,
+              onDestinationSelected: (index) => _go(ref, index),
               destinations: destinations,
             ),
     );
   }
 
-  void _go(int index) => navigationShell.goBranch(
-    index,
-    initialLocation: index == navigationShell.currentIndex,
-  );
+  void _go(WidgetRef ref, int index) {
+    navigationShell.goBranch(
+      index,
+      initialLocation: index == navigationShell.currentIndex,
+    );
+    if (index != _printingDestinationIndex) {
+      return;
+    }
+    final controller = ref.read(printingControllerProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await controller.refresh();
+    });
+  }
 }
