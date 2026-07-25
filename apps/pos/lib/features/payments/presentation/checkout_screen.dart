@@ -3,9 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/di/providers.dart';
+import '../../../core/network/backend_error.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../orders/domain/order_models.dart';
+import '../../orders/domain/uuid_v4.dart';
 import '../../orders/presentation/order_controller.dart';
+import '../../printing/data/printing_api.dart';
+import '../../printing/domain/payment_receipt_print_options.dart';
 import '../../printing/presentation/printing_controller.dart';
 import '../domain/payment_models.dart';
 import 'checkout_controller.dart';
@@ -28,6 +32,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final orderController = ref.watch(orderControllerProvider);
     final checkoutController = ref.watch(checkoutControllerProvider);
     final printingController = ref.watch(printingControllerProvider);
+    final printingApi = ref.watch(printingApiProvider);
     final location = authController.state.deviceAssignment?.location;
     final session = authController.state.session;
 
@@ -84,6 +89,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         canRecordPayments: canRecordPayments,
         role: session.role,
         printingController: printingController,
+        printerSelectionGateway: printingApi,
       ),
     );
   }
@@ -95,9 +101,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     String orderId,
   ) {
     final key = '$locationId:$orderId';
-    if (_scheduledKey == key) {
-      return;
-    }
+    if (_scheduledKey == key) return;
     _scheduledKey = key;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await checkoutController.bindLocation(locationId);
@@ -110,13 +114,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final order = orderController.activeOrder;
       if (order != null) {
         final opened = await checkoutController.openForOrder(order);
-        if (opened) {
-          await orderController.selectOrder(orderId);
-        }
+        if (opened) await orderController.selectOrder(orderId);
       }
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) setState(() {});
     });
   }
 }
@@ -129,6 +129,7 @@ class CheckoutView extends StatelessWidget {
     required this.canRecordPayments,
     required this.role,
     this.printingController,
+    this.printerSelectionGateway,
     super.key,
   });
 
@@ -138,6 +139,7 @@ class CheckoutView extends StatelessWidget {
   final bool canRecordPayments;
   final String? role;
   final PrintingController? printingController;
+  final PaymentReceiptPrinterSelectionGateway? printerSelectionGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -147,43 +149,39 @@ class CheckoutView extends StatelessWidget {
     if (controller.status == CheckoutLoadStatus.loading && checkout == null) {
       return const FluxaLoadingView(label: 'Apertura checkout');
     }
-
     if (checkout == null) {
-      return _CheckoutUnavailable(
+      return FluxaEmptyView(
+        icon: Icons.point_of_sale_outlined,
+        title: 'Checkout non disponibile',
         message:
             controller.errorMessage ??
             'Il checkout non è ancora disponibile per questo ordine.',
-        onRetry: () async {
-          await orderController.selectOrder(orderId);
-          final refreshedOrder = orderController.activeOrder;
-          if (refreshedOrder != null) {
-            await controller.openForOrder(refreshedOrder);
-          }
-        },
       );
     }
 
+    final summary = _CheckoutSummary(
+      checkout: checkout,
+      order: order,
+      controller: controller,
+      canRecordPayments: canRecordPayments,
+      role: role,
+      printingController: printingController,
+      printerSelectionGateway: printerSelectionGateway,
+      onOrderRefresh: () => orderController.selectOrder(orderId),
+      onStartNewOrder: () {
+        orderController.discardCurrentView();
+        context.go('/home');
+      },
+    );
+    final payments = _PaymentsList(
+      checkout: checkout,
+      controller: controller,
+      canRecordPayments: canRecordPayments,
+      onOrderRefresh: () => orderController.selectOrder(orderId),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final summary = _CheckoutSummary(
-          checkout: checkout,
-          order: order,
-          controller: controller,
-          canRecordPayments: canRecordPayments,
-          role: role,
-          onOrderRefresh: () => orderController.selectOrder(orderId),
-          onStartNewOrder: () {
-            orderController.discardCurrentView();
-            context.go('/home');
-          },
-          printingController: printingController,
-        );
-        final payments = _PaymentsList(
-          checkout: checkout,
-          controller: controller,
-          canRecordPayments: canRecordPayments,
-          onOrderRefresh: () => orderController.selectOrder(orderId),
-        );
         if (constraints.maxWidth >= 980) {
           return Padding(
             padding: const EdgeInsets.all(20),
@@ -202,7 +200,7 @@ class CheckoutView extends StatelessWidget {
           children: [
             summary,
             const SizedBox(height: 16),
-            SizedBox(height: 520, child: payments),
+            payments,
           ],
         );
       },
@@ -220,6 +218,7 @@ class _CheckoutSummary extends StatelessWidget {
     required this.onOrderRefresh,
     required this.onStartNewOrder,
     this.printingController,
+    this.printerSelectionGateway,
   });
 
   final CheckoutSession checkout;
@@ -230,6 +229,7 @@ class _CheckoutSummary extends StatelessWidget {
   final Future<bool> Function() onOrderRefresh;
   final VoidCallback onStartNewOrder;
   final PrintingController? printingController;
+  final PaymentReceiptPrinterSelectionGateway? printerSelectionGateway;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -257,10 +257,7 @@ class _CheckoutSummary extends StatelessWidget {
           if (checkout.pendingCents > 0)
             _MoneyRow(
               label: 'In attesa terminale',
-              value: formatPaymentMoney(
-                checkout.pendingCents,
-                checkout.currency,
-              ),
+              value: formatPaymentMoney(checkout.pendingCents, checkout.currency),
             ),
           _MoneyRow(
             label: 'Residuo',
@@ -273,34 +270,22 @@ class _CheckoutSummary extends StatelessWidget {
           if (checkout.changeCents > 0)
             _MoneyRow(
               label: 'Resto',
-              value: formatPaymentMoney(
-                checkout.changeCents,
-                checkout.currency,
-              ),
+              value: formatPaymentMoney(checkout.changeCents, checkout.currency),
             ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              const Text('Stato'),
-              const SizedBox(width: 12),
-              Chip(label: Text(checkout.status.label)),
-            ],
-          ),
-          if (controller.errorMessage != null) ...[
-            const SizedBox(height: 12),
+          Chip(label: Text(checkout.status.label)),
+          if (controller.errorMessage != null)
             _MessageCard(
               message: controller.errorMessage!,
               error: true,
               onDismiss: controller.clearMessages,
-            ),
-          ] else if (controller.noticeMessage != null) ...[
-            const SizedBox(height: 12),
+            )
+          else if (controller.noticeMessage != null)
             _MessageCard(
               message: controller.noticeMessage!,
               error: false,
               onDismiss: controller.clearMessages,
             ),
-          ],
           const SizedBox(height: 20),
           if (checkout.isCompleted) ...[
             if (printingController != null)
@@ -310,9 +295,7 @@ class _CheckoutSummary extends StatelessWidget {
                   key: const Key('print-payment-receipt-button'),
                   onPressed: printingController!.busy
                       ? null
-                      : () => printingController!.requestPaymentReceipt(
-                          checkout.id,
-                        ),
+                      : () => _printReceipt(context),
                   icon: const Icon(Icons.print_outlined),
                   label: const Text('Stampa riepilogo pagamento'),
                 ),
@@ -328,11 +311,14 @@ class _CheckoutSummary extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            FilledButton.icon(
-              key: const Key('checkout-completed-button'),
-              onPressed: onStartNewOrder,
-              icon: const Icon(Icons.add_shopping_cart),
-              label: const Text('Nuovo ordine'),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('checkout-completed-button'),
+                onPressed: onStartNewOrder,
+                icon: const Icon(Icons.add_shopping_cart),
+                label: const Text('Nuovo ordine'),
+              ),
             ),
           ] else if (!checkout.isOpen)
             FilledButton.tonalIcon(
@@ -341,14 +327,8 @@ class _CheckoutSummary extends StatelessWidget {
               label: const Text('Torna agli ordini'),
             )
           else if (!canRecordPayments)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  'Il ruolo ${role ?? 'corrente'} può aprire il checkout, '
-                  'ma non può registrare o finalizzare pagamenti.',
-                ),
-              ),
+            Text(
+              'Il ruolo ${role ?? 'corrente'} può consultare il checkout, ma non registrare pagamenti.',
             )
           else ...[
             SizedBox(
@@ -357,22 +337,7 @@ class _CheckoutSummary extends StatelessWidget {
                 key: const Key('checkout-cash-button'),
                 onPressed: controller.busy || checkout.availableCents <= 0
                     ? null
-                    : () async {
-                        final values = await showCashPaymentDialog(
-                          context,
-                          checkout,
-                        );
-                        if (values == null) {
-                          return;
-                        }
-                        final success = await controller.addCashPayment(
-                          amountCents: values.amountCents,
-                          tenderedCents: values.tenderedCents,
-                        );
-                        if (success) {
-                          await onOrderRefresh();
-                        }
-                      },
+                    : () => _cash(context),
                 icon: const Icon(Icons.payments_outlined),
                 label: const Text('Contanti'),
               ),
@@ -384,20 +349,7 @@ class _CheckoutSummary extends StatelessWidget {
                 key: const Key('checkout-terminal-button'),
                 onPressed: controller.busy || checkout.availableCents <= 0
                     ? null
-                    : () async {
-                        final values = await showTerminalPaymentDialog(
-                          context,
-                          checkout,
-                        );
-                        if (values == null) {
-                          return;
-                        }
-                        await controller.addTerminalPayment(
-                          method: values.method,
-                          provider: values.provider,
-                          amountCents: values.amountCents,
-                        );
-                      },
+                    : () => _terminal(context),
                 icon: const Icon(Icons.credit_card),
                 label: const Text('Carta o altro'),
               ),
@@ -408,22 +360,7 @@ class _CheckoutSummary extends StatelessWidget {
                 width: double.infinity,
                 child: TextButton.icon(
                   key: const Key('cancel-checkout-button'),
-                  onPressed: controller.busy
-                      ? null
-                      : () async {
-                          final reason = await showCheckoutCancelDialog(
-                            context,
-                          );
-                          if (reason == null) {
-                            return;
-                          }
-                          final success = await controller.cancelCheckout(
-                            reason,
-                          );
-                          if (success) {
-                            await onOrderRefresh();
-                          }
-                        },
+                  onPressed: controller.busy ? null : () => _cancel(context),
                   icon: const Icon(Icons.close),
                   label: const Text('Annulla checkout'),
                 ),
@@ -434,6 +371,77 @@ class _CheckoutSummary extends StatelessWidget {
       ),
     ),
   );
+
+  Future<void> _printReceipt(BuildContext context) async {
+    final gateway = printerSelectionGateway;
+    if (gateway == null) {
+      await printingController!.requestPaymentReceipt(checkout.id);
+      return;
+    }
+    try {
+      final options = await gateway.paymentReceiptOptions(checkout.id);
+      if (!context.mounted) return;
+      final choice = await _showPrinterDialog(context, options);
+      if (choice == null) return;
+      final success = choice == _defaultRouteChoice
+          ? await printingController!.requestPaymentReceipt(checkout.id)
+          : (await gateway.requestPaymentReceiptToPrinter(
+                  checkoutId: checkout.id,
+                  clientRequestId: UuidV4.generate(),
+                  printerId: choice,
+                ))
+                .jobs
+                .isNotEmpty;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success
+                  ? 'Riepilogo pagamento accodato.'
+                  : 'Nessun lavoro di stampa creato.',
+            ),
+          ),
+        );
+      }
+    } on BackendError catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    }
+  }
+
+  Future<void> _cash(BuildContext context) async {
+    final values = await _showCashDialog(context, checkout);
+    if (values == null) return;
+    final success = await controller.addCashPayment(
+      amountCents: values.$1,
+      tenderedCents: values.$2,
+    );
+    if (success) await onOrderRefresh();
+  }
+
+  Future<void> _terminal(BuildContext context) async {
+    final values = await _showTerminalDialog(context, checkout);
+    if (values == null) return;
+    await controller.addTerminalPayment(
+      method: values.$1,
+      provider: values.$2,
+      amountCents: values.$3,
+    );
+  }
+
+  Future<void> _cancel(BuildContext context) async {
+    final reason = await _showTextDialog(
+      context,
+      title: 'Annulla checkout',
+      label: 'Motivo',
+    );
+    if (reason == null || reason.trim().length < 2) return;
+    final success = await controller.cancelCheckout(reason);
+    if (success) await onOrderRefresh();
+  }
 }
 
 class _PaymentsList extends StatelessWidget {
@@ -456,178 +464,73 @@ class _PaymentsList extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Pagamenti',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-              ),
-              Text('${checkout.payments.length} operazioni'),
-            ],
-          ),
+          Text('Pagamenti', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
-          Expanded(
-            child: checkout.payments.isEmpty
-                ? const FluxaEmptyView(
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'Nessun pagamento',
-                    message:
-                        'Registra un pagamento in contanti o tramite terminale.',
-                  )
-                : ListView.separated(
-                    key: const Key('checkout-payments-list'),
-                    itemCount: checkout.payments.length,
-                    separatorBuilder: (context, index) =>
-                        const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final payment = checkout.payments[index];
-                      return _PaymentTile(
-                        payment: payment,
-                        currency: checkout.currency,
-                        controller: controller,
-                        canRecordPayments: canRecordPayments,
-                        onOrderRefresh: onOrderRefresh,
-                      );
-                    },
-                  ),
-          ),
+          if (checkout.payments.isEmpty)
+            const Text('Nessun pagamento registrato.')
+          else
+            for (final payment in checkout.payments)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  payment.method == PaymentMethod.cash
+                      ? Icons.payments_outlined
+                      : Icons.credit_card,
+                ),
+                title: Text(
+                  '${payment.method.label} · ${formatPaymentMoney(payment.amountCents, checkout.currency)}',
+                ),
+                subtitle: Text(
+                  '${payment.provider.label} · ${payment.status.label}',
+                ),
+                trailing:
+                    canRecordPayments && payment.status == PaymentStatus.pending
+                    ? PopupMenuButton<String>(
+                        onSelected: (action) =>
+                            _handlePaymentAction(context, payment, action),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'capture',
+                            child: Text('Acquisisci'),
+                          ),
+                          PopupMenuItem(
+                            value: 'cancel',
+                            child: Text('Annulla'),
+                          ),
+                        ],
+                      )
+                    : null,
+              ),
         ],
       ),
     ),
   );
-}
 
-class _PaymentTile extends StatelessWidget {
-  const _PaymentTile({
-    required this.payment,
-    required this.currency,
-    required this.controller,
-    required this.canRecordPayments,
-    required this.onOrderRefresh,
-  });
-
-  final PaymentRecord payment;
-  final String currency;
-  final CheckoutController controller;
-  final bool canRecordPayments;
-  final Future<bool> Function() onOrderRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final subtitle = <String>[
-      payment.provider.label,
-      if (payment.providerReference != null) payment.providerReference!,
-      if (payment.failureCode != null) payment.failureCode!,
-    ].join(' · ');
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(
-        payment.method == PaymentMethod.cash
-            ? Icons.payments_outlined
-            : Icons.credit_card,
-      ),
-      title: Text(
-        '${payment.method.label} · '
-        '${formatPaymentMoney(payment.amountCents, currency)}',
-      ),
-      subtitle: Text(subtitle),
-      trailing:
-          payment.status == PaymentStatus.pending &&
-              canRecordPayments &&
-              controller.checkout?.isOpen == true
-          ? PopupMenuButton<String>(
-              key: Key('pending-payment-actions-${payment.id}'),
-              enabled: !controller.busy,
-              onSelected: (action) async {
-                if (action == 'capture') {
-                  final values = await showCapturePaymentDialog(context);
-                  if (values == null) {
-                    return;
-                  }
-                  final success = await controller.capturePayment(
-                    payment: payment,
-                    providerReference: values.providerReference,
-                    providerEventId: values.providerEventId,
-                  );
-                  if (success) {
-                    await onOrderRefresh();
-                  }
-                } else if (action == 'fail') {
-                  final values = await showFailPaymentDialog(context);
-                  if (values == null) {
-                    return;
-                  }
-                  await controller.failPayment(
-                    payment: payment,
-                    failureCode: values.failureCode,
-                    failureMessage: values.failureMessage,
-                    providerEventId: values.providerEventId,
-                  );
-                } else if (action == 'cancel') {
-                  await controller.cancelPayment(
-                    payment,
-                    reason: 'Annullato dall’operatore POS',
-                  );
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: 'capture',
-                  child: Text('Conferma acquisizione'),
-                ),
-                PopupMenuItem(value: 'fail', child: Text('Segna come fallito')),
-                PopupMenuItem(
-                  value: 'cancel',
-                  child: Text('Annulla pagamento'),
-                ),
-              ],
-              child: Chip(label: Text(payment.status.label)),
-            )
-          : Chip(label: Text(payment.status.label)),
-    );
+  Future<void> _handlePaymentAction(
+    BuildContext context,
+    PaymentRecord payment,
+    String action,
+  ) async {
+    if (action == 'capture') {
+      final reference = await _showTextDialog(
+        context,
+        title: 'Acquisisci pagamento',
+        label: 'Riferimento provider',
+      );
+      if (reference == null || reference.trim().isEmpty) return;
+      final success = await controller.capturePayment(
+        payment: payment,
+        providerReference: reference,
+      );
+      if (success) await onOrderRefresh();
+    } else {
+      final success = await controller.cancelPayment(
+        payment,
+        reason: 'Annullato dal POS',
+      );
+      if (success) await onOrderRefresh();
+    }
   }
-}
-
-class _CheckoutUnavailable extends StatelessWidget {
-  const _CheckoutUnavailable({required this.message, required this.onRetry});
-
-  final String message;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 480),
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.point_of_sale_outlined, size: 56),
-            const SizedBox(height: 16),
-            Text(
-              'Checkout non disponibile',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Riprova'),
-            ),
-            TextButton(
-              onPressed: () => context.go('/orders'),
-              child: const Text('Torna agli ordini'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class _MoneyRow extends StatelessWidget {
@@ -642,20 +545,18 @@ class _MoneyRow extends StatelessWidget {
   final bool emphasized;
 
   @override
-  Widget build(BuildContext context) {
-    final style = emphasized
-        ? Theme.of(context).textTheme.titleLarge
-        : Theme.of(context).textTheme.bodyLarge;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: style)),
-          Text(value, style: style),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(
+          value,
+          style: emphasized ? Theme.of(context).textTheme.titleMedium : null,
+        ),
+      ],
+    ),
+  );
 }
 
 class _MessageCard extends StatelessWidget {
@@ -672,147 +573,201 @@ class _MessageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     child: ListTile(
-      dense: true,
       leading: Icon(error ? Icons.error_outline : Icons.check_circle_outline),
       title: Text(message),
-      trailing: IconButton(
-        tooltip: 'Chiudi',
-        onPressed: onDismiss,
-        icon: const Icon(Icons.close),
+      trailing: IconButton(onPressed: onDismiss, icon: const Icon(Icons.close)),
+    ),
+  );
+}
+
+const _defaultRouteChoice = '__DEFAULT_ROUTE__';
+
+Future<String?> _showPrinterDialog(
+  BuildContext context,
+  PaymentReceiptPrintOptions options,
+) async {
+  if (options.printers.isEmpty && !options.defaultRouteConfigured) {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nessuna stampante disponibile'),
+        content: const Text(
+          'Assegna una stampante attiva a questo POS oppure configura una rotta PAYMENT_RECEIPT.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Chiudi'),
+          ),
+        ],
+      ),
+    );
+    return null;
+  }
+
+  var selected = options.printers.isNotEmpty
+      ? options.printers.first.id
+      : _defaultRouteChoice;
+  return showDialog<String>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Scegli stampante'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: RadioGroup<String>(
+              groupValue: selected,
+              onChanged: (value) {
+                if (value != null) setState(() => selected = value);
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (options.defaultRouteConfigured)
+                    const RadioListTile<String>(
+                      value: _defaultRouteChoice,
+                      title: Text('Rotta predefinita'),
+                      subtitle: Text('Usa la configurazione amministrativa'),
+                    ),
+                  for (final printer in options.printers)
+                    RadioListTile<String>(
+                      value: printer.id,
+                      title: Text(printer.name),
+                      subtitle: Text('${printer.code} · ${printer.purpose}'),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, selected),
+            child: const Text('Stampa'),
+          ),
+        ],
       ),
     ),
   );
 }
 
-class CashPaymentInput {
-  const CashPaymentInput({
-    required this.amountCents,
-    required this.tenderedCents,
-  });
-
-  final int amountCents;
-  final int tenderedCents;
-}
-
-class TerminalPaymentInput {
-  const TerminalPaymentInput({
-    required this.method,
-    required this.provider,
-    required this.amountCents,
-  });
-
-  final PaymentMethod method;
-  final PaymentProvider provider;
-  final int amountCents;
-}
-
-class CapturePaymentInput {
-  const CapturePaymentInput({
-    required this.providerReference,
-    required this.providerEventId,
-  });
-
-  final String providerReference;
-  final String? providerEventId;
-}
-
-class FailPaymentInput {
-  const FailPaymentInput({
-    required this.failureCode,
-    required this.failureMessage,
-    required this.providerEventId,
-  });
-
-  final String failureCode;
-  final String? failureMessage;
-  final String? providerEventId;
-}
-
-Future<CashPaymentInput?> showCashPaymentDialog(
+Future<(int, int)?> _showCashDialog(
   BuildContext context,
   CheckoutSession checkout,
 ) async {
-  var amountText = moneyInputValue(checkout.availableCents);
-  var tenderedText = moneyInputValue(checkout.availableCents);
-  String? validation;
-  return showDialog<CashPaymentInput>(
+  final amount = TextEditingController(text: checkout.availableCents.toString());
+  final tendered = TextEditingController(text: checkout.availableCents.toString());
+  final result = await showDialog<(int, int)>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Pagamento in contanti'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                key: const Key('cash-amount-field'),
-                initialValue: amountText,
-                onChanged: (value) => amountText = value,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Importo applicato all’ordine',
-                  prefixText: '€ ',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                key: const Key('cash-tendered-field'),
-                initialValue: tenderedText,
-                onChanged: (value) => tenderedText = value,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Contante ricevuto',
-                  prefixText: '€ ',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              if (validation != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  validation!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-            ],
+    builder: (context) => AlertDialog(
+      title: const Text('Pagamento in contanti'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: amount,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Importo in centesimi'),
           ),
+          TextField(
+            controller: tendered,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Ricevuto in centesimi'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annulla'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final parsedAmount = int.tryParse(amount.text);
+            final parsedTendered = int.tryParse(tendered.text);
+            if (parsedAmount != null && parsedTendered != null) {
+              Navigator.pop(context, (parsedAmount, parsedTendered));
+            }
+          },
+          child: const Text('Registra'),
+        ),
+      ],
+    ),
+  );
+  amount.dispose();
+  tendered.dispose();
+  return result;
+}
+
+Future<(PaymentMethod, PaymentProvider, int)?> _showTerminalDialog(
+  BuildContext context,
+  CheckoutSession checkout,
+) async {
+  var method = PaymentMethod.card;
+  var provider = PaymentProvider.manualTerminal;
+  final amount = TextEditingController(text: checkout.availableCents.toString());
+  final result = await showDialog<(PaymentMethod, PaymentProvider, int)>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Carta o altro'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<PaymentMethod>(
+              value: method,
+              items: const [PaymentMethod.card, PaymentMethod.other]
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value.label),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                if (value != null) setState(() => method = value);
+              },
+              decoration: const InputDecoration(labelText: 'Metodo'),
+            ),
+            DropdownButtonFormField<PaymentProvider>(
+              value: provider,
+              items: const [
+                PaymentProvider.manualTerminal,
+                PaymentProvider.externalTerminal,
+              ]
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value.label),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                if (value != null) setState(() => provider = value);
+              },
+              decoration: const InputDecoration(labelText: 'Provider'),
+            ),
+            TextField(
+              controller: amount,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Importo in centesimi'),
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
+            onPressed: () => Navigator.pop(context),
             child: const Text('Annulla'),
           ),
           FilledButton(
-            key: const Key('confirm-cash-payment-button'),
             onPressed: () {
-              try {
-                final amount = parseMoneyInput(amountText);
-                final tendered = parseMoneyInput(tenderedText);
-                if (amount > checkout.availableCents) {
-                  throw const FormatException(
-                    'L’importo supera il residuo disponibile.',
-                  );
-                }
-                if (tendered < amount) {
-                  throw const FormatException(
-                    'Il contante ricevuto è inferiore all’importo.',
-                  );
-                }
-                Navigator.pop(
-                  dialogContext,
-                  CashPaymentInput(
-                    amountCents: amount,
-                    tenderedCents: tendered,
-                  ),
-                );
-              } on FormatException catch (error) {
-                setState(() => validation = error.message.toString());
-              }
+              final parsed = int.tryParse(amount.text);
+              if (parsed != null) Navigator.pop(context, (method, provider, parsed));
             },
             child: const Text('Registra'),
           ),
@@ -820,327 +775,36 @@ Future<CashPaymentInput?> showCashPaymentDialog(
       ),
     ),
   );
+  amount.dispose();
+  return result;
 }
 
-Future<TerminalPaymentInput?> showTerminalPaymentDialog(
-  BuildContext context,
-  CheckoutSession checkout,
-) async {
-  var method = PaymentMethod.card;
-  var provider = PaymentProvider.manualTerminal;
-  var amountText = moneyInputValue(checkout.availableCents);
-  String? validation;
-  return showDialog<TerminalPaymentInput>(
+Future<String?> _showTextDialog(
+  BuildContext context, {
+  required String title,
+  required String label,
+}) async {
+  final controller = TextEditingController();
+  final result = await showDialog<String>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Pagamento tramite terminale'),
-        content: SizedBox(
-          width: 440,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<PaymentMethod>(
-                value: method,
-                decoration: const InputDecoration(
-                  labelText: 'Metodo',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: PaymentMethod.card,
-                    child: Text('Carta'),
-                  ),
-                  DropdownMenuItem(
-                    value: PaymentMethod.other,
-                    child: Text('Altro'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => method = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<PaymentProvider>(
-                value: provider,
-                decoration: const InputDecoration(
-                  labelText: 'Provider',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: PaymentProvider.manualTerminal,
-                    child: Text('Terminale manuale'),
-                  ),
-                  DropdownMenuItem(
-                    value: PaymentProvider.externalTerminal,
-                    child: Text('Terminale esterno'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => provider = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                key: const Key('terminal-amount-field'),
-                initialValue: amountText,
-                onChanged: (value) => amountText = value,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Importo',
-                  prefixText: '€ ',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              if (validation != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  validation!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            key: const Key('confirm-terminal-payment-button'),
-            onPressed: () {
-              try {
-                final amount = parseMoneyInput(amountText);
-                if (amount > checkout.availableCents) {
-                  throw const FormatException(
-                    'L’importo supera il residuo disponibile.',
-                  );
-                }
-                Navigator.pop(
-                  dialogContext,
-                  TerminalPaymentInput(
-                    method: method,
-                    provider: provider,
-                    amountCents: amount,
-                  ),
-                );
-              } on FormatException catch (error) {
-                setState(() => validation = error.message.toString());
-              }
-            },
-            child: const Text('Crea pagamento'),
-          ),
-        ],
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        decoration: InputDecoration(labelText: label),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annulla'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text),
+          child: const Text('Conferma'),
+        ),
+      ],
     ),
   );
-}
-
-Future<CapturePaymentInput?> showCapturePaymentDialog(
-  BuildContext context,
-) async {
-  var referenceText = '';
-  var eventText = '';
-  String? validation;
-  return showDialog<CapturePaymentInput>(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Conferma acquisizione'),
-        content: SizedBox(
-          width: 440,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                key: const Key('provider-reference-field'),
-                initialValue: referenceText,
-                onChanged: (value) => referenceText = value,
-                maxLength: 200,
-                decoration: const InputDecoration(
-                  labelText: 'Riferimento provider',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              TextFormField(
-                initialValue: eventText,
-                onChanged: (value) => eventText = value,
-                maxLength: 200,
-                decoration: const InputDecoration(
-                  labelText: 'ID evento provider (facoltativo)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              if (validation != null)
-                Text(
-                  validation!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final reference = referenceText.trim();
-              if (reference.isEmpty) {
-                setState(
-                  () => validation = 'Inserisci il riferimento provider.',
-                );
-                return;
-              }
-              Navigator.pop(
-                dialogContext,
-                CapturePaymentInput(
-                  providerReference: reference,
-                  providerEventId: _optionalDialogValue(eventText),
-                ),
-              );
-            },
-            child: const Text('Acquisisci'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-Future<FailPaymentInput?> showFailPaymentDialog(BuildContext context) async {
-  var codeText = '';
-  var messageText = '';
-  var eventText = '';
-  String? validation;
-  return showDialog<FailPaymentInput>(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Pagamento fallito'),
-        content: SizedBox(
-          width: 440,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                key: const Key('payment-failure-code-field'),
-                initialValue: codeText,
-                onChanged: (value) => codeText = value,
-                maxLength: 80,
-                decoration: const InputDecoration(
-                  labelText: 'Codice errore',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              TextFormField(
-                initialValue: messageText,
-                onChanged: (value) => messageText = value,
-                maxLength: 500,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Messaggio (facoltativo)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              TextFormField(
-                initialValue: eventText,
-                onChanged: (value) => eventText = value,
-                maxLength: 200,
-                decoration: const InputDecoration(
-                  labelText: 'ID evento provider (facoltativo)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              if (validation != null)
-                Text(
-                  validation!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final code = codeText.trim();
-              if (code.isEmpty) {
-                setState(() => validation = 'Inserisci il codice errore.');
-                return;
-              }
-              Navigator.pop(
-                dialogContext,
-                FailPaymentInput(
-                  failureCode: code,
-                  failureMessage: _optionalDialogValue(messageText),
-                  providerEventId: _optionalDialogValue(eventText),
-                ),
-              );
-            },
-            child: const Text('Conferma fallimento'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-Future<String?> showCheckoutCancelDialog(BuildContext context) async {
-  var reasonText = '';
-  String? validation;
-  return showDialog<String>(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Annulla checkout'),
-        content: TextFormField(
-          key: const Key('checkout-cancel-reason-field'),
-          initialValue: reasonText,
-          onChanged: (value) => reasonText = value,
-          maxLength: 500,
-          maxLines: 3,
-          decoration: InputDecoration(
-            labelText: 'Motivo',
-            errorText: validation,
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Indietro'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final reason = reasonText.trim();
-              if (reason.length < 3) {
-                setState(() => validation = 'Inserisci almeno 3 caratteri.');
-                return;
-              }
-              Navigator.pop(dialogContext, reason);
-            },
-            child: const Text('Annulla checkout'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-String? _optionalDialogValue(String value) {
-  final normalized = value.trim();
-  return normalized.isEmpty ? null : normalized;
+  controller.dispose();
+  return result;
 }
