@@ -1,0 +1,133 @@
+name: Fix POS analyze PR 24
+
+on:
+  push:
+    branches:
+      - feature/admin-management-ui
+    paths:
+      - .github/workflows/fix-pos-analyze-pr24.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/admin-management-ui
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply analyzer fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          admin_path = Path('apps/pos/lib/features/admin/presentation/admin_management_screen.dart')
+          admin = admin_path.read_text(encoding='utf-8')
+          old_admin = "    return [if (code != null) code, if (status != null) status].join(' · ');"
+          new_admin = "    return [code, status].whereType<String>().join(' · ');"
+          if old_admin not in admin:
+              raise SystemExit('admin subtitle pattern not found')
+          admin_path.write_text(admin.replace(old_admin, new_admin, 1), encoding='utf-8')
+
+          checkout_path = Path('apps/pos/lib/features/payments/presentation/checkout_screen.dart')
+          checkout = checkout_path.read_text(encoding='utf-8')
+          old_radio = """            child: RadioGroup<String>(
+              groupValue: selected,
+              onChanged: (value) {
+                if (value != null) setState(() => selected = value);
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (options.defaultRouteConfigured)
+                    const RadioListTile<String>(
+                      value: _defaultRouteChoice,
+                      title: Text('Rotta predefinita'),
+                      subtitle: Text('Usa la configurazione amministrativa'),
+                    ),
+                  for (final printer in options.printers)
+                    RadioListTile<String>(
+                      value: printer.id,
+                      title: Text(printer.name),
+                      subtitle: Text('${printer.code} · ${printer.purpose}'),
+                    ),
+                ],
+              ),
+            ),"""
+          new_radio = """            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (options.defaultRouteConfigured)
+                  RadioListTile<String>(
+                    value: _defaultRouteChoice,
+                    groupValue: selected,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selected = value);
+                      }
+                    },
+                    title: const Text('Rotta predefinita'),
+                    subtitle: const Text(
+                      'Usa la configurazione amministrativa',
+                    ),
+                  ),
+                for (final printer in options.printers)
+                  RadioListTile<String>(
+                    value: printer.id,
+                    groupValue: selected,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selected = value);
+                      }
+                    },
+                    title: Text(printer.name),
+                    subtitle: Text('${printer.code} · ${printer.purpose}'),
+                  ),
+              ],
+            ),"""
+          if old_radio not in checkout:
+              raise SystemExit('printer radio pattern not found')
+          checkout = checkout.replace(old_radio, new_radio, 1)
+
+          old_if = """              if (parsed != null)
+                Navigator.pop(context, (method, provider, parsed));"""
+          new_if = """              if (parsed != null) {
+                Navigator.pop(context, (method, provider, parsed));
+              }"""
+          if old_if not in checkout:
+              raise SystemExit('terminal parsed pattern not found')
+          checkout_path.write_text(checkout.replace(old_if, new_if, 1), encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        working-directory: apps/pos
+        run: flutter pub get
+
+      - name: Format and analyze
+        working-directory: apps/pos
+        run: |
+          dart format lib test
+          flutter analyze
+
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/pos/lib/features/admin/presentation/admin_management_screen.dart \
+            apps/pos/lib/features/payments/presentation/checkout_screen.dart
+          git commit -m "fix(pos): resolve Flutter analyzer errors"
+          git push origin HEAD:feature/admin-management-ui
+
+# retrigger

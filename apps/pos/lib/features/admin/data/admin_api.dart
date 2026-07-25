@@ -67,6 +67,15 @@ class AdminApi {
     }
   }
 
+  Future<Map<String, Object?>> delete(String path) async {
+    try {
+      final response = await _dio.delete<Object?>(path);
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
   List<Map<String, Object?>> _asList(Object? data) {
     final raw = switch (data) {
       final List<Object?> values => values,
