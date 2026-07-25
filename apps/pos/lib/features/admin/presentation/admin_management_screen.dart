@@ -475,7 +475,7 @@ class _AdminManagementScreenState extends ConsumerState<AdminManagementScreen> {
   String _entitySubtitle(Map<String, Object?> value) {
     final code = value['code']?.toString();
     final status = value['status']?.toString();
-    return [if (code != null) code, if (status != null) status].join(' · ');
+    return [code, status].whereType<String>().join(' · ');
   }
 
   String _message(Object error) => switch (error) {
