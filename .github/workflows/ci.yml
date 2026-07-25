@@ -39,7 +39,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feature/admin-management-ui
-      - name: Apply PR 24 analyzer fixes
+          fetch-depth: 0
+      - name: Apply and publish PR 24 analyzer fixes
         working-directory: .
         shell: bash
         run: |
@@ -56,30 +57,17 @@ jobs:
 
           checkout_path = Path('apps/pos/lib/features/payments/presentation/checkout_screen.dart')
           checkout = checkout_path.read_text(encoding='utf-8')
-          old_radio = """            child: RadioGroup<String>(
-              groupValue: selected,
-              onChanged: (value) {
-                if (value != null) setState(() => selected = value);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (options.defaultRouteConfigured)
-                    const RadioListTile<String>(
-                      value: _defaultRouteChoice,
-                      title: Text('Rotta predefinita'),
-                      subtitle: Text('Usa la configurazione amministrativa'),
-                    ),
-                  for (final printer in options.printers)
-                    RadioListTile<String>(
-                      value: printer.id,
-                      title: Text(printer.name),
-                      subtitle: Text('${printer.code} · ${printer.purpose}'),
-                    ),
-                ],
-              ),
-            ),"""
-          new_radio = """            child: Column(
+
+          start_marker = '            child: RadioGroup<String>('
+          end_marker = '            ),\n          ),\n        ),\n        actions:'
+          start = checkout.find(start_marker)
+          if start == -1:
+              raise SystemExit('RadioGroup start marker not found')
+          end = checkout.find(end_marker, start)
+          if end == -1:
+              raise SystemExit('RadioGroup end marker not found')
+
+          replacement = """            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (options.defaultRouteConfigured)
@@ -109,17 +97,32 @@ jobs:
                     subtitle: Text('${printer.code} · ${printer.purpose}'),
                   ),
               ],
-            ),"""
-          checkout = checkout.replace(old_radio, new_radio)
-          checkout = checkout.replace(
-              """              if (parsed != null)
-                Navigator.pop(context, (method, provider, parsed));""",
-              """              if (parsed != null) {
+            )"""
+          checkout = checkout[:start] + replacement + checkout[end + len('            ),'):]
+
+          old_if = """              if (parsed != null)
+                Navigator.pop(context, (method, provider, parsed));"""
+          new_if = """              if (parsed != null) {
                 Navigator.pop(context, (method, provider, parsed));
-              }""",
-          )
+              }"""
+          if old_if not in checkout:
+              raise SystemExit('Terminal parsed if marker not found')
+          checkout = checkout.replace(old_if, new_if, 1)
+
+          if 'RadioGroup<String>' in checkout:
+              raise SystemExit('RadioGroup is still present after replacement')
           checkout_path.write_text(checkout, encoding='utf-8')
           PY
+
+          dart format apps/pos/lib apps/pos/test
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/pos/lib/features/admin/presentation/admin_management_screen.dart apps/pos/lib/features/payments/presentation/checkout_screen.dart
+          if ! git diff --cached --quiet; then
+            git commit -m "fix(pos): resolve Flutter analyzer errors"
+            git push origin HEAD:feature/admin-management-ui
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -132,22 +135,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format lib test
+      - run: dart format --output=none --set-exit-if-changed lib test
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --debug
       - run: flutter build web --dart-define=FLUXA_ENV=test --dart-define=API_BASE_URL=https://test.invalid/api/v1
-      - name: Commit analyzer fixes
-        if: success()
-        working-directory: .
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/pos/lib/features/admin/presentation/admin_management_screen.dart apps/pos/lib/features/payments/presentation/checkout_screen.dart
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "fix(pos): resolve Flutter analyzer errors"
-          git push origin HEAD:feature/admin-management-ui
       # The debug APK is built and validated but is not uploaded on every PR.
       # Signed downloadable artifacts are produced only by android-release.yml.
