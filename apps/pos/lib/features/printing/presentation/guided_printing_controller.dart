@@ -9,8 +9,9 @@ class GuidedPrintingController extends PrintingController {
   GuidedPrintingController(
     PrintingGateway gateway,
     LocalPrinterMappingStore mappingStore,
-    this._profileBackend,
-  ) : super(gateway, mappingStore, _profileBackend);
+    ProfileAwareLocalPrinterBackend profileBackend,
+  ) : _profileBackend = profileBackend,
+      super(gateway, mappingStore, profileBackend);
 
   final ProfileAwareLocalPrinterBackend _profileBackend;
 
