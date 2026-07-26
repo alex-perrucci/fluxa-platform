@@ -1,3 +1,4 @@
+// dart format off
 class EscPosPrintProfile {
   const EscPosPrintProfile({
     required this.paperWidthMm,
@@ -200,3 +201,4 @@ class EscPosTextFormatter {
       ..write('\n');
   }
 }
+// dart format on
