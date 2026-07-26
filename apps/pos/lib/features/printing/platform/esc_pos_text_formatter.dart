@@ -9,12 +9,13 @@ class EscPosPrintProfile {
   final int charactersPerLine;
   final String encoding;
 
-  int get normalizedCharactersPerLine => charactersPerLine.clamp(24, 64);
+  int get normalizedCharactersPerLine =>
+      charactersPerLine.clamp(24, 64).toInt();
 
   int get printableWidthDots {
     if (paperWidthMm >= 76) return 576;
     if (paperWidthMm >= 56) return 384;
-    return (normalizedCharactersPerLine * 12).clamp(288, 576);
+    return (normalizedCharactersPerLine * 12).clamp(288, 576).toInt();
   }
 }
 
@@ -47,7 +48,7 @@ class EscPosTextFormatter {
     for (final rawLine in normalized.split('\n')) {
       final line = _shortenTechnicalIdentifiers(rawLine.trimRight());
       if (_isSeparator(line)) {
-        _writeLine(output, '-' * width);
+        _writeLine(output, _repeat('-', width));
         continue;
       }
 
@@ -86,13 +87,13 @@ class EscPosTextFormatter {
   }
 
   static List<String> layoutForPreview(String source, int charactersPerLine) {
-    final width = charactersPerLine.clamp(24, 64);
+    final width = charactersPerLine.clamp(24, 64).toInt();
     final result = <String>[];
     final normalized = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     for (final rawLine in normalized.split('\n')) {
       final line = _shortenTechnicalIdentifiers(rawLine.trimRight());
       if (_isSeparator(line)) {
-        result.add('-' * width);
+        result.add(_repeat('-', width));
       } else {
         result.addAll(_layoutLine(_cleanCenteredLine(line), width));
       }
@@ -158,8 +159,7 @@ class EscPosTextFormatter {
   static bool _isSeparator(String line) => RegExp(r'^-{3,}$').hasMatch(line);
 
   static bool _isCenteredLine(String line) =>
-      (line.startsWith('***') && line.endsWith('***')) ||
-      line == '*** NON VALIDO AI FINI FISCALI ***';
+      line.startsWith('***') && line.endsWith('***');
 
   static bool _isEmphasizedLine(String line) {
     final normalized = line.toUpperCase();
@@ -173,18 +173,22 @@ class EscPosTextFormatter {
     return line.substring(3, line.length - 3).trim();
   }
 
-  static String _shortenTechnicalIdentifiers(String line) => line.replaceAllMapped(
-    RegExp(
-      r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b',
-    ),
-    (match) => '${match.group(0)!.substring(0, 8)}…',
-  );
+  static String _shortenTechnicalIdentifiers(String line) =>
+      line.replaceAllMapped(
+        RegExp(
+          r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b',
+        ),
+        (match) => '${match.group(0)!.substring(0, 8)}…',
+      );
 
-  static int _codePage(String encoding) => switch (encoding.toUpperCase()) {
-    'CP858' || 'IBM00858' => 19,
-    'CP850' || 'IBM850' => 2,
-    _ => 19,
-  };
+  static int _codePage(String encoding) {
+    final normalized = encoding.toUpperCase();
+    if (normalized == 'CP850' || normalized == 'IBM850') return 2;
+    return 19;
+  }
+
+  static String _repeat(String value, int count) =>
+      List<String>.filled(count, value, growable: false).join();
 
   static void _writeLine(StringBuffer output, String line) {
     output
