@@ -5,6 +5,8 @@ import { validateEnvironment } from '@fluxa/config';
 import { DatabaseModule } from '@fluxa/database';
 import { QueueModule } from '@fluxa/queue';
 import { BackgroundProcessor } from './background.processor';
+import { ReservationHoldExpiryService } from './reservation-hold-expiry.service';
+import { ReservationHoldSchedulerService } from './reservation-hold-scheduler.service';
 
 @Module({
   imports: [
@@ -21,6 +23,10 @@ import { BackgroundProcessor } from './background.processor';
     DatabaseModule,
     QueueModule,
   ],
-  providers: [BackgroundProcessor],
+  providers: [
+    BackgroundProcessor,
+    ReservationHoldExpiryService,
+    ReservationHoldSchedulerService,
+  ],
 })
 export class BackgroundWorkerModule {}

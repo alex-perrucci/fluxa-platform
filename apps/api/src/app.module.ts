@@ -23,6 +23,7 @@ import { OrdersModule } from './orders/orders.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PrintingModule } from './printing/printing.module';
+import { ReservationsModule } from './reservations/reservations.module';
 import { RootController } from './root.controller';
 
 @Module({
@@ -68,6 +69,7 @@ import { RootController } from './root.controller';
     OrganizationsModule,
     PaymentsModule,
     PrintingModule,
+    ReservationsModule,
     MerchantsModule,
     LocationsModule,
     CatalogModule,
