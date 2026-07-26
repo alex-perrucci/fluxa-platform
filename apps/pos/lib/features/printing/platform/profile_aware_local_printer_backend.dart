@@ -1,3 +1,4 @@
+// dart format off
 import 'esc_pos_text_formatter.dart';
 import 'local_printer_backend_contract.dart';
 
@@ -46,3 +47,4 @@ class ProfileAwareLocalPrinterBackend implements LocalPrinterBackend {
     );
   }
 }
+// dart format on
