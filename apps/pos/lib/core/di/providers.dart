@@ -22,6 +22,8 @@ import '../../features/payments/presentation/checkout_controller.dart';
 import '../../features/printing/data/local_printer_mapping_store.dart';
 import '../../features/printing/data/printing_api.dart';
 import '../../features/printing/platform/local_printer_backend.dart';
+import '../../features/printing/platform/profile_aware_local_printer_backend.dart';
+import '../../features/printing/presentation/guided_printing_controller.dart';
 import '../../features/printing/presentation/printing_controller.dart';
 import '../config/app_config.dart';
 import '../network/api_client.dart';
@@ -86,8 +88,8 @@ final printingApiProvider = Provider<PrintingApi>(
 final localPrinterMappingStoreProvider = Provider<LocalPrinterMappingStore>(
   (ref) => LocalPrinterMappingStore(ref.watch(secureStoreProvider)),
 );
-final localPrinterBackendProvider = Provider(
-  (ref) => createLocalPrinterBackend(),
+final localPrinterBackendProvider = Provider<ProfileAwareLocalPrinterBackend>(
+  (ref) => ProfileAwareLocalPrinterBackend(createLocalPrinterBackend()),
 );
 final installationIdentityProvider = Provider<InstallationIdentityService>(
   (ref) => InstallationIdentityService(ref.watch(sessionStoreProvider)),
@@ -140,7 +142,7 @@ final fiscalControllerProvider = ChangeNotifierProvider<FiscalController>(
   ),
 );
 final printingControllerProvider = ChangeNotifierProvider<PrintingController>(
-  (ref) => PrintingController(
+  (ref) => GuidedPrintingController(
     ref.watch(printingApiProvider),
     ref.watch(localPrinterMappingStoreProvider),
     ref.watch(localPrinterBackendProvider),
