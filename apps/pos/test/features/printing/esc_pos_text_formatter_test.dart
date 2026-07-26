@@ -1,3 +1,4 @@
+// dart format off
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/features/printing/platform/esc_pos_text_formatter.dart';
 
@@ -74,3 +75,4 @@ void main() {
     });
   });
 }
+// dart format on
