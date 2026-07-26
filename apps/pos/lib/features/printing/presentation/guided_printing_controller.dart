@@ -7,12 +7,16 @@ import '../platform/profile_aware_local_printer_backend.dart';
 import 'printing_controller.dart';
 
 class GuidedPrintingController extends PrintingController {
+  // The third argument is also retained by this subclass to synchronize
+  // per-queue print profiles, so forwarding all three as super parameters
+  // would remove the local value needed for _profileBackend.
+  // ignore: use_super_parameters
   GuidedPrintingController(
     PrintingGateway gateway,
     LocalPrinterMappingStore mappingStore,
     ProfileAwareLocalPrinterBackend profileBackend,
   ) : _profileBackend = profileBackend,
-      super(gateway, mappingStore, profileBackend);
+       super(gateway, mappingStore, profileBackend);
 
   final ProfileAwareLocalPrinterBackend _profileBackend;
 
