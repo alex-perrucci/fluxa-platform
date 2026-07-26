@@ -155,14 +155,33 @@ function Invoke-Checked {
 
     Push-Location -LiteralPath $WorkingDirectory
 
+    $previousErrorActionPreference = $ErrorActionPreference
+
     try {
-        $output = & $FilePath @ArgumentList 2>&1
+        # Windows PowerShell 5.1 converte qualsiasi output scritto su STDERR
+        # da un comando nativo in NativeCommandError. npm usa STDERR anche
+        # per semplici notice, pur terminando con exit code 0.
+        #
+        # Impostiamo temporaneamente Continue, catturiamo STDOUT e STDERR e
+        # decidiamo il successo esclusivamente tramite LASTEXITCODE.
+        $ErrorActionPreference = 'Continue'
+        $output = @(& $FilePath @ArgumentList 2>&1)
         $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        Pop-Location
+    }
 
-        if ($exitCode -ne 0) {
-            $details = @($output) -join [Environment]::NewLine
+    if ($exitCode -ne 0) {
+        $details = @(
+            $output |
+                ForEach-Object {
+                    $_.ToString()
+                }
+        ) -join [Environment]::NewLine
 
-            throw @"
+        throw @"
 Comando fallito con exit code ${exitCode}:
 
 $displayCommand
@@ -170,13 +189,14 @@ $displayCommand
 Output:
 $details
 "@
-        }
+    }
 
-        return @($output)
-    }
-    finally {
-        Pop-Location
-    }
+    return @(
+        $output |
+            ForEach-Object {
+                $_.ToString()
+            }
+    )
 }
 
 function Test-FileContains {
