@@ -1,3 +1,4 @@
+// dart format off
 import '../data/local_printer_mapping_store.dart';
 import '../data/printing_api.dart';
 import '../domain/printing_models.dart';
@@ -79,3 +80,4 @@ class GuidedPrintingController extends PrintingController {
     }
   }
 }
+// dart format on
