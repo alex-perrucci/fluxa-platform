@@ -29,18 +29,19 @@ class EscPosTextFormatter {
   static String format(String source, EscPosPrintProfile profile) {
     final width = profile.normalizedCharactersPerLine;
     final output = StringBuffer()
-      ..write('$_esc@')
-      ..write('$_esc')
+      ..write(_esc)
+      ..write('@')
+      ..write(_esc)
       ..write('t')
       ..writeCharCode(_codePage(profile.encoding))
-      ..write('$_esc')
+      ..write(_esc)
       ..write('M')
       ..writeCharCode(0)
-      ..write('$_gs')
+      ..write(_gs)
       ..write('L')
       ..writeCharCode(0)
       ..writeCharCode(0)
-      ..write('$_gs')
+      ..write(_gs)
       ..write('W')
       ..writeCharCode(profile.printableWidthDots & 0xff)
       ..writeCharCode((profile.printableWidthDots >> 8) & 0xff);
@@ -66,10 +67,10 @@ class EscPosTextFormatter {
 
       for (final part in wrapped) {
         output
-          ..write('$_esc')
+          ..write(_esc)
           ..write('a')
           ..writeCharCode(centered ? 1 : 0)
-          ..write('$_esc')
+          ..write(_esc)
           ..write('E')
           ..writeCharCode(emphasized ? 1 : 0);
         _writeLine(output, part);
@@ -77,13 +78,13 @@ class EscPosTextFormatter {
     }
 
     output
-      ..write('$_esc')
+      ..write(_esc)
       ..write('E')
       ..writeCharCode(0)
-      ..write('$_esc')
+      ..write(_esc)
       ..write('a')
       ..writeCharCode(0)
-      ..write('$_esc')
+      ..write(_esc)
       ..write('M')
       ..writeCharCode(0);
     return output.toString();
