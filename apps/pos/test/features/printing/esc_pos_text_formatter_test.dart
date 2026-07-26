@@ -22,7 +22,10 @@ void main() {
     });
 
     test('hard-wraps a word longer than the configured width', () {
-      final lines = EscPosTextFormatter.layoutForPreview('A' * 40, 32);
+      final lines = EscPosTextFormatter.layoutForPreview(
+        List.filled(40, 'A').join(),
+        32,
+      );
 
       expect(lines, hasLength(2));
       expect(lines.first, hasLength(32));
@@ -32,7 +35,7 @@ void main() {
     test('expands separators to the configured width', () {
       final lines = EscPosTextFormatter.layoutForPreview('--------', 48);
 
-      expect(lines.single, '-' * 48);
+      expect(lines.single, List.filled(48, '-').join());
     });
 
     test('shortens UUIDs that would destroy receipt layout', () {
@@ -55,7 +58,7 @@ void main() {
       );
 
       expect(output, contains('Caffè € 2,50'));
-      expect(output, contains('\u001dt\u0013'));
+      expect(output, contains('\u001bt\u0013'));
       expect(output, contains('\u001dW'));
       expect(output, contains('\u001bE\u0001'));
     });
