@@ -44,7 +44,9 @@ class EscPosTextFormatter {
       ..writeCharCode(profile.printableWidthDots & 0xff)
       ..writeCharCode((profile.printableWidthDots >> 8) & 0xff);
 
-    final normalized = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final normalized = source
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n');
     for (final rawLine in normalized.split('\n')) {
       final line = _shortenTechnicalIdentifiers(rawLine.trimRight());
       if (_isSeparator(line)) {
@@ -89,7 +91,9 @@ class EscPosTextFormatter {
   static List<String> layoutForPreview(String source, int charactersPerLine) {
     final width = charactersPerLine.clamp(24, 64).toInt();
     final result = <String>[];
-    final normalized = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final normalized = source
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n');
     for (final rawLine in normalized.split('\n')) {
       final line = _shortenTechnicalIdentifiers(rawLine.trimRight());
       if (_isSeparator(line)) {
@@ -173,8 +177,8 @@ class EscPosTextFormatter {
     return line.substring(3, line.length - 3).trim();
   }
 
-  static String _shortenTechnicalIdentifiers(String line) =>
-      line.replaceAllMapped(
+  static String _shortenTechnicalIdentifiers(String line) => line
+      .replaceAllMapped(
         RegExp(
           r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b',
         ),
