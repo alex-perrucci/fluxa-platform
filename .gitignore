@@ -34,3 +34,11 @@ temp/
 # release outputs kept outside Git
 release-artifacts/
 release-symbols/
+# Fluxa web
+apps/web/.next/
+apps/web/node_modules/
+apps/web/coverage/
+apps/web/.env
+apps/web/.env.local
+apps/web/.env.*.local
+!apps/web/.env.example

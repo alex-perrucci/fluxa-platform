@@ -13,6 +13,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantContextGuard } from './auth/guards/tenant-context.guard';
 import { CatalogModule } from './catalog/catalog.module';
 import { DevicesModule } from './devices/devices.module';
+import { EventsModule } from './events/events.module';
 import { FiscalModule } from './fiscal/fiscal.module';
 import { HealthModule } from './health/health.module';
 import { HospitalityModule } from './hospitality/hospitality.module';
@@ -22,6 +23,7 @@ import { OrdersModule } from './orders/orders.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PrintingModule } from './printing/printing.module';
+import { ReservationsModule } from './reservations/reservations.module';
 import { RootController } from './root.controller';
 
 @Module({
@@ -60,12 +62,14 @@ import { RootController } from './root.controller';
     QueueModule,
     AuthModule,
     HealthModule,
+    EventsModule,
     FiscalModule,
     HospitalityModule,
     OrdersModule,
     OrganizationsModule,
     PaymentsModule,
     PrintingModule,
+    ReservationsModule,
     MerchantsModule,
     LocationsModule,
     CatalogModule,

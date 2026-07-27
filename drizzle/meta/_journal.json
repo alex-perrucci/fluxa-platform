@@ -64,6 +64,20 @@
       "when": 1784885703521,
       "tag": "0008_member_default_location",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785105096352,
+      "tag": "0009_conscious_baron_strucker",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785109619645,
+      "tag": "0010_flowery_infant_terrible",
+      "breakpoints": true
     }
   ]
 }

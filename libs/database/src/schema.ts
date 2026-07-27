@@ -1,6 +1,8 @@
+import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
   boolean,
+  check,
   char,
   index,
   integer,
@@ -192,6 +194,63 @@ export const fiscalAttemptOutcome = pgEnum('fiscal_attempt_outcome', [
   'RETRY',
   'REJECTED',
 ]);
+
+// PHASE_2_EVENTS_RESERVATIONS_ENUMS_START
+export const eventStatus = pgEnum('event_status', [
+  'DRAFT',
+  'PUBLISHED',
+  'SOLD_OUT',
+  'CANCELLED',
+  'COMPLETED',
+  'ARCHIVED',
+]);
+
+export const reservationStatus = pgEnum('reservation_status', [
+  'PENDING_PAYMENT',
+  'CONFIRMED',
+  'CHECKED_IN',
+  'SEATED',
+  'COMPLETED',
+  'CANCELLED',
+  'EXPIRED',
+  'NO_SHOW',
+  'REFUND_PENDING',
+  'REFUNDED',
+]);
+
+export const reservationHoldStatus = pgEnum('reservation_hold_status', [
+  'ACTIVE',
+  'CONVERTED',
+  'EXPIRED',
+  'CANCELLED',
+]);
+
+export const reservationAssignmentStatus = pgEnum(
+  'reservation_assignment_status',
+  ['ACTIVE', 'RELEASED'],
+);
+
+export const reservationPaymentStatus = pgEnum('reservation_payment_status', [
+  'CREATED',
+  'REQUIRES_ACTION',
+  'PAID',
+  'FAILED',
+  'CANCELLED',
+  'PARTIALLY_REFUNDED',
+  'REFUNDED',
+]);
+
+export const platformFeeRuleScope = pgEnum('platform_fee_rule_scope', [
+  'GLOBAL',
+  'ORGANIZATION',
+  'EVENT',
+]);
+
+export const platformFeeLedgerEntryType = pgEnum(
+  'platform_fee_ledger_entry_type',
+  ['CHARGE', 'REFUND', 'ADJUSTMENT'],
+);
+// PHASE_2_EVENTS_RESERVATIONS_ENUMS_END
 
 export const outboxStatus = pgEnum('outbox_status', [
   'PENDING',
@@ -2169,6 +2228,762 @@ export const fiscalMutations = pgTable(
   ],
 );
 
+// PHASE_2_EVENTS_RESERVATIONS_TABLES_START
+export const events = pgTable(
+  'events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    title: varchar('title', { length: 220 }).notNull(),
+    slug: varchar('slug', { length: 180 }).notNull(),
+    description: text('description').notNull(),
+    timezone: varchar('timezone', { length: 80 })
+      .notNull()
+      .default('Europe/Rome'),
+    status: eventStatus('status').notNull().default('DRAFT'),
+    coverImageUrl: varchar('cover_image_url', { length: 1000 }),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    bookingOpensAt: timestamp('booking_opens_at', {
+      withTimezone: true,
+    }).notNull(),
+    bookingClosesAt: timestamp('booking_closes_at', {
+      withTimezone: true,
+    }).notNull(),
+    bookingAmountCents: integer('booking_amount_cents').notNull(),
+    currency: char('currency', { length: 3 }).notNull().default('EUR'),
+    capacity: integer('capacity').notNull(),
+    cancellationPolicy: text('cancellation_policy'),
+    version: integer('version').notNull().default(1),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('events_slug_uq').on(table.slug),
+    index('events_org_location_status_start_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.status,
+      table.startsAt,
+    ),
+    index('events_public_status_booking_idx').on(
+      table.status,
+      table.bookingOpensAt,
+      table.bookingClosesAt,
+    ),
+    check('events_time_window_ck', sql`${table.endsAt} > ${table.startsAt}`),
+    check(
+      'events_booking_window_ck',
+      sql`${table.bookingOpensAt} < ${table.bookingClosesAt}`,
+    ),
+    check(
+      'events_booking_before_start_ck',
+      sql`${table.bookingClosesAt} <= ${table.startsAt}`,
+    ),
+    check(
+      'events_booking_amount_nonnegative_ck',
+      sql`${table.bookingAmountCents} >= 0`,
+    ),
+    check('events_capacity_positive_ck', sql`${table.capacity} > 0`),
+    check('events_version_positive_ck', sql`${table.version} > 0`),
+  ],
+);
+
+export const eventMedia = pgTable(
+  'event_media',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    objectKey: varchar('object_key', { length: 1000 }).notNull(),
+    publicUrl: varchar('public_url', { length: 1000 }),
+    mimeType: varchar('mime_type', { length: 120 }).notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    widthPx: integer('width_px'),
+    heightPx: integer('height_px'),
+    altText: varchar('alt_text', { length: 300 }),
+    isCover: boolean('is_cover').notNull().default(false),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('event_media_event_object_key_uq').on(
+      table.eventId,
+      table.objectKey,
+    ),
+    index('event_media_event_cover_sort_idx').on(
+      table.eventId,
+      table.isCover,
+      table.sortOrder,
+    ),
+    check('event_media_size_positive_ck', sql`${table.sizeBytes} > 0`),
+    check('event_media_sort_nonnegative_ck', sql`${table.sortOrder} >= 0`),
+    check(
+      'event_media_width_positive_ck',
+      sql`${table.widthPx} is null or ${table.widthPx} > 0`,
+    ),
+    check(
+      'event_media_height_positive_ck',
+      sql`${table.heightPx} is null or ${table.heightPx} > 0`,
+    ),
+  ],
+);
+
+export const eventTableInventory = pgTable(
+  'event_table_inventory',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    diningTableId: uuid('dining_table_id')
+      .notNull()
+      .references(() => diningTables.id, { onDelete: 'restrict' }),
+    capacitySnapshot: integer('capacity_snapshot').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('event_table_inventory_event_table_uq').on(
+      table.eventId,
+      table.diningTableId,
+    ),
+    index('event_table_inventory_event_enabled_capacity_idx').on(
+      table.eventId,
+      table.enabled,
+      table.capacitySnapshot,
+    ),
+    index('event_table_inventory_org_location_idx').on(
+      table.organizationId,
+      table.locationId,
+    ),
+    check(
+      'event_table_inventory_capacity_positive_ck',
+      sql`${table.capacitySnapshot} > 0`,
+    ),
+  ],
+);
+
+export const eventBookingRules = pgTable(
+  'event_booking_rules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    minPartySize: integer('min_party_size').notNull().default(1),
+    maxPartySize: integer('max_party_size').notNull(),
+    holdMinutes: integer('hold_minutes').notNull().default(15),
+    bookingCutoffMinutes: integer('booking_cutoff_minutes')
+      .notNull()
+      .default(0),
+    cancellationCutoffMinutes: integer('cancellation_cutoff_minutes')
+      .notNull()
+      .default(0),
+    autoAssignSmallestTable: boolean('auto_assign_smallest_table')
+      .notNull()
+      .default(true),
+    allowManualAssignment: boolean('allow_manual_assignment')
+      .notNull()
+      .default(true),
+    requirePhone: boolean('require_phone').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('event_booking_rules_event_uq').on(table.eventId),
+    index('event_booking_rules_org_location_idx').on(
+      table.organizationId,
+      table.locationId,
+    ),
+    check(
+      'event_booking_rules_party_range_ck',
+      sql`${table.minPartySize} > 0 and ${table.maxPartySize} >= ${table.minPartySize}`,
+    ),
+    check(
+      'event_booking_rules_hold_minutes_ck',
+      sql`${table.holdMinutes} between 1 and 120`,
+    ),
+    check(
+      'event_booking_rules_booking_cutoff_ck',
+      sql`${table.bookingCutoffMinutes} >= 0`,
+    ),
+    check(
+      'event_booking_rules_cancellation_cutoff_ck',
+      sql`${table.cancellationCutoffMinutes} >= 0`,
+    ),
+  ],
+);
+
+export const platformFeeRules = pgTable(
+  'platform_fee_rules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scope: platformFeeRuleScope('scope').notNull(),
+    organizationId: uuid('organization_id').references(() => organizations.id, {
+      onDelete: 'cascade',
+    }),
+    eventId: uuid('event_id').references(() => events.id, {
+      onDelete: 'cascade',
+    }),
+    basisPoints: integer('basis_points').notNull(),
+    active: boolean('active').notNull().default(true),
+    effectiveFrom: timestamp('effective_from', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    effectiveTo: timestamp('effective_to', { withTimezone: true }),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('platform_fee_rules_resolution_idx').on(
+      table.scope,
+      table.organizationId,
+      table.eventId,
+      table.active,
+      table.effectiveFrom,
+    ),
+    check(
+      'platform_fee_rules_basis_points_ck',
+      sql`${table.basisPoints} between 0 and 10000`,
+    ),
+    check(
+      'platform_fee_rules_effective_window_ck',
+      sql`${table.effectiveTo} is null or ${table.effectiveTo} > ${table.effectiveFrom}`,
+    ),
+    check(
+      'platform_fee_rules_scope_ck',
+      sql`(
+        (${table.scope} = 'GLOBAL' and ${table.organizationId} is null and ${table.eventId} is null)
+        or
+        (${table.scope} = 'ORGANIZATION' and ${table.organizationId} is not null and ${table.eventId} is null)
+        or
+        (${table.scope} = 'EVENT' and ${table.organizationId} is not null and ${table.eventId} is not null)
+      )`,
+    ),
+  ],
+);
+
+export const reservationHolds = pgTable(
+  'reservation_holds',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'restrict' }),
+    feeRuleId: uuid('fee_rule_id').references(() => platformFeeRules.id, {
+      onDelete: 'set null',
+    }),
+    publicTokenHash: char('public_token_hash', { length: 64 }).notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 200 }).notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    status: reservationHoldStatus('status').notNull().default('ACTIVE'),
+    partySize: integer('party_size').notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    platformFeeBasisPoints: integer('platform_fee_basis_points').notNull(),
+    platformFeeCents: integer('platform_fee_cents').notNull(),
+    merchantGrossCents: integer('merchant_gross_cents').notNull(),
+    currency: char('currency', { length: 3 }).notNull().default('EUR'),
+    version: integer('version').notNull().default(1),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    convertedAt: timestamp('converted_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('reservation_holds_public_token_hash_uq').on(
+      table.publicTokenHash,
+    ),
+    uniqueIndex('reservation_holds_event_idempotency_uq').on(
+      table.organizationId,
+      table.eventId,
+      table.idempotencyKey,
+    ),
+    index('reservation_holds_expiry_idx').on(table.status, table.expiresAt),
+    index('reservation_holds_org_location_event_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.eventId,
+      table.createdAt,
+    ),
+    check('reservation_holds_party_positive_ck', sql`${table.partySize} > 0`),
+    check(
+      'reservation_holds_amount_nonnegative_ck',
+      sql`${table.amountCents} >= 0`,
+    ),
+    check(
+      'reservation_holds_fee_basis_points_ck',
+      sql`${table.platformFeeBasisPoints} between 0 and 10000`,
+    ),
+    check(
+      'reservation_holds_fee_nonnegative_ck',
+      sql`${table.platformFeeCents} >= 0`,
+    ),
+    check(
+      'reservation_holds_merchant_gross_ck',
+      sql`${table.merchantGrossCents} = ${table.amountCents} - ${table.platformFeeCents}`,
+    ),
+    check(
+      'reservation_holds_expiry_after_creation_ck',
+      sql`${table.expiresAt} > ${table.createdAt}`,
+    ),
+    check('reservation_holds_version_positive_ck', sql`${table.version} > 0`),
+  ],
+);
+
+export const reservations = pgTable(
+  'reservations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'restrict' }),
+    holdId: uuid('hold_id').references(() => reservationHolds.id, {
+      onDelete: 'set null',
+    }),
+    feeRuleId: uuid('fee_rule_id').references(() => platformFeeRules.id, {
+      onDelete: 'set null',
+    }),
+    tableSessionId: uuid('table_session_id').references(
+      () => tableSessions.id,
+      {
+        onDelete: 'set null',
+      },
+    ),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    publicTokenHash: char('public_token_hash', { length: 64 }).notNull(),
+    confirmationCode: varchar('confirmation_code', { length: 24 }).notNull(),
+    status: reservationStatus('status').notNull().default('PENDING_PAYMENT'),
+    customerName: varchar('customer_name', { length: 180 }).notNull(),
+    customerEmail: varchar('customer_email', { length: 320 }).notNull(),
+    customerPhone: varchar('customer_phone', { length: 40 }),
+    customerNote: varchar('customer_note', { length: 1000 }),
+    partySize: integer('party_size').notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    platformFeeBasisPoints: integer('platform_fee_basis_points').notNull(),
+    platformFeeCents: integer('platform_fee_cents').notNull(),
+    merchantGrossCents: integer('merchant_gross_cents').notNull(),
+    providerFeeCents: integer('provider_fee_cents').notNull().default(0),
+    merchantNetCents: integer('merchant_net_cents').notNull(),
+    refundedCents: integer('refunded_cents').notNull().default(0),
+    currency: char('currency', { length: 3 }).notNull().default('EUR'),
+    version: integer('version').notNull().default(1),
+    paymentExpiresAt: timestamp('payment_expires_at', {
+      withTimezone: true,
+    }),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    checkedInAt: timestamp('checked_in_at', { withTimezone: true }),
+    seatedAt: timestamp('seated_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    noShowAt: timestamp('no_show_at', { withTimezone: true }),
+    refundedAt: timestamp('refunded_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('reservations_hold_uq').on(table.holdId),
+    uniqueIndex('reservations_public_token_hash_uq').on(table.publicTokenHash),
+    uniqueIndex('reservations_confirmation_code_uq').on(table.confirmationCode),
+    uniqueIndex('reservations_table_session_uq').on(table.tableSessionId),
+    index('reservations_org_location_event_status_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.eventId,
+      table.status,
+      table.createdAt,
+    ),
+    index('reservations_customer_email_idx').on(
+      table.organizationId,
+      table.customerEmail,
+      table.createdAt,
+    ),
+    index('reservations_payment_expiry_idx').on(
+      table.status,
+      table.paymentExpiresAt,
+    ),
+    check('reservations_party_positive_ck', sql`${table.partySize} > 0`),
+    check('reservations_amount_nonnegative_ck', sql`${table.amountCents} >= 0`),
+    check(
+      'reservations_fee_basis_points_ck',
+      sql`${table.platformFeeBasisPoints} between 0 and 10000`,
+    ),
+    check(
+      'reservations_fee_nonnegative_ck',
+      sql`${table.platformFeeCents} >= 0`,
+    ),
+    check(
+      'reservations_merchant_gross_ck',
+      sql`${table.merchantGrossCents} = ${table.amountCents} - ${table.platformFeeCents}`,
+    ),
+    check(
+      'reservations_provider_fee_nonnegative_ck',
+      sql`${table.providerFeeCents} >= 0`,
+    ),
+    check(
+      'reservations_merchant_net_ck',
+      sql`${table.merchantNetCents} = ${table.merchantGrossCents} - ${table.providerFeeCents}`,
+    ),
+    check(
+      'reservations_refunded_range_ck',
+      sql`${table.refundedCents} between 0 and ${table.amountCents}`,
+    ),
+    check('reservations_version_positive_ck', sql`${table.version} > 0`),
+    check(
+      'reservations_payment_expiry_ck',
+      sql`(
+        (${table.status} = 'PENDING_PAYMENT' and ${table.paymentExpiresAt} is not null)
+        or
+        (${table.status} <> 'PENDING_PAYMENT')
+      )`,
+    ),
+  ],
+);
+
+export const reservationTableAssignments = pgTable(
+  'reservation_table_assignments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'restrict' }),
+    diningTableId: uuid('dining_table_id')
+      .notNull()
+      .references(() => diningTables.id, { onDelete: 'restrict' }),
+    holdId: uuid('hold_id').references(() => reservationHolds.id, {
+      onDelete: 'cascade',
+    }),
+    reservationId: uuid('reservation_id').references(() => reservations.id, {
+      onDelete: 'cascade',
+    }),
+    assignedByUserId: uuid('assigned_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    status: reservationAssignmentStatus('status').notNull().default('ACTIVE'),
+    activeEventTableKey: varchar('active_event_table_key', { length: 200 }),
+    version: integer('version').notNull().default(1),
+    assignedAt: timestamp('assigned_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+    releaseReason: varchar('release_reason', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('reservation_table_assignments_hold_uq').on(table.holdId),
+    uniqueIndex('reservation_table_assignments_reservation_uq').on(
+      table.reservationId,
+    ),
+    uniqueIndex('reservation_table_assignments_active_table_uq').on(
+      table.organizationId,
+      table.activeEventTableKey,
+    ),
+    index('reservation_table_assignments_event_status_idx').on(
+      table.eventId,
+      table.status,
+      table.assignedAt,
+    ),
+    index('reservation_table_assignments_table_idx').on(
+      table.diningTableId,
+      table.status,
+    ),
+    check(
+      'reservation_table_assignments_owner_ck',
+      sql`(
+        (${table.holdId} is not null and ${table.reservationId} is null)
+        or
+        (${table.holdId} is null and ${table.reservationId} is not null)
+      )`,
+    ),
+    check(
+      'reservation_table_assignments_active_state_ck',
+      sql`(
+        (${table.status} = 'ACTIVE' and ${table.activeEventTableKey} is not null and ${table.releasedAt} is null)
+        or
+        (${table.status} = 'RELEASED' and ${table.activeEventTableKey} is null and ${table.releasedAt} is not null)
+      )`,
+    ),
+    check(
+      'reservation_table_assignments_version_positive_ck',
+      sql`${table.version} > 0`,
+    ),
+  ],
+);
+
+export const reservationPayments = pgTable(
+  'reservation_payments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => reservations.id, { onDelete: 'cascade' }),
+    status: reservationPaymentStatus('status').notNull().default('CREATED'),
+    provider: varchar('provider', { length: 80 }).notNull(),
+    providerPaymentId: varchar('provider_payment_id', { length: 240 }),
+    providerSessionId: varchar('provider_session_id', { length: 240 }),
+    providerEventId: varchar('provider_event_id', { length: 240 }),
+    idempotencyKey: varchar('idempotency_key', { length: 200 }).notNull(),
+    requestHash: char('request_hash', { length: 64 }).notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    platformFeeCents: integer('platform_fee_cents').notNull(),
+    merchantGrossCents: integer('merchant_gross_cents').notNull(),
+    providerFeeCents: integer('provider_fee_cents').notNull().default(0),
+    merchantNetCents: integer('merchant_net_cents').notNull(),
+    refundedCents: integer('refunded_cents').notNull().default(0),
+    currency: char('currency', { length: 3 }).notNull(),
+    failureCode: varchar('failure_code', { length: 100 }),
+    failureMessage: varchar('failure_message', { length: 1000 }),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    refundedAt: timestamp('refunded_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('reservation_payments_reservation_idempotency_uq').on(
+      table.reservationId,
+      table.idempotencyKey,
+    ),
+    uniqueIndex('reservation_payments_provider_payment_uq').on(
+      table.provider,
+      table.providerPaymentId,
+    ),
+    uniqueIndex('reservation_payments_provider_event_uq').on(
+      table.provider,
+      table.providerEventId,
+    ),
+    index('reservation_payments_reservation_status_idx').on(
+      table.reservationId,
+      table.status,
+      table.createdAt,
+    ),
+    index('reservation_payments_org_location_created_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.createdAt,
+    ),
+    check(
+      'reservation_payments_amount_positive_ck',
+      sql`${table.amountCents} > 0`,
+    ),
+    check(
+      'reservation_payments_platform_fee_nonnegative_ck',
+      sql`${table.platformFeeCents} >= 0`,
+    ),
+    check(
+      'reservation_payments_merchant_gross_ck',
+      sql`${table.merchantGrossCents} = ${table.amountCents} - ${table.platformFeeCents}`,
+    ),
+    check(
+      'reservation_payments_provider_fee_nonnegative_ck',
+      sql`${table.providerFeeCents} >= 0`,
+    ),
+    check(
+      'reservation_payments_merchant_net_ck',
+      sql`${table.merchantNetCents} = ${table.merchantGrossCents} - ${table.providerFeeCents}`,
+    ),
+    check(
+      'reservation_payments_refunded_range_ck',
+      sql`${table.refundedCents} between 0 and ${table.amountCents}`,
+    ),
+  ],
+);
+
+export const platformFeeLedger = pgTable(
+  'platform_fee_ledger',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => reservations.id, { onDelete: 'restrict' }),
+    reservationPaymentId: uuid('reservation_payment_id').references(
+      () => reservationPayments.id,
+      { onDelete: 'restrict' },
+    ),
+    entryType: platformFeeLedgerEntryType('entry_type').notNull(),
+    sourceKey: varchar('source_key', { length: 240 }).notNull(),
+    customerAmountCents: integer('customer_amount_cents').notNull(),
+    platformFeeCents: integer('platform_fee_cents').notNull(),
+    providerFeeCents: integer('provider_fee_cents').notNull(),
+    merchantNetCents: integer('merchant_net_cents').notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    description: varchar('description', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('platform_fee_ledger_source_key_uq').on(table.sourceKey),
+    index('platform_fee_ledger_org_event_created_idx').on(
+      table.organizationId,
+      table.eventId,
+      table.createdAt,
+    ),
+    index('platform_fee_ledger_reservation_idx').on(
+      table.reservationId,
+      table.createdAt,
+    ),
+    check(
+      'platform_fee_ledger_balance_ck',
+      sql`${table.customerAmountCents} = ${table.platformFeeCents} + ${table.providerFeeCents} + ${table.merchantNetCents}`,
+    ),
+  ],
+);
+
+export const reservationStatusHistory = pgTable(
+  'reservation_status_history',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => reservations.id, { onDelete: 'cascade' }),
+    fromStatus: reservationStatus('from_status'),
+    toStatus: reservationStatus('to_status').notNull(),
+    changedByUserId: uuid('changed_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    reason: varchar('reason', { length: 500 }),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('reservation_status_history_reservation_created_idx').on(
+      table.reservationId,
+      table.createdAt,
+    ),
+    index('reservation_status_history_org_location_created_idx').on(
+      table.organizationId,
+      table.locationId,
+      table.createdAt,
+    ),
+  ],
+);
+// PHASE_2_EVENTS_RESERVATIONS_TABLES_END
+
 export const auditEvents = pgTable(
   'audit_events',
   {
@@ -2230,6 +3045,21 @@ export const outboxEvents = pgTable(
     ),
   ],
 );
+
+// PHASE_2_EVENTS_RESERVATIONS_TYPES_START
+export type EventStatus = (typeof eventStatus.enumValues)[number];
+export type ReservationStatus = (typeof reservationStatus.enumValues)[number];
+export type ReservationHoldStatus =
+  (typeof reservationHoldStatus.enumValues)[number];
+export type ReservationAssignmentStatus =
+  (typeof reservationAssignmentStatus.enumValues)[number];
+export type ReservationPaymentStatus =
+  (typeof reservationPaymentStatus.enumValues)[number];
+export type PlatformFeeRuleScope =
+  (typeof platformFeeRuleScope.enumValues)[number];
+export type PlatformFeeLedgerEntryType =
+  (typeof platformFeeLedgerEntryType.enumValues)[number];
+// PHASE_2_EVENTS_RESERVATIONS_TYPES_END
 
 export type FiscalProvider = (typeof fiscalProvider.enumValues)[number];
 export type FiscalEnvironment = (typeof fiscalEnvironment.enumValues)[number];
