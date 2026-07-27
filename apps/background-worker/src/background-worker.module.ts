@@ -7,6 +7,7 @@ import { QueueModule } from '@fluxa/queue';
 import { BackgroundProcessor } from './background.processor';
 import { ReservationHoldExpiryService } from './reservation-hold-expiry.service';
 import { ReservationHoldSchedulerService } from './reservation-hold-scheduler.service';
+import { ReservationPaymentExpiryService } from './reservation-payment-expiry.service';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ReservationHoldSchedulerService } from './reservation-hold-scheduler.se
     BackgroundProcessor,
     ReservationHoldExpiryService,
     ReservationHoldSchedulerService,
+    ReservationPaymentExpiryService,
   ],
 })
 export class BackgroundWorkerModule {}

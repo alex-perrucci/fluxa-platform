@@ -2646,6 +2646,9 @@ export const reservations = pgTable(
     refundedCents: integer('refunded_cents').notNull().default(0),
     currency: char('currency', { length: 3 }).notNull().default('EUR'),
     version: integer('version').notNull().default(1),
+    paymentExpiresAt: timestamp('payment_expires_at', {
+      withTimezone: true,
+    }),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     checkedInAt: timestamp('checked_in_at', { withTimezone: true }),
     seatedAt: timestamp('seated_at', { withTimezone: true }),
@@ -2677,6 +2680,10 @@ export const reservations = pgTable(
       table.customerEmail,
       table.createdAt,
     ),
+    index('reservations_payment_expiry_idx').on(
+      table.status,
+      table.paymentExpiresAt,
+    ),
     check('reservations_party_positive_ck', sql`${table.partySize} > 0`),
     check('reservations_amount_nonnegative_ck', sql`${table.amountCents} >= 0`),
     check(
@@ -2704,6 +2711,14 @@ export const reservations = pgTable(
       sql`${table.refundedCents} between 0 and ${table.amountCents}`,
     ),
     check('reservations_version_positive_ck', sql`${table.version} > 0`),
+    check(
+      'reservations_payment_expiry_ck',
+      sql`(
+        (${table.status} = 'PENDING_PAYMENT' and ${table.paymentExpiresAt} is not null)
+        or
+        (${table.status} <> 'PENDING_PAYMENT')
+      )`,
+    ),
   ],
 );
 

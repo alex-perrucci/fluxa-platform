@@ -1,4 +1,4 @@
-// PHASE_4_RESERVATION_ENGINE
+// PHASE_5_RESERVATION_CONVERSION
 import {
   Body,
   Controller,
@@ -11,7 +11,9 @@ import {
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import { AvailabilityQueryDto } from './dto/availability-query.dto';
+import { ConvertHoldToReservationDto } from './dto/convert-hold-to-reservation.dto';
 import { CreateReservationHoldDto } from './dto/create-reservation-hold.dto';
+import { ReservationConversionService } from './reservation-conversion.service';
 import { ReservationEngineService } from './reservation-engine.service';
 
 @Public()
@@ -39,7 +41,10 @@ export class PublicEventReservationsController {
 @Public()
 @Controller('public/reservation-holds')
 export class PublicReservationHoldsController {
-  constructor(private readonly engine: ReservationEngineService) {}
+  constructor(
+    private readonly engine: ReservationEngineService,
+    private readonly conversion: ReservationConversionService,
+  ) {}
 
   @Get(':holdToken')
   get(
@@ -49,11 +54,34 @@ export class PublicReservationHoldsController {
     return this.engine.getHold(holdToken);
   }
 
+  @Post(':holdToken/reservations')
+  convert(
+    @Param('holdToken', new ParseUUIDPipe({ version: '4' }))
+    holdToken: string,
+    @Body() dto: ConvertHoldToReservationDto,
+  ) {
+    return this.conversion.convert(holdToken, dto);
+  }
+
   @Delete(':holdToken')
   cancel(
     @Param('holdToken', new ParseUUIDPipe({ version: '4' }))
     holdToken: string,
   ) {
     return this.engine.cancelHold(holdToken);
+  }
+}
+
+@Public()
+@Controller('public/reservations')
+export class PublicReservationsController {
+  constructor(private readonly conversion: ReservationConversionService) {}
+
+  @Get(':reservationToken')
+  get(
+    @Param('reservationToken', new ParseUUIDPipe({ version: '4' }))
+    reservationToken: string,
+  ) {
+    return this.conversion.getByToken(reservationToken);
   }
 }

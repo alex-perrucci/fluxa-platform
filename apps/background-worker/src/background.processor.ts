@@ -1,13 +1,15 @@
-// PHASE_4_RESERVATION_ENGINE
+// PHASE_5_RESERVATION_CONVERSION
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
 import { BACKGROUND_QUEUE, RESERVATION_HOLD_EXPIRY_JOB } from '@fluxa/queue';
 import { ReservationHoldExpiryService } from './reservation-hold-expiry.service';
+import { ReservationPaymentExpiryService } from './reservation-payment-expiry.service';
 
 @Processor(BACKGROUND_QUEUE, { concurrency: 10 })
 export class BackgroundProcessor extends WorkerHost {
   constructor(
-    private readonly reservationHoldExpiry: ReservationHoldExpiryService,
+    private readonly holdExpiry: ReservationHoldExpiryService,
+    private readonly paymentExpiry: ReservationPaymentExpiryService,
   ) {
     super();
   }
@@ -22,11 +24,21 @@ export class BackgroundProcessor extends WorkerHost {
     }
 
     if (job.name === RESERVATION_HOLD_EXPIRY_JOB) {
-      let expired = 0;
+      let expiredHolds = 0;
+      let expiredReservations = 0;
 
       for (let iteration = 0; iteration < 10; iteration += 1) {
-        const count = await this.reservationHoldExpiry.expireAvailable(200);
-        expired += count;
+        const count = await this.holdExpiry.expireAvailable(200);
+        expiredHolds += count;
+
+        if (count < 200) {
+          break;
+        }
+      }
+
+      for (let iteration = 0; iteration < 10; iteration += 1) {
+        const count = await this.paymentExpiry.expireAvailable(200);
+        expiredReservations += count;
 
         if (count < 200) {
           break;
@@ -36,7 +48,8 @@ export class BackgroundProcessor extends WorkerHost {
       return {
         ok: true,
         job: RESERVATION_HOLD_EXPIRY_JOB,
-        expired,
+        expiredHolds,
+        expiredReservations,
       };
     }
 
