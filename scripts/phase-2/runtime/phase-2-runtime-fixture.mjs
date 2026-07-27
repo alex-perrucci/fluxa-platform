@@ -1,0 +1,55 @@
+// PHASE_7_RUNTIME_INTEGRATION
+export const PHASE_7 = Object.freeze({
+  organizationId: '77000000-0000-4000-8000-000000000001',
+  userId: '77000000-0000-4000-8000-000000000002',
+  merchantId: '77000000-0000-4000-8000-000000000003',
+  locationId: '77000000-0000-4000-8000-000000000004',
+  areaId: '77000000-0000-4000-8000-000000000005',
+  feeRuleId: '77000000-0000-4000-8000-000000000006',
+  webhookSecret: 'whsec_phase7_local_signature_secret',
+  apiPort: 3107,
+  events: {
+    concurrency: {
+      id: '77000000-0000-4000-8000-000000000101',
+      slug: 'phase-7-concurrency',
+      tableId: '77000000-0000-4000-8000-000000000201',
+      tableCode: 'P7-CONCURRENCY',
+      tableName: 'Phase 7 Concurrency',
+    },
+    paid: {
+      id: '77000000-0000-4000-8000-000000000102',
+      slug: 'phase-7-paid',
+      tableId: '77000000-0000-4000-8000-000000000202',
+      tableCode: 'P7-PAID',
+      tableName: 'Phase 7 Paid',
+    },
+    free: {
+      id: '77000000-0000-4000-8000-000000000103',
+      slug: 'phase-7-free',
+      tableId: '77000000-0000-4000-8000-000000000203',
+      tableCode: 'P7-FREE',
+      tableName: 'Phase 7 Free',
+    },
+    holdExpiry: {
+      id: '77000000-0000-4000-8000-000000000104',
+      slug: 'phase-7-hold-expiry',
+      tableId: '77000000-0000-4000-8000-000000000204',
+      tableCode: 'P7-HOLD-EXPIRY',
+      tableName: 'Phase 7 Hold Expiry',
+    },
+    paymentExpiry: {
+      id: '77000000-0000-4000-8000-000000000105',
+      slug: 'phase-7-payment-expiry',
+      tableId: '77000000-0000-4000-8000-000000000205',
+      tableCode: 'P7-PAYMENT-EXPIRY',
+      tableName: 'Phase 7 Payment Expiry',
+    },
+    latePayment: {
+      id: '77000000-0000-4000-8000-000000000106',
+      slug: 'phase-7-late-payment',
+      tableId: '77000000-0000-4000-8000-000000000206',
+      tableCode: 'P7-LATE-PAYMENT',
+      tableName: 'Phase 7 Late Payment',
+    },
+  },
+});
