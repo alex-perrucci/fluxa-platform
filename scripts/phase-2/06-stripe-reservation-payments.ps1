@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [switch] $DryRun,
     [switch] $SkipVerify
@@ -1781,7 +1781,7 @@ const parsedPackage = JSON.parse(packageJson);
 const stripeVersion = parsedPackage.dependencies?.stripe;
 
 const checks = [
-  ['Stripe dependency', String(stripeVersion), '22.1.1'],
+  ['Stripe dependency', String(stripeVersion), '22.3.2'],
   ['Nest raw body', main, 'rawBody: true'],
   ['Stripe secret config', environment, 'STRIPE_SECRET_KEY'],
   ['Stripe webhook config', environment, 'STRIPE_WEBHOOK_SECRET'],
@@ -2023,7 +2023,7 @@ if ($DryRun) {
     Write-Host @"
 Verrebbero aggiunti:
 
-- Stripe SDK 22.1.1;
+- Stripe SDK 22.3.2;
 - Checkout Session pubblica e idempotente;
 - webhook Stripe con verifica firma sul raw body;
 - conferma reservation dopo pagamento;
@@ -2044,7 +2044,7 @@ Invoke-Checked `
     -FilePath $npmCommand `
     -ArgumentList @(
         'install',
-        'stripe@22.1.1',
+        'stripe@22.3.2',
         '--save-exact'
     ) `
     -WorkingDirectory $repositoryRoot | ForEach-Object {

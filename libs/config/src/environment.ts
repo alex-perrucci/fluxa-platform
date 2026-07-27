@@ -20,6 +20,9 @@ const environmentSchema = z
     REDIS_PASSWORD: z.string().default(''),
     REDIS_TLS: booleanString('false'),
     CORS_ORIGINS: z.string().default('http://localhost:3000'),
+    BOOKING_WEB_BASE_URL: z.string().url().default('http://localhost:3000'),
+    STRIPE_SECRET_KEY: z.string().default(''),
+    STRIPE_WEBHOOK_SECRET: z.string().default(''),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
@@ -115,6 +118,23 @@ const environmentSchema = z
       } catch {
         addIssue('CORS_ORIGINS', `origin ${origin} is not a valid URL`);
       }
+    }
+    if (!environment.STRIPE_SECRET_KEY.startsWith('sk_live_')) {
+      addIssue('STRIPE_SECRET_KEY', 'must start with sk_live_');
+    }
+    if (!environment.STRIPE_WEBHOOK_SECRET.startsWith('whsec_')) {
+      addIssue('STRIPE_WEBHOOK_SECRET', 'must start with whsec_');
+    }
+    try {
+      const bookingUrl = new URL(environment.BOOKING_WEB_BASE_URL);
+      if (
+        bookingUrl.protocol !== 'https:' ||
+        localHost.test(bookingUrl.hostname)
+      ) {
+        addIssue('BOOKING_WEB_BASE_URL', 'must be a non-local HTTPS URL');
+      }
+    } catch {
+      addIssue('BOOKING_WEB_BASE_URL', 'must be a valid URL');
     }
     if (['debug', 'trace'].includes(environment.LOG_LEVEL)) {
       addIssue('LOG_LEVEL', 'debug and trace are forbidden in production');
