@@ -89,6 +89,16 @@
     "infra:down": "docker compose down",
     "infra:reset": "docker compose down -v --remove-orphans",
     "verify": "npm run lint && npm test && npm run build",
+    "verify:migrations": "node scripts/verify-migrations.mjs",
+    "verify:production": "node scripts/verify-production-config.mjs",
+    "verify:production:self-test": "node scripts/verify-production-config.mjs --self-test",
+    "verify:release:structure": "node scripts/verify-release-readiness.mjs",
+    "verify:web": "npm --prefix apps/web run verify",
+    "verify:ci": "npm run security:secrets && npm run verify:migrations && npm run verify:production:self-test && npm run verify:release:structure && npm run lint && npm test && npm run build",
+    "verify:release": "npm run verify:ci && npm run verify:web",
+    "e2e:release": "node scripts/e2e-release-candidate.mjs",
+    "backup:postgres": "node scripts/backup-postgres.mjs",
+    "backup:verify": "node scripts/verify-postgres-backup.mjs",
     "db:seed": "ts-node -r tsconfig-paths/register scripts/seed-block-02.ts",
     "test:identity": "jest apps/api/src/auth libs/config/src/environment.spec.ts --runInBand",
     "test:device-context": "jest apps/api/src/devices --runInBand",
@@ -107,9 +117,7 @@
     "test:fiscal": "jest apps/api/src/fiscal --runInBand",
     "smoke:fiscal": "node scripts/smoke-block-08.mjs",
     "security:secrets": "node scripts/check-secrets.mjs",
-    "verify:production": "node scripts/verify-production-config.mjs",
-    "smoke:production": "node scripts/smoke-production.mjs",
-    "verify:ci": "npm run security:secrets && npm run lint && npm test && npm run build"
+    "smoke:production": "node scripts/smoke-production.mjs"
   },
   "jest": {
     "moduleFileExtensions": [

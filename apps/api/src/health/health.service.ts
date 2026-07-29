@@ -10,6 +10,10 @@ import { DatabaseService } from '@fluxa/database';
 @Injectable()
 export class HealthService implements OnModuleDestroy {
   private readonly redis: Redis;
+  private readonly release: {
+    sha: string;
+    version: string;
+  };
 
   constructor(
     private readonly database: DatabaseService,
@@ -19,17 +23,24 @@ export class HealthService implements OnModuleDestroy {
       host: config.getOrThrow<string>('REDIS_HOST'),
       port: config.getOrThrow<number>('REDIS_PORT'),
       password: config.get<string>('REDIS_PASSWORD') || undefined,
+      tls: config.get<boolean>('REDIS_TLS') ? {} : undefined,
       lazyConnect: true,
       connectTimeout: 5_000,
       maxRetriesPerRequest: 1,
       enableReadyCheck: true,
     });
+    this.release = {
+      sha: config.getOrThrow<string>('RELEASE_SHA'),
+      version: config.getOrThrow<string>('RELEASE_VERSION'),
+    };
   }
 
   live() {
     return {
       status: 'ok',
       service: 'fluxa-api',
+      release: this.release,
+      uptimeSeconds: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
     };
   }
@@ -57,6 +68,7 @@ export class HealthService implements OnModuleDestroy {
       status:
         checks.database === 'up' && checks.redis === 'up' ? 'ok' : 'error',
       checks,
+      release: this.release,
       durationMs: Date.now() - startedAt,
       timestamp: new Date().toISOString(),
     };
