@@ -1,7 +1,9 @@
+// PHASE_8_TRUE_CONTROL_CENTER
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { FluxaMark } from '@/components/brand/fluxa-mark';
+import { Icon } from '@/components/control-center/icons';
 import { LoginForm } from '@/components/auth/login-form';
-import { Card } from '@/components/ui/card';
 
 export const metadata: Metadata = {
   title: 'Accesso',
@@ -9,24 +11,47 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <main className="shell grid min-h-screen place-items-center py-10">
-      <div className="w-full max-w-lg">
-        <Link className="muted mb-5 inline-block text-sm hover:text-white" href="/">
-          ← Torna al sito
+    <main className="login-stage">
+      <section className="login-visual">
+        <Link className="public-brand" href="/">
+          <FluxaMark className="h-11 w-11" />
+          <span>
+            <strong>Fluxa</strong>
+            <small>Venue operating system</small>
+          </span>
         </Link>
 
-        <Card>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">
-            Fluxa
+        <div className="login-manifesto">
+          <p className="eyebrow">One system. Every moving part.</p>
+          <h1>La notte inizia dal controllo.</h1>
+          <p>
+            Accedi al workspace del tuo locale oppure alla regia globale della
+            piattaforma Fluxa.
           </p>
-          <h1 className="mt-3 text-3xl font-semibold">Accedi al gestionale</h1>
-          <p className="muted mt-3">
-            Usa lo stesso account gestito dal backend Fluxa.
-          </p>
+        </div>
 
+        <div className="login-quote">
+          <div>
+            <Icon name="sparkles" />
+          </div>
+          <p>
+            Eventi e prenotazioni sono sincronizzati con il motore
+            transazionale, Stripe e i worker in background.
+          </p>
+        </div>
+      </section>
+
+      <section className="login-panel">
+        <div className="login-panel-inner">
+          <p className="eyebrow">Secure workspace</p>
+          <h2>Bentornato.</h2>
+          <p>
+            Usa il tuo account Fluxa. Il ruolo determina automaticamente il
+            Control Center.
+          </p>
           <LoginForm />
-        </Card>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }

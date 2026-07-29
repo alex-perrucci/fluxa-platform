@@ -67,9 +67,7 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.json(
       {
         code:
-          error instanceof FluxaApiError
-            ? error.code
-            : 'SESSION_LOAD_FAILED',
+          error instanceof FluxaApiError ? error.code : 'SESSION_LOAD_FAILED',
         message:
           error instanceof Error
             ? error.message

@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fluxaServerFetch } from '@/lib/api/fluxa-api';
-import {
-  ACCESS_COOKIE,
-  clearAuthCookies,
-} from '@/lib/auth/cookies';
+import { ACCESS_COOKIE, clearAuthCookies } from '@/lib/auth/cookies';
 
 export async function POST(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_COOKIE)?.value;
