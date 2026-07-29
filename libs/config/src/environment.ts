@@ -12,6 +12,8 @@ const environmentSchema = z
       .enum(['development', 'test', 'production'])
       .default('development'),
     API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    RELEASE_SHA: z.string().min(1).max(100).default('local'),
+    RELEASE_VERSION: z.string().min(1).max(50).default('0.8.0'),
     DATABASE_URL: z.string().min(1).startsWith('postgresql://'),
     DATABASE_SSL: booleanString('false'),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(20),
@@ -58,6 +60,7 @@ const environmentSchema = z
     if (!environment.DATABASE_SSL) {
       addIssue('DATABASE_SSL', 'must be true in production');
     }
+
     try {
       const databaseUrl = new URL(environment.DATABASE_URL);
       if (localHost.test(databaseUrl.hostname)) {
@@ -66,6 +69,7 @@ const environmentSchema = z
     } catch {
       addIssue('DATABASE_URL', 'must be a valid PostgreSQL URL');
     }
+
     if (
       environment.REDIS_PASSWORD.length < 16 ||
       placeholder.test(environment.REDIS_PASSWORD)
@@ -81,6 +85,7 @@ const environmentSchema = z
       ['REFRESH_TOKEN_SECRET', environment.REFRESH_TOKEN_SECRET],
       ['SESSION_IP_HASH_SECRET', environment.SESSION_IP_HASH_SECRET],
     ] as const;
+
     for (const [name, value] of secrets) {
       if (value.length < 48 || placeholder.test(value)) {
         addIssue(
@@ -89,6 +94,7 @@ const environmentSchema = z
         );
       }
     }
+
     if (new Set(secrets.map(([, value]) => value)).size !== secrets.length) {
       addIssue('ACCESS_TOKEN_SECRET', 'all security secrets must be distinct');
     }
@@ -96,9 +102,11 @@ const environmentSchema = z
     const origins = environment.CORS_ORIGINS.split(',')
       .map((origin) => origin.trim())
       .filter(Boolean);
+
     if (origins.length === 0) {
       addIssue('CORS_ORIGINS', 'must contain at least one production origin');
     }
+
     for (const origin of origins) {
       if (origin === '*') {
         addIssue(
@@ -107,6 +115,7 @@ const environmentSchema = z
         );
         continue;
       }
+
       try {
         const url = new URL(origin);
         if (url.protocol !== 'https:' || localHost.test(url.hostname)) {
@@ -119,12 +128,15 @@ const environmentSchema = z
         addIssue('CORS_ORIGINS', `origin ${origin} is not a valid URL`);
       }
     }
+
     if (!environment.STRIPE_SECRET_KEY.startsWith('sk_live_')) {
       addIssue('STRIPE_SECRET_KEY', 'must start with sk_live_');
     }
+
     if (!environment.STRIPE_WEBHOOK_SECRET.startsWith('whsec_')) {
       addIssue('STRIPE_WEBHOOK_SECRET', 'must start with whsec_');
     }
+
     try {
       const bookingUrl = new URL(environment.BOOKING_WEB_BASE_URL);
       if (
@@ -136,9 +148,11 @@ const environmentSchema = z
     } catch {
       addIssue('BOOKING_WEB_BASE_URL', 'must be a valid URL');
     }
+
     if (['debug', 'trace'].includes(environment.LOG_LEVEL)) {
       addIssue('LOG_LEVEL', 'debug and trace are forbidden in production');
     }
+
     if (environment.SWAGGER_ENABLED) {
       addIssue('SWAGGER_ENABLED', 'must be false in production');
     }

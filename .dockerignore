@@ -5,6 +5,9 @@
 node_modules
 dist
 coverage
+apps/web/.next
+apps/web/node_modules
+apps/web/coverage
 apps/pos/build
 apps/pos/.dart_tool
 apps/pos/android/.gradle

@@ -1,16 +1,30 @@
 # Security policy
 
-## Reporting
+## Supported version
 
-Do not open public issues containing credentials, customer data, fiscal payloads or production logs. Report vulnerabilities privately to the repository owner with the affected component, reproduction steps and impact.
+Security fixes are applied to the current `main` branch and to the latest
+deployed release candidate.
+
+## Reporting a vulnerability
+
+Do not open a public issue containing credentials, customer data, exploit
+details or provider tokens.
+
+Use GitHub's private vulnerability-reporting or security-advisory flow for this
+repository. When that is unavailable, contact the repository owner privately
+through the GitHub profile.
+
+Include:
+
+- affected component and commit;
+- reproduction steps;
+- expected and observed behavior;
+- potential impact;
+- logs or screenshots with secrets and personal data removed.
 
 ## Secret handling
 
-- Never commit `.env`, `key.properties`, keystores, private keys or A-Cube credentials.
-- Store production secrets in the deployment secret manager and GitHub environment secrets.
-- Rotate a secret immediately if it appears in Git history or logs.
-- Use distinct values for access tokens, refresh tokens and session IP hashing.
-
-## Supported branch
-
-Security fixes are applied to `main`. Production releases must be built from a reviewed commit whose CI checks pass.
+- Never commit `.env` files, private keys, A-Cube credentials or Stripe keys.
+- Rotate any secret that appears in chat, logs, screenshots or source history.
+- Production secrets belong in the hosting provider's secret manager.
+- Use distinct JWT access, refresh and session-hash secrets.

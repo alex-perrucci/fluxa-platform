@@ -1,58 +1,188 @@
-name: CI
+name: Fluxa CI
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: fluxa-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   backend:
+    name: Backend quality
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
-      - run: npm run security:secrets
-      - run: node scripts/check-secrets.mjs --self-test
-      - run: node scripts/verify-production-config.mjs --self-test
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
-      - run: docker build --build-arg FLUXA_APP=api -t fluxa-api:${{ github.sha }} .
+    timeout-minutes: 20
 
-  pos:
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Verify backend release gates
+        run: npm run verify:ci
+
+  web:
+    name: Web quality
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
-        working-directory: apps/pos
+        working-directory: apps/web
+    env:
+      FLUXA_API_BASE_URL: https://api.example.com/api/v1
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - run: sdkmanager 'platforms;android-36' 'ndk;27.0.12077973'
-      - uses: subosito/flutter-action@v2
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Verify web application
+        run: npm run verify
+
+  release-e2e:
+    name: Release E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - backend
+      - web
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fluxa
+          POSTGRES_PASSWORD: fluxa_ci_password
+          POSTGRES_DB: fluxa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fluxa -d fluxa"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      NODE_ENV: development
+      API_PORT: '3000'
+      LOG_LEVEL: info
+      SWAGGER_ENABLED: 'false'
+      DATABASE_URL: postgresql://fluxa:fluxa_ci_password@127.0.0.1:5432/fluxa
+      DATABASE_SSL: 'false'
+      DATABASE_POOL_MAX: '20'
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ''
+      REDIS_TLS: 'false'
+      CORS_ORIGINS: http://localhost:3001
+      BOOKING_WEB_BASE_URL: http://localhost:3001
+      STRIPE_SECRET_KEY: ''
+      STRIPE_WEBHOOK_SECRET: ''
+      ACCESS_TOKEN_SECRET: ci_access_token_secret_0123456789_abcdefghijklmnopqrstuvwxyz
+      REFRESH_TOKEN_SECRET: ci_refresh_token_secret_0123456789_abcdefghijklmnopqrstuvwxyz
+      SESSION_IP_HASH_SECRET: ci_session_hash_secret_0123456789_abcdefghijklmnopqrstuvwxyz
+      ACCESS_TOKEN_TTL_SECONDS: '900'
+      REFRESH_TOKEN_TTL_DAYS: '30'
+      JWT_ISSUER: fluxa-platform
+      JWT_AUDIENCE: fluxa-pos
+      BOOTSTRAP_ADMIN_EMAIL: e2e-admin@fluxa.local
+      BOOTSTRAP_ADMIN_PASSWORD: E2E_Admin_Password_2026!
+      BOOTSTRAP_ADMIN_DISPLAY_NAME: Fluxa E2E Admin
+      FLUXA_API_BASE_URL: http://127.0.0.1:3000/api/v1
+      FLUXA_E2E_ADMIN_EMAIL: e2e-admin@fluxa.local
+      FLUXA_E2E_ADMIN_PASSWORD: E2E_Admin_Password_2026!
+      RELEASE_SHA: ${{ github.sha }}
+      RELEASE_VERSION: 0.8.0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          flutter-version: '3.32.5'
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed lib test
-      - run: flutter analyze
-      - run: flutter test
-      - run: flutter build apk --debug
-      - run: flutter build web --dart-define=FLUXA_ENV=test --dart-define=API_BASE_URL=https://test.invalid/api/v1
-      # The debug APK is built and validated but is not uploaded on every PR.
-      # Signed downloadable artifacts are produced only by android-release.yml.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build API
+        run: npm run build:api
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Seed platform administrator
+        run: npm run db:seed
+
+      - name: Start API
+        run: |
+          node dist/apps/api/main.js > api.log 2>&1 &
+          echo $! > api.pid
+
+      - name: Wait for readiness
+        run: |
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent \
+              http://127.0.0.1:3000/api/v1/health/ready > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat api.log
+          exit 1
+
+      - name: Run release candidate E2E
+        run: npm run e2e:release
+
+      - name: Upload API log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluxa-api-e2e-log
+          path: api.log
+          if-no-files-found: ignore
+
+      - name: Stop API
+        if: always()
+        run: |
+          if [ -f api.pid ]; then
+            kill "$(cat api.pid)" || true
+          fi

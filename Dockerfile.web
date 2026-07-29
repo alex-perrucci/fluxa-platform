@@ -1,0 +1,27 @@
+FROM node:24-bookworm-slim AS dependencies
+WORKDIR /app
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci
+
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ARG FLUXA_API_BASE_URL
+ENV FLUXA_API_BASE_URL=${FLUXA_API_BASE_URL}
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY apps/web/ ./
+RUN mkdir -p public && npm run build
+
+FROM node:24-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+USER node
+EXPOSE 3000
+STOPSIGNAL SIGTERM
+CMD ["node", "server.js"]
