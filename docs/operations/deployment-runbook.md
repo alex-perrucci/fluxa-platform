@@ -1,8 +1,83 @@
 # Production deployment runbook
 
-## 1. Pre-deploy gate
+Fluxa supports two production paths:
 
-Run against the exact commit to deploy:
+1. one-command deployment on a dedicated Ubuntu or Debian VPS;
+2. manual deployment using managed PostgreSQL, Redis and container services.
+
+## One-command VPS deployment
+
+Prerequisites:
+
+- a clean VPS;
+- root access;
+- a DNS record for the web domain;
+- a separate DNS record for the API domain;
+- ports 80 and 443 reachable from the internet.
+
+Run:
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/alex-perrucci/fluxa-platform/main/scripts/vps/install.sh \
+  -o /tmp/fluxa-install.sh && \
+sudo bash /tmp/fluxa-install.sh
+```
+
+The installer clones the repository into `/opt/fluxa`, installs Docker, writes
+`deploy/vps/.env`, configures UFW, builds the images, migrates the database,
+creates the first platform administrator, starts the complete stack, installs
+the daily backup timer and executes `doctor.sh`.
+
+The resulting services are:
+
+```text
+Caddy
+├── web domain → Next.js
+└── API domain → NestJS API
+
+private Docker network
+├── PostgreSQL
+├── Redis
+├── API
+├── background worker
+├── optional fiscal worker
+└── web
+```
+
+PostgreSQL and Redis have no host-published ports.
+
+### Update
+
+```bash
+sudo bash /opt/fluxa/scripts/vps/update.sh main
+```
+
+The update creates a backup, records the previous commit, builds immutable
+images, applies forward migrations, starts the target release and runs
+diagnostics.
+
+### Application rollback
+
+```bash
+sudo bash /opt/fluxa/scripts/vps/rollback.sh
+```
+
+Rollback restores the previous application commit and images. It deliberately
+does not reverse database migrations. Migrations must remain backward
+compatible or be forward-fixed.
+
+### Diagnostics and backup
+
+```bash
+sudo bash /opt/fluxa/scripts/vps/doctor.sh
+sudo bash /opt/fluxa/scripts/vps/backup.sh
+systemctl status fluxa-backup.timer
+```
+
+## Manual/managed deployment
+
+Run against the exact commit:
 
 ```powershell
 npm ci
@@ -11,39 +86,33 @@ npm run verify:release
 npm run verify:production -- --env .env.production
 ```
 
-Create and verify a database backup before applying migrations:
+Create and verify a database backup:
 
 ```powershell
 npm run backup:postgres -- --label pre-deploy
 npm run backup:verify -- --file <BACKUP_FILE>
 ```
 
-## 2. Build immutable images
-
-Backend and workers:
+Build immutable images:
 
 ```powershell
 docker build -t fluxa-backend:<GIT_SHA> .
-```
 
-Web:
-
-```powershell
 docker build `
   -f Dockerfile.web `
   --build-arg FLUXA_API_BASE_URL=https://api.example.com/api/v1 `
   -t fluxa-web:<GIT_SHA> .
 ```
 
-Use the same backend image with:
+Use the backend image with:
 
 - `FLUXA_APP=api`
 - `FLUXA_APP=background-worker`
 - `FLUXA_APP=fiscal-worker`
 
-## 3. Migration policy
+## Migration policy
 
-Apply migrations once, before shifting traffic to the new API:
+Apply migrations once before shifting traffic:
 
 ```powershell
 npm run db:migrate
@@ -53,53 +122,14 @@ Rules:
 
 - prefer additive and backward-compatible migrations;
 - deploy schema expansion before code that requires it;
-- do not edit a migration already applied to an environment;
-- destructive changes require a backup and a reviewed data migration;
-- Drizzle rollback is not automatic: roll back application images and
-  forward-fix the database unless an explicit reviewed rollback SQL exists.
+- never edit a migration already applied to an environment;
+- destructive changes require a backup and reviewed data migration;
+- prefer application rollback plus database forward-fix.
 
-## 4. Deployment order
-
-1. PostgreSQL and Redis connectivity.
-2. Database backup.
-3. Migration job.
-4. API.
-5. Background worker.
-6. Fiscal worker.
-7. Web.
-8. Stripe webhook endpoint.
-9. A-Cube provider connectivity.
-10. Production smoke.
-
-## 5. Post-deploy smoke
+## Post-deploy smoke
 
 ```powershell
 npm run smoke:production -- `
   --api-base-url https://api.example.com/api/v1 `
   --web-base-url https://app.example.com
 ```
-
-For the optional authenticated smoke, set a dedicated low-privilege account:
-
-```powershell
-$env:FLUXA_SMOKE_EMAIL = "<SMOKE_ACCOUNT>"
-$env:FLUXA_SMOKE_PASSWORD = "<SECRET>"
-$env:FLUXA_SMOKE_ORGANIZATION_ID = "<OPTIONAL_ORGANIZATION_ID>"
-```
-
-## 6. Rollback
-
-Application rollback:
-
-1. stop traffic to the failing release;
-2. redeploy the previous immutable image tags;
-3. verify `/health/live` and `/health/ready`;
-4. run the production smoke;
-5. preserve logs and provider event IDs.
-
-Database rollback:
-
-- never restore over the live database without an approved incident plan;
-- prefer a forward fix;
-- for catastrophic corruption, restore into a separate database first,
-  validate it, then execute the cutover plan.

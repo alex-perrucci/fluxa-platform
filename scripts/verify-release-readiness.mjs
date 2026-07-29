@@ -4,7 +4,6 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-
 const requiredFiles = [
   '.github/workflows/ci.yml',
   '.github/pull_request_template.md',
@@ -22,6 +21,13 @@ const requiredFiles = [
   'scripts/verify-migrations.mjs',
   'scripts/backup-postgres.mjs',
   'scripts/verify-postgres-backup.mjs',
+  'scripts/verify-vps-deployment.mjs',
+  'deploy/vps/compose.production.yml',
+  'deploy/vps/Caddyfile',
+  'scripts/vps/install.sh',
+  'scripts/vps/update.sh',
+  'scripts/vps/rollback.sh',
+  'scripts/vps/doctor.sh',
 ];
 
 for (const relativePath of requiredFiles) {
@@ -32,7 +38,6 @@ for (const relativePath of requiredFiles) {
 }
 
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
-
 assert.ok(!readme.includes('\0'), 'README contains NUL bytes.');
 assert.ok(!/[ÃÂ][ƒ¢€]/.test(readme), 'README appears to contain mojibake.');
 assert.ok(
@@ -40,8 +45,8 @@ assert.ok(
   'README release status is missing.',
 );
 assert.ok(
-  readme.includes('docs/operations/release-checklist.md'),
-  'README does not link the release checklist.',
+  readme.includes('scripts/vps/install.sh'),
+  'README does not document one-command VPS installation.',
 );
 
 const rootPackage = JSON.parse(
@@ -50,11 +55,11 @@ const rootPackage = JSON.parse(
 const webPackage = JSON.parse(
   fs.readFileSync(path.join(root, 'apps/web/package.json'), 'utf8'),
 );
-
 for (const script of [
   'verify:migrations',
   'verify:production:self-test',
   'verify:release:structure',
+  'verify:vps',
   'verify:ci',
   'verify:release',
   'e2e:release',
@@ -66,14 +71,12 @@ for (const script of [
     `Root package script missing: ${script}`,
   );
 }
-
 assert.ok(webPackage.scripts?.verify, 'Web verify script is missing.');
 
 const workflow = fs.readFileSync(
   path.join(root, '.github/workflows/ci.yml'),
   'utf8',
 );
-
 for (const marker of [
   'Backend quality',
   'Web quality',
@@ -88,13 +91,12 @@ const productionEnvironment = fs.readFileSync(
   path.join(root, '.env.production.example'),
   'utf8',
 );
-
 for (const name of [
   'RELEASE_SHA',
+  'INFRASTRUCTURE_TRUST_MODE',
   'BOOKING_WEB_BASE_URL',
-  'STRIPE_SECRET_KEY',
-  'STRIPE_WEBHOOK_SECRET',
-  'ACUBE_BEARER_TOKEN',
+  'STRIPE_ENABLED',
+  'ACUBE_ENABLED',
 ]) {
   assert.ok(
     productionEnvironment.includes(`${name}=`),
@@ -106,7 +108,6 @@ const webDockerfile = fs.readFileSync(
   path.join(root, 'Dockerfile.web'),
   'utf8',
 );
-
 for (const marker of [
   'npm run build',
   '.next/standalone',

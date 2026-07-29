@@ -3,18 +3,26 @@ import helmet from 'helmet';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
     rawBody: true,
   });
   const logger = app.get(Logger);
+  const config = app.get(ConfigService);
+
   app.useLogger(logger);
   app.enableShutdownHooks();
+
+  if (config.getOrThrow<boolean>('TRUST_PROXY')) {
+    app.set('trust proxy', 1);
+  }
+
   app.use(helmet());
   app.use(compression());
   app.useGlobalPipes(
@@ -26,7 +34,6 @@ async function bootstrap(): Promise<void> {
   );
   app.setGlobalPrefix('api/v1');
 
-  const config = app.get(ConfigService);
   const allowedOrigins = config
     .getOrThrow<string>('CORS_ORIGINS')
     .split(',')

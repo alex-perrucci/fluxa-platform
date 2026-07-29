@@ -1,0 +1,37 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+(common_security) {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+{$WEB_DOMAIN} {
+	import common_security
+	reverse_proxy web:3000
+	log {
+		output stdout
+		format json
+	}
+}
+
+{$API_DOMAIN} {
+	import common_security
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy api:3000
+	log {
+		output stdout
+		format json
+	}
+}

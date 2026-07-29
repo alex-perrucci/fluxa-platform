@@ -7,9 +7,9 @@ tables and kitchen routing, event publishing, online reservations, deposits,
 check-in and fiscal-document orchestration.
 
 > **Release status:** release candidate for controlled pilots and private beta.
-> A production go-live still requires valid infrastructure, Stripe live
-> webhooks, A-Cube production credentials, monitoring, backups and the release
-> checklist in `docs/operations/release-checklist.md`.
+> A production go-live still requires valid infrastructure, provider
+> credentials, monitoring, verified backups and completion of
+> `docs/operations/release-checklist.md`.
 
 ## Product flows
 
@@ -78,24 +78,13 @@ Requirements:
 - Docker
 - Flutter SDK only for the POS client
 
-Create the local environment:
-
 ```powershell
 Copy-Item .env.example .env
 Copy-Item apps\web\.env.example apps\web\.env.local
-```
 
-Replace every `CHANGE_ME` value, then start PostgreSQL and Redis:
-
-```powershell
 npm run infra:up
 npm run db:migrate
 npm run db:seed
-```
-
-Start the backend services:
-
-```powershell
 npm run start:dev
 ```
 
@@ -105,54 +94,65 @@ Start the web application in another terminal:
 npm --prefix apps/web run dev
 ```
 
-Default local endpoints:
-
-- API: `http://localhost:3000/api/v1`
-- API readiness: `http://localhost:3000/api/v1/health/ready`
-- Swagger: `http://localhost:3000/docs`
-- Web: `http://localhost:3000` when started with the default Next.js port
-
 ## Verification
-
-Backend:
-
-```powershell
-npm run verify:ci
-```
-
-Web:
-
-```powershell
-npm --prefix apps/web run verify
-```
-
-Complete release verification:
 
 ```powershell
 npm run verify:release
-```
-
-Local release-candidate E2E:
-
-```powershell
-$env:FLUXA_API_BASE_URL = "http://127.0.0.1:3000/api/v1"
-$env:FLUXA_E2E_ADMIN_EMAIL = "admin@fluxa.local"
-$env:FLUXA_E2E_ADMIN_PASSWORD = "<LOCAL_PLATFORM_ADMIN_PASSWORD>"
-
 npm run e2e:release
 ```
 
-The E2E creates isolated test data and refuses a remote host unless
+The release E2E creates isolated test data and refuses a remote API unless
 `--allow-remote` is supplied explicitly.
 
-## Production
+## One-command VPS installation
+
+Supported target: a clean Ubuntu or Debian VPS with two DNS records already
+pointing to it.
+
+After Phase 12 is merged into `main`, run:
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/alex-perrucci/fluxa-platform/main/scripts/vps/install.sh \
+  -o /tmp/fluxa-install.sh && \
+sudo bash /tmp/fluxa-install.sh
+```
+
+The installer asks for:
+
+- web and API domains;
+- certificate-notification email;
+- initial platform-admin email;
+- optional Stripe live credentials;
+- optional A-Cube production token.
+
+It then installs Docker, configures UFW, generates application secrets, builds
+immutable images, starts PostgreSQL, Redis, API, workers, Next.js and Caddy,
+applies migrations, creates the platform administrator, enables HTTPS, installs
+the backup timer and runs production diagnostics.
+
+Operational commands:
+
+```bash
+sudo bash /opt/fluxa/scripts/vps/doctor.sh
+sudo bash /opt/fluxa/scripts/vps/backup.sh
+sudo bash /opt/fluxa/scripts/vps/update.sh main
+sudo bash /opt/fluxa/scripts/vps/rollback.sh
+```
+
+PostgreSQL and Redis are not published on the VPS network interface. Their
+non-TLS connections are accepted only in the explicitly validated private
+Docker network deployment mode.
+
+## Manual production deployment
 
 Production examples:
 
-- API and workers: `.env.production.example`
-- Web: `apps/web/.env.production.example`
-- API/worker image: `Dockerfile`
-- Web image: `Dockerfile.web`
+- managed infrastructure: `.env.production.example`;
+- one-command VPS: `deploy/vps/.env.example`;
+- web: `apps/web/.env.production.example`;
+- API and workers image: `Dockerfile`;
+- web image: `Dockerfile.web`.
 
 Before deployment:
 
@@ -178,8 +178,9 @@ Operational documentation:
 
 ## Security
 
-Secrets must never be committed. The repository includes a tracked-file secret
-scanner and production-environment validation.
+Secrets must never be committed. Production secrets belong in the host secret
+store or the generated `deploy/vps/.env`, which is ignored and created with
+mode `0600`.
 
 Report vulnerabilities privately as described in `SECURITY.md`.
 

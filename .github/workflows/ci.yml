@@ -44,8 +44,6 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
-    env:
-      FLUXA_API_BASE_URL: https://api.example.com/api/v1
 
     steps:
       - name: Checkout
@@ -61,8 +59,16 @@ jobs:
       - name: Install web dependencies
         run: npm ci
 
-      - name: Verify web application
-        run: npm run verify
+      - name: Lint web application
+        run: npm run lint
+
+      - name: Test web application
+        run: npm run test
+
+      - name: Build web application
+        run: npm run build
+        env:
+          FLUXA_API_BASE_URL: https://api.example.com/api/v1
 
   release-e2e:
     name: Release E2E
@@ -111,8 +117,11 @@ jobs:
       REDIS_TLS: 'false'
       CORS_ORIGINS: http://localhost:3001
       BOOKING_WEB_BASE_URL: http://localhost:3001
+      STRIPE_ENABLED: 'false'
       STRIPE_SECRET_KEY: ''
       STRIPE_WEBHOOK_SECRET: ''
+      ACUBE_ENABLED: 'false'
+      TRUST_PROXY: 'false'
       ACCESS_TOKEN_SECRET: ci_access_token_secret_0123456789_abcdefghijklmnopqrstuvwxyz
       REFRESH_TOKEN_SECRET: ci_refresh_token_secret_0123456789_abcdefghijklmnopqrstuvwxyz
       SESSION_IP_HASH_SECRET: ci_session_hash_secret_0123456789_abcdefghijklmnopqrstuvwxyz

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Fluxa PostgreSQL backup every day
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=fluxa-backup.service
+
+[Install]
+WantedBy=timers.target

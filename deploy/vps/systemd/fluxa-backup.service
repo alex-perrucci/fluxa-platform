@@ -1,0 +1,13 @@
+[Unit]
+Description=Fluxa PostgreSQL backup
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash @INSTALL_DIR@/scripts/vps/backup.sh
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
