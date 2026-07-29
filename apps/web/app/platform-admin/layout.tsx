@@ -1,9 +1,27 @@
+// PHASE_8_TRUE_CONTROL_CENTER
 import type { ReactNode } from 'react';
-import Link from 'next/link';
-import { LogoutButton } from '@/components/auth/logout-button';
+import { ControlCenterShell } from '@/components/control-center/shell';
 import { requirePlatformAdminSession } from '@/lib/auth/session';
 
 export const dynamic = 'force-dynamic';
+
+const nav = [
+  {
+    href: '/platform-admin',
+    label: 'Panoramica',
+    icon: 'dashboard' as const,
+  },
+  {
+    href: '/platform-admin/organizations',
+    label: 'Organizzazioni',
+    icon: 'building' as const,
+  },
+  {
+    href: '/platform-admin/organizations/new',
+    label: 'Nuovo tenant',
+    icon: 'plus' as const,
+  },
+];
 
 export default async function PlatformAdminLayout({
   children,
@@ -11,19 +29,14 @@ export default async function PlatformAdminLayout({
   const session = await requirePlatformAdminSession();
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-slate-800 bg-slate-950/70 backdrop-blur">
-        <div className="shell flex min-h-16 items-center justify-between gap-4">
-          <div>
-            <Link className="font-semibold" href="/platform-admin">
-              Fluxa Platform Admin
-            </Link>
-            <p className="muted text-xs">{session.user.email}</p>
-          </div>
-          <LogoutButton />
-        </div>
-      </header>
+    <ControlCenterShell
+      mode="platform"
+      nav={nav}
+      session={session}
+      subtitle="Global operations"
+      title="Platform Control Center"
+    >
       {children}
-    </div>
+    </ControlCenterShell>
   );
 }

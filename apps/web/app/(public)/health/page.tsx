@@ -46,7 +46,11 @@ export default async function HealthPage() {
 
           <div>
             <dt className="muted text-sm">Backend ready</dt>
-            <dd className={health.ok ? 'mt-1 text-emerald-300' : 'mt-1 text-red-300'}>
+            <dd
+              className={
+                health.ok ? 'mt-1 text-emerald-300' : 'mt-1 text-red-300'
+              }
+            >
               {health.ok ? 'Raggiungibile' : 'Non raggiungibile'}
             </dd>
           </div>
