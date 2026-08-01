@@ -1,6 +1,12 @@
 'use client';
 
-import { useRef, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import {
+  useRef,
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { platformOnboardingSubmitIntent } from '@/lib/control-center/onboarding-step';
 
 interface PlatformOnboardingSubmitGuardProps {
