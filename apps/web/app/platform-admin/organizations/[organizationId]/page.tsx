@@ -1,8 +1,12 @@
 // PHASE_8_TRUE_CONTROL_CENTER
 import { MetricCard, SectionHeading } from '@/components/control-center/shell';
 import { StatusBadge } from '@/components/control-center/status-badge';
+import { PlatformTableLayoutEditor } from '@/components/platform/table-layout-editor';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
-import type { PlatformOrganizationDetail } from '@/lib/control-center/types';
+import type {
+  PlatformOrganizationDetail,
+  PlatformTableLayout,
+} from '@/lib/control-center/types';
 
 function euro(cents: string) {
   return new Intl.NumberFormat('it-IT', {
@@ -20,6 +24,12 @@ export default async function OrganizationDetailPage({
   const detail = await authenticatedFluxaFetch<PlatformOrganizationDetail>(
     `/platform/organizations/${organizationId}`,
   );
+  const firstLocation = detail.locations[0];
+  const initialLayout = firstLocation
+    ? await authenticatedFluxaFetch<PlatformTableLayout>(
+        `/platform/organizations/${organizationId}/table-layout?locationId=${encodeURIComponent(firstLocation.id)}`,
+      )
+    : null;
 
   return (
     <>
@@ -64,6 +74,23 @@ export default async function OrganizationDetailPage({
           value={euro(detail.metrics.paidVolumeCents)}
         />
       </div>
+
+      <section className="glass-panel panel-padding mt-5">
+        <SectionHeading
+          eyebrow="Layout operativo"
+          title="Sale, tavoli e capienza"
+        />
+        <p className="muted">
+          Modifica il numero dei tavoli e i posti disponibili per ciascuna sede.
+        </p>
+        <div className="mt-5">
+          <PlatformTableLayoutEditor
+            initialLayout={initialLayout}
+            locations={detail.locations}
+            organizationId={organizationId}
+          />
+        </div>
+      </section>
 
       <div className="dashboard-grid">
         <section className="glass-panel panel-padding">
