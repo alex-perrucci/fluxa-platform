@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
@@ -99,7 +103,9 @@ export class PlatformTableLayoutService {
          FOR UPDATE`,
         [organizationId, dto.locationId, dto.areaId],
       );
-      const currentById = new Map(current.rows.map((table) => [table.id, table]));
+      const currentById = new Map(
+        current.rows.map((table) => [table.id, table]),
+      );
       const retainedIds = new Set<string>();
 
       for (const table of normalized) {
@@ -149,7 +155,9 @@ export class PlatformTableLayoutService {
         }
       }
 
-      const removed = current.rows.filter((table) => !retainedIds.has(table.id));
+      const removed = current.rows.filter(
+        (table) => !retainedIds.has(table.id),
+      );
       for (const table of removed) {
         const openSession = await client.query<{ count: number }>(
           `SELECT COUNT(*)::int AS count
