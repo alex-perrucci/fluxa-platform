@@ -4,8 +4,8 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 DEPLOY_DIR="${REPO_ROOT}/deploy/vps"
-ENV_FILE="${DEPLOY_DIR}/.env"
-COMPOSE_FILE="${DEPLOY_DIR}/compose.production.yml"
+ENV_FILE="${FLUXA_ENV_FILE:-${DEPLOY_DIR}/.env}"
+COMPOSE_FILE="${FLUXA_COMPOSE_FILE:-${DEPLOY_DIR}/compose.production.yml}"
 STATE_DIR="${DEPLOY_DIR}/.state"
 PROJECT_NAME="${FLUXA_PROJECT_NAME:-fluxa}"
 
