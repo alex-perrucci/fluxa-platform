@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { PoolClient, QueryResultRow } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
 import type { PlatformTableLayoutDto } from './dto/platform-table-layout.dto';
@@ -75,7 +75,7 @@ export class PlatformTableLayoutService {
       });
     }
 
-    return this.withTransaction(async (client) => {
+    await this.withTransaction(async (client) => {
       await this.requireLocation(organizationId, dto.locationId, client);
       const area = await client.query<AreaRow>(
         `SELECT id, location_id AS "locationId", code, name, status
@@ -184,15 +184,15 @@ export class PlatformTableLayoutService {
           JSON.stringify({ tableCount: normalized.length, areaId: dto.areaId }),
         ],
       );
-
-      return this.get(organizationId, dto.locationId);
     });
+
+    return this.get(organizationId, dto.locationId);
   }
 
   private async requireLocation(
     organizationId: string,
     locationId: string,
-    client: PoolClient | DatabaseService['pool'] = this.database.pool,
+    client: Pool | PoolClient = this.database.pool,
   ) {
     const result = await client.query<LocationRow>(
       `SELECT id, organization_id AS "organizationId", name
