@@ -243,3 +243,28 @@ export interface PlatformOrganizationDetail {
     defaultLocationName: string | null;
   }>;
 }
+
+export interface PlatformTableLayout {
+  location: {
+    id: string;
+    organizationId: string;
+    name: string;
+  };
+  areas: Array<{
+    id: string;
+    locationId: string;
+    code: string;
+    name: string;
+    status: 'ACTIVE' | 'INACTIVE';
+  }>;
+  tables: Array<{
+    id: string;
+    locationId: string;
+    areaId: string;
+    code: string;
+    name: string;
+    capacity: number;
+    sortOrder: number;
+    status: 'ACTIVE' | 'INACTIVE';
+  }>;
+}
