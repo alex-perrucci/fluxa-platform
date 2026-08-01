@@ -48,7 +48,7 @@ export class PlatformTableLayoutService {
          capacity, sort_order AS "sortOrder", status
        FROM dining_tables
        WHERE organization_id=$1 AND location_id=$2
-       ORDER BY sort_order, name`,
+       ORDER BY area_id, sort_order, name`,
       [organizationId, locationId],
     );
 
@@ -80,14 +80,14 @@ export class PlatformTableLayoutService {
       const area = await client.query<AreaRow>(
         `SELECT id, location_id AS "locationId", code, name, status
          FROM dining_areas
-         WHERE id=$1 AND organization_id=$2 AND location_id=$3
+         WHERE id=$1 AND organization_id=$2 AND location_id=$3 AND status='ACTIVE'
          LIMIT 1`,
         [dto.areaId, organizationId, dto.locationId],
       );
       if (!area.rows[0]) {
         throw new NotFoundException({
           code: 'DINING_AREA_NOT_FOUND',
-          message: 'Sala non trovata per questa sede.',
+          message: 'Sala attiva non trovata per questa sede.',
         });
       }
 
@@ -95,9 +95,9 @@ export class PlatformTableLayoutService {
         `SELECT id, location_id AS "locationId", area_id AS "areaId", code, name,
            capacity, sort_order AS "sortOrder", status
          FROM dining_tables
-         WHERE organization_id=$1 AND location_id=$2
+         WHERE organization_id=$1 AND location_id=$2 AND area_id=$3
          FOR UPDATE`,
-        [organizationId, dto.locationId],
+        [organizationId, dto.locationId, dto.areaId],
       );
       const currentById = new Map(current.rows.map((table) => [table.id, table]));
       const retainedIds = new Set<string>();
@@ -108,20 +108,19 @@ export class PlatformTableLayoutService {
           if (!existing) {
             throw new NotFoundException({
               code: 'DINING_TABLE_NOT_FOUND',
-              message: `Il tavolo ${table.code} non appartiene a questa sede.`,
+              message: `Il tavolo ${table.code} non appartiene alla sala selezionata.`,
             });
           }
           retainedIds.add(table.id);
           await client.query(
             `UPDATE dining_tables
-             SET area_id=$4, code=$5, name=$6, capacity=$7, sort_order=$8,
+             SET code=$4, name=$5, capacity=$6, sort_order=$7,
                  status='ACTIVE', updated_at=NOW()
              WHERE id=$1 AND organization_id=$2 AND location_id=$3`,
             [
               table.id,
               organizationId,
               dto.locationId,
-              dto.areaId,
               table.code,
               table.name,
               table.capacity,
@@ -175,13 +174,16 @@ export class PlatformTableLayoutService {
       await client.query(
         `INSERT INTO audit_events (
            id, organization_id, actor_user_id, action, entity_type, entity_id, payload
-         ) VALUES ($1,$2,$3,'platform.table_layout.updated','location',$4,$5::jsonb)`,
+         ) VALUES ($1,$2,$3,'platform.table_layout.updated','dining_area',$4,$5::jsonb)`,
         [
           randomUUID(),
           organizationId,
           auth.userId,
-          dto.locationId,
-          JSON.stringify({ tableCount: normalized.length, areaId: dto.areaId }),
+          dto.areaId,
+          JSON.stringify({
+            tableCount: normalized.length,
+            locationId: dto.locationId,
+          }),
         ],
       );
     });
