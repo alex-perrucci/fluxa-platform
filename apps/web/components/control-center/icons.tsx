@@ -1,4 +1,3 @@
-// PHASE_8_TRUE_CONTROL_CENTER
 import type { ReactNode, SVGProps } from 'react';
 
 export type IconName =
@@ -11,7 +10,10 @@ export type IconName =
   | 'users'
   | 'sparkles'
   | 'money'
-  | 'search';
+  | 'search'
+  | 'shield'
+  | 'activity'
+  | 'location';
 
 const paths: Record<IconName, ReactNode> = {
   dashboard: (
@@ -66,6 +68,19 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-4-4" />
+    </>
+  ),
+  shield: (
+    <>
+      <path d="M12 3 20 6v6c0 5-3.4 8.2-8 9-4.6-.8-8-4-8-9V6l8-3Z" />
+      <path d="m9 12 2 2 4-5" />
+    </>
+  ),
+  activity: <path d="M3 12h4l2-7 4 14 2-7h6" />,
+  location: (
+    <>
+      <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" />
+      <circle cx="12" cy="10" r="2.5" />
     </>
   ),
 };

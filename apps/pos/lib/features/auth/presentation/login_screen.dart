@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/di/providers.dart';
+import '../../../core/theme/fluxa_theme.dart';
+import '../../../core/widgets/fluxa_brand.dart';
 
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
@@ -11,27 +13,143 @@ class LoginScreen extends ConsumerWidget {
     final auth = ref.watch(authControllerProvider).state;
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: LoginForm(
-                    busy: auth.busy,
-                    errorMessage: auth.errorMessage,
-                    onSubmit: ref.read(authControllerProvider).login,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 900;
+            final form = Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(30),
+                      child: LoginForm(
+                        busy: auth.busy,
+                        errorMessage: auth.errorMessage,
+                        onSubmit: ref.read(authControllerProvider).login,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+
+            if (!wide) {
+              return form;
+            }
+
+            return Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Container(
+                    height: double.infinity,
+                    padding: const EdgeInsets.all(48),
+                    decoration: const BoxDecoration(color: FluxaPalette.ink),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const FluxaBrandLockup(reversed: true),
+                        const Spacer(),
+                        Text(
+                          'Il tuo locale.\nTutto sotto controllo.',
+                          style: Theme.of(context).textTheme.displaySmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -1.7,
+                                height: 1.02,
+                              ),
+                        ),
+                        const SizedBox(height: 20),
+                        const SizedBox(
+                          width: 520,
+                          child: Text(
+                            'Ordini, tavoli, cucina, pagamenti, stampa e fiscale nello stesso flusso operativo.',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 17,
+                              height: 1.6,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 34),
+                        const Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            _LoginFeature(
+                              icon: Icons.point_of_sale,
+                              label: 'Cassa',
+                            ),
+                            _LoginFeature(
+                              icon: Icons.table_restaurant,
+                              label: 'Tavoli',
+                            ),
+                            _LoginFeature(
+                              icon: Icons.soup_kitchen,
+                              label: 'Cucina',
+                            ),
+                            _LoginFeature(
+                              icon: Icons.receipt_long,
+                              label: 'Fiscale',
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        const Text(
+                          'FLUXA · MINIMAL CUT',
+                          style: TextStyle(
+                            color: FluxaPalette.gold,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 2.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(flex: 4, child: form),
+              ],
+            );
+          },
         ),
       ),
     );
   }
+}
+
+class _LoginFeature extends StatelessWidget {
+  const _LoginFeature({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    decoration: BoxDecoration(
+      border: Border.all(color: const Color(0xFF34353A)),
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF1A1B1F),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: FluxaPalette.gold),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class LoginForm extends StatefulWidget {
@@ -69,11 +187,18 @@ class _LoginFormState extends State<LoginForm> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Fluxa', style: Theme.of(context).textTheme.headlineLarge),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: FluxaBrandLockup(compact: true),
+        ),
+        const SizedBox(height: 30),
+        Text('Bentornato.', style: Theme.of(context).textTheme.headlineLarge),
         const SizedBox(height: 8),
         Text(
-          'Accedi al punto cassa',
-          style: Theme.of(context).textTheme.titleMedium,
+          'Accedi al punto cassa del tuo locale.',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(color: FluxaPalette.muted),
         ),
         const SizedBox(height: 28),
         TextFormField(
@@ -82,7 +207,10 @@ class _LoginFormState extends State<LoginForm> {
           enabled: !widget.busy,
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.username],
-          decoration: const InputDecoration(labelText: 'Email'),
+          decoration: const InputDecoration(
+            labelText: 'Email',
+            prefixIcon: Icon(Icons.mail_outline),
+          ),
           validator: (value) {
             final text = value?.trim() ?? '';
             return text.contains('@')
@@ -99,6 +227,7 @@ class _LoginFormState extends State<LoginForm> {
           autofillHints: const [AutofillHints.password],
           decoration: InputDecoration(
             labelText: 'Password',
+            prefixIcon: const Icon(Icons.lock_outline),
             suffixIcon: IconButton(
               onPressed: () => setState(() => _obscure = !_obscure),
               icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
@@ -128,6 +257,18 @@ class _LoginFormState extends State<LoginForm> {
                 )
               : const Icon(Icons.login),
           label: const Text('Accedi'),
+        ),
+        const SizedBox(height: 15),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.shield_outlined, size: 16, color: FluxaPalette.goldDark),
+            SizedBox(width: 7),
+            Text(
+              'Sessione protetta e isolamento del locale',
+              style: TextStyle(color: FluxaPalette.muted, fontSize: 12),
+            ),
+          ],
         ),
       ],
     ),

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+    width="128" height="128" viewBox="0 0 128 128" fill="none">
+    
+    <g transform="translate(10 5) scale(1.08)">
+      <path d="M20 16H104L79 45H20Z" fill="#000000"/>
+      <path d="M20 51H77L60 72H20Z" fill="#000000"/>
+      <path d="M20 77H52L20 108Z" fill="#000000"/>
+    </g>
+    
+</svg>
