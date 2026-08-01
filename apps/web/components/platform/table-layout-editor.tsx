@@ -28,9 +28,12 @@ function createTable(index: number, capacity: number): EditableTable {
   };
 }
 
-function activeTables(layout: PlatformTableLayout): EditableTable[] {
+function activeTables(
+  layout: PlatformTableLayout,
+  areaId: string,
+): EditableTable[] {
   return layout.tables
-    .filter((table) => table.status === 'ACTIVE')
+    .filter((table) => table.status === 'ACTIVE' && table.areaId === areaId)
     .map((table) => ({
       id: table.id,
       code: table.code,
@@ -39,20 +42,23 @@ function activeTables(layout: PlatformTableLayout): EditableTable[] {
     }));
 }
 
+function firstActiveAreaId(layout: PlatformTableLayout | null) {
+  return layout?.areas.find((area) => area.status === 'ACTIVE')?.id ?? '';
+}
+
 export function PlatformTableLayoutEditor({
   organizationId,
   locations,
   initialLayout,
 }: Props) {
+  const initialAreaId = firstActiveAreaId(initialLayout);
   const [layout, setLayout] = useState(initialLayout);
   const [locationId, setLocationId] = useState(
     initialLayout?.location.id ?? locations[0]?.id ?? '',
   );
-  const [areaId, setAreaId] = useState(
-    initialLayout?.areas.find((area) => area.status === 'ACTIVE')?.id ?? '',
-  );
+  const [areaId, setAreaId] = useState(initialAreaId);
   const [tables, setTables] = useState<EditableTable[]>(() =>
-    initialLayout ? activeTables(initialLayout) : [],
+    initialLayout ? activeTables(initialLayout, initialAreaId) : [],
   );
   const [defaultCapacity, setDefaultCapacity] = useState(4);
   const [pending, setPending] = useState(false);
@@ -83,6 +89,13 @@ export function PlatformTableLayoutEditor({
     );
   }
 
+  function selectArea(nextAreaId: string) {
+    setAreaId(nextAreaId);
+    setTables(layout ? activeTables(layout, nextAreaId) : []);
+    setError(null);
+    setMessage(null);
+  }
+
   async function loadLocation(nextLocationId: string) {
     setLocationId(nextLocationId);
     setPending(true);
@@ -104,11 +117,10 @@ export function PlatformTableLayoutEditor({
         );
       }
       const nextLayout = body as PlatformTableLayout;
+      const nextAreaId = firstActiveAreaId(nextLayout);
       setLayout(nextLayout);
-      setAreaId(
-        nextLayout.areas.find((area) => area.status === 'ACTIVE')?.id ?? '',
-      );
-      setTables(activeTables(nextLayout));
+      setAreaId(nextAreaId);
+      setTables(activeTables(nextLayout, nextAreaId));
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -174,9 +186,10 @@ export function PlatformTableLayoutEditor({
         );
       }
       const nextLayout = body as PlatformTableLayout;
+      const savedTables = activeTables(nextLayout, areaId);
       setLayout(nextLayout);
-      setTables(activeTables(nextLayout));
-      setMessage(`${activeTables(nextLayout).length} tavoli salvati.`);
+      setTables(savedTables);
+      setMessage(`${savedTables.length} tavoli salvati nella sala selezionata.`);
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -224,7 +237,7 @@ export function PlatformTableLayoutEditor({
           <span>Sala</span>
           <select
             disabled={pending || activeAreas.length === 0}
-            onChange={(event) => setAreaId(event.target.value)}
+            onChange={(event) => selectArea(event.target.value)}
             value={areaId}
           >
             {activeAreas.map((area) => (
@@ -235,8 +248,9 @@ export function PlatformTableLayoutEditor({
           </select>
         </label>
         <label className="field">
-          <span>Numero tavoli</span>
+          <span>Numero tavoli nella sala</span>
           <input
+            disabled={!areaId}
             max={100}
             min={1}
             onChange={(event) => resizeTables(Number(event.target.value))}
@@ -262,11 +276,12 @@ export function PlatformTableLayoutEditor({
 
       <div className="table-editor-toolbar">
         <div>
-          <strong>{tables.length} tavoli attivi</strong>
+          <strong>{tables.length} tavoli attivi nella sala</strong>
           <span>I tavoli rimossi vengono disattivati senza perdere lo storico.</span>
         </div>
         <button
           className="button-secondary"
+          disabled={!areaId}
           onClick={() =>
             setTables((current) =>
               current.map((table) => ({ ...table, capacity: defaultCapacity })),
