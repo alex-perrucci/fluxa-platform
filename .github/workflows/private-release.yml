@@ -1,0 +1,154 @@
+name: Private GHCR release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Immutable release tag, for example v0.8.0
+        required: true
+        type: string
+      api_base_url:
+        description: Public HTTPS API URL baked into the web image
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: private-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: alex-perrucci
+
+jobs:
+  verify:
+    name: Verify release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run verify:ci
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+        working-directory: apps/web
+      - run: npm run lint
+        working-directory: apps/web
+      - run: npm run test
+        working-directory: apps/web
+
+  publish:
+    name: Build and publish private images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: verify
+    outputs:
+      release_tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: release
+        name: Resolve release metadata
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+          INPUT_API_BASE_URL: ${{ inputs.api_base_url }}
+          REPOSITORY_API_BASE_URL: ${{ vars.FLUXA_PRODUCTION_API_BASE_URL }}
+        run: |
+          set -Eeuo pipefail
+          tag="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+          api_base_url="${INPUT_API_BASE_URL:-${REPOSITORY_API_BASE_URL}}"
+          [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]] || {
+            echo "Invalid release tag: ${tag}" >&2
+            exit 1
+          }
+          [[ "${api_base_url}" =~ ^https://[^[:space:]]+/api/v1/?$ ]] || {
+            echo "Set FLUXA_PRODUCTION_API_BASE_URL to an HTTPS /api/v1 URL." >&2
+            exit 1
+          }
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "api_base_url=${api_base_url%/}" >> "${GITHUB_OUTPUT}"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish backend runtime
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          push: true
+          build-args: FLUXA_APP=api
+          tags: |
+            ghcr.io/${{ env.OWNER }}/fluxa-backend:${{ steps.release.outputs.tag }}
+            ghcr.io/${{ env.OWNER }}/fluxa-backend:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.release.outputs.tag }}
+
+      - name: Publish migration tools
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: build
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/fluxa-tools:${{ steps.release.outputs.tag }}
+            ghcr.io/${{ env.OWNER }}/fluxa-tools:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.release.outputs.tag }}
+
+      - name: Publish web runtime
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.web
+          target: runtime
+          push: true
+          build-args: FLUXA_API_BASE_URL=${{ steps.release.outputs.api_base_url }}
+          tags: |
+            ghcr.io/${{ env.OWNER }}/fluxa-web:${{ steps.release.outputs.tag }}
+            ghcr.io/${{ env.OWNER }}/fluxa-web:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.release.outputs.tag }}
+
+      - name: Publish deployment bundle
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.deploy
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/fluxa-deploy:${{ steps.release.outputs.tag }}
+            ghcr.io/${{ env.OWNER }}/fluxa-deploy:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.release.outputs.tag }}

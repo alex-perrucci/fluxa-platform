@@ -1,0 +1,177 @@
+name: fluxa
+
+x-backend-common: &backend-common
+  image: ${FLUXA_BACKEND_IMAGE}
+  env_file:
+    - .env
+  restart: unless-stopped
+  networks:
+    - data
+    - app
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '5'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: [redis-server, --appendonly, 'yes', --requirepass, '${REDIS_PASSWORD}']
+    volumes:
+      - redis_data:/data
+    networks:
+      - data
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli -a "$${REDIS_PASSWORD}" ping | grep PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  migrate:
+    image: ${FLUXA_TOOLS_IMAGE}
+    env_file:
+      - .env
+    command: [npm, run, db:migrate]
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: [tools]
+
+  bootstrap-admin:
+    image: ${FLUXA_TOOLS_IMAGE}
+    env_file:
+      - .env
+    command: [npm, run, db:seed]
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: [tools]
+
+  api:
+    <<: *backend-common
+    environment:
+      FLUXA_APP: api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://127.0.0.1:3000/api/v1/health/ready')
+          .then((response) => process.exit(response.ok ? 0 : 1))
+          .catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  background-worker:
+    <<: *backend-common
+    environment:
+      FLUXA_APP: background-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  fiscal-worker:
+    <<: *backend-common
+    environment:
+      FLUXA_APP: fiscal-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: [fiscal]
+
+  web:
+    image: ${FLUXA_WEB_IMAGE}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    networks:
+      - app
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://127.0.0.1:3000/health')
+          .then((response) => process.exit(response.ok ? 0 : 1))
+          .catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app
+      - edge
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+networks:
+  data:
+    internal: true
+  app:
+  edge:
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

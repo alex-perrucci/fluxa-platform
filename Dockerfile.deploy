@@ -1,0 +1,18 @@
+FROM alpine:3.22
+
+WORKDIR /bundle
+
+COPY deploy/vps/Caddyfile /bundle/deploy/vps/Caddyfile
+COPY deploy/vps/compose.ghcr.yml /bundle/deploy/vps/compose.ghcr.yml
+COPY deploy/vps/systemd /bundle/deploy/vps/systemd
+COPY scripts/vps/backup.sh /bundle/scripts/vps/backup.sh
+COPY scripts/vps/doctor.sh /bundle/scripts/vps/doctor.sh
+COPY scripts/vps/lib.sh /bundle/scripts/vps/lib.sh
+COPY scripts/vps/install-ghcr.sh /bundle/scripts/vps/install-ghcr.sh
+COPY scripts/vps/update-ghcr.sh /bundle/scripts/vps/update-ghcr.sh
+COPY scripts/vps/rollback-ghcr.sh /bundle/scripts/vps/rollback-ghcr.sh
+
+RUN chmod 0755 /bundle/scripts/vps/*.sh
+
+LABEL org.opencontainers.image.source="https://github.com/alex-perrucci/fluxa-platform"
+LABEL org.opencontainers.image.description="Private Fluxa VPS deployment bundle"
