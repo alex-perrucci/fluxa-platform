@@ -87,17 +87,19 @@ export class EventInventoryPublishingService {
         `INSERT INTO audit_events (
            id,organization_id,actor_user_id,action,entity_type,entity_id,payload
          ) VALUES ($1,$2,$3,'event.published','event',$4,$5::jsonb)`,
-        [randomUUID(), organizationId, auth.userId, eventId, JSON.stringify(payload)],
+        [
+          randomUUID(),
+          organizationId,
+          auth.userId,
+          eventId,
+          JSON.stringify(payload),
+        ],
       );
       await client.query(
         `INSERT INTO outbox_events (
            id,topic,aggregate_type,aggregate_id,payload
          ) VALUES ($1,'events.event.published','event',$2,$3::jsonb)`,
-        [
-          randomUUID(),
-          eventId,
-          JSON.stringify({ organizationId, ...payload }),
-        ],
+        [randomUUID(), eventId, JSON.stringify({ organizationId, ...payload })],
       );
     });
 
