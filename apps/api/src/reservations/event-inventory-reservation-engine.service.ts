@@ -112,8 +112,7 @@ export class EventInventoryReservationEngineService extends ReservationEngineSer
       event.capacity,
       occupancy.occupiedCapacity,
     );
-    const availableUnitCount =
-      availability.rows[0]?.availableUnitCount ?? 0;
+    const availableUnitCount = availability.rows[0]?.availableUnitCount ?? 0;
 
     return {
       event: {
@@ -143,7 +142,7 @@ export class EventInventoryReservationEngineService extends ReservationEngineSer
     const idempotencyKey = dto.idempotencyKey.trim();
 
     try {
-      const holdId = await this.withInventoryTransaction(async (client) => {
+      await this.withInventoryTransaction(async (client) => {
         const event = await this.loadAndLockPublicEvent(client, slug);
         assertEventAcceptsHolds(event);
         await client.query(
@@ -184,7 +183,7 @@ export class EventInventoryReservationEngineService extends ReservationEngineSer
                 'La chiave di idempotenza è già stata utilizzata con dati differenti.',
             });
           }
-          return existing.id;
+          return;
         }
 
         const occupancy = await this.occupiedCapacity(client, event.id);
@@ -343,8 +342,6 @@ export class EventInventoryReservationEngineService extends ReservationEngineSer
             expiresAt: expiresAt.toISOString(),
           },
         });
-
-        return holdId;
       });
 
       return this.getHold(dto.holdToken);
