@@ -15,11 +15,22 @@ export function moveElement(
   element: FloorPlanElement,
   delta: Point,
   gridSize: number,
+  canvasWidth?: number,
+  canvasHeight?: number,
 ): FloorPlanElement {
+  const x = snap(element.x + delta.x, gridSize);
+  const y = snap(element.y + delta.y, gridSize);
+
   return {
     ...element,
-    x: snap(element.x + delta.x, gridSize),
-    y: snap(element.y + delta.y, gridSize),
+    x:
+      canvasWidth === undefined
+        ? x
+        : clamp(x, 0, Math.max(0, canvasWidth - element.width)),
+    y:
+      canvasHeight === undefined
+        ? y
+        : clamp(y, 0, Math.max(0, canvasHeight - element.height)),
   };
 }
 
@@ -27,11 +38,22 @@ export function resizeElement(
   element: FloorPlanElement,
   delta: Point,
   gridSize: number,
+  canvasWidth?: number,
+  canvasHeight?: number,
 ): FloorPlanElement {
+  const width = Math.max(8, snap(element.width + delta.x, gridSize));
+  const height = Math.max(8, snap(element.height + delta.y, gridSize));
+
   return {
     ...element,
-    width: Math.max(8, snap(element.width + delta.x, gridSize)),
-    height: Math.max(8, snap(element.height + delta.y, gridSize)),
+    width:
+      canvasWidth === undefined
+        ? width
+        : Math.min(width, Math.max(8, canvasWidth - element.x)),
+    height:
+      canvasHeight === undefined
+        ? height
+        : Math.min(height, Math.max(8, canvasHeight - element.y)),
   };
 }
 
@@ -56,4 +78,8 @@ export function elementCenter(element: FloorPlanElement): Point {
     x: element.x + element.width / 2,
     y: element.y + element.height / 2,
   };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
 }
