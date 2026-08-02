@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { AuthorizationGuard } from './guards/authorization.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { TenantContextGuard } from './guards/tenant-context.guard';
+import { LocationAccessService } from './location-access.service';
 
 @Global()
 @Module({
@@ -12,10 +13,17 @@ import { TenantContextGuard } from './guards/tenant-context.guard';
   controllers: [AuthController],
   providers: [
     AuthService,
+    LocationAccessService,
     JwtAuthGuard,
     TenantContextGuard,
     AuthorizationGuard,
   ],
-  exports: [AuthService, JwtAuthGuard, TenantContextGuard, AuthorizationGuard],
+  exports: [
+    AuthService,
+    LocationAccessService,
+    JwtAuthGuard,
+    TenantContextGuard,
+    AuthorizationGuard,
+  ],
 })
 export class AuthModule {}
