@@ -69,21 +69,17 @@ function defaultElement(
   gridSize: number,
   diningTableId: string,
 ): FloorPlanElement {
-  const x = snap(point.x, gridSize);
-  const y = snap(point.y, gridSize);
-  const base = {
+  const base: FloorPlanElement = {
     id: crypto.randomUUID(),
     type,
-    x,
-    y,
+    x: snap(point.x, gridSize),
+    y: snap(point.y, gridSize),
     width: 160,
     height: 100,
     rotation: 0,
-  } satisfies FloorPlanElement;
+  };
 
-  if (type === 'WALL') {
-    return { ...base, width: 240, height: 16 };
-  }
+  if (type === 'WALL') return { ...base, width: 240, height: 16 };
   if (type === 'TEXT') {
     return { ...base, height: 48, text: 'Nuovo testo', fontSize: 24 };
   }
@@ -159,7 +155,7 @@ export function FloorPlanEditor({
     [planDocument.elements],
   );
 
-  function pointFromEvent(event: ReactPointerEvent<SVGSVGElement>): Point {
+  function pointFromEvent(event: ReactPointerEvent<SVGElement>): Point {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
     const rect = svg.getBoundingClientRect();
@@ -176,10 +172,10 @@ export function FloorPlanEditor({
     setDirty(true);
   }
 
-  function updateElement(
+  function replaceElement(
     elementId: string,
     updater: (element: FloorPlanElement) => FloorPlanElement,
-    withHistory: boolean,
+    withHistory = true,
   ) {
     const next = {
       ...planDocument,
@@ -187,15 +183,14 @@ export function FloorPlanEditor({
         element.id === elementId ? updater(element) : element,
       ),
     };
-    if (withHistory) {
-      commit(next);
-    } else {
+    if (withHistory) commit(next);
+    else {
       setPlanDocument(next);
       setDirty(true);
     }
   }
 
-  function addElement(event: ReactPointerEvent<SVGSVGElement>) {
+  function addElement(event: ReactPointerEvent<SVGElement>) {
     if (tool === 'SELECT') {
       setSelectedId(null);
       return;
@@ -225,35 +220,25 @@ export function FloorPlanEditor({
     setTool('SELECT');
   }
 
-  function startInteraction(
-    event: ReactPointerEvent<SVGGElement>,
+  function beginInteraction(
+    event: ReactPointerEvent<SVGElement>,
     element: FloorPlanElement,
-    modeValue: InteractionMode,
+    interactionMode: InteractionMode,
   ) {
     event.stopPropagation();
-    svgRef.current?.setPointerCapture(event.pointerId);
+    setSelectedId(element.id);
     interactionRef.current = {
       pointerId: event.pointerId,
-      mode: modeValue,
+      mode: interactionMode,
       elementId: element.id,
-      start: pointFromSvgChildEvent(event),
+      start: pointFromEvent(event),
       original: element,
       snapshot: planDocument,
     };
-    setSelectedId(element.id);
+    event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function pointFromSvgChildEvent(event: ReactPointerEvent<SVGGElement>): Point {
-    const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
-    const rect = svg.getBoundingClientRect();
-    return {
-      x: ((event.clientX - rect.left) / rect.width) * planDocument.width,
-      y: ((event.clientY - rect.top) / rect.height) * planDocument.height,
-    };
-  }
-
-  function moveInteraction(event: ReactPointerEvent<SVGSVGElement>) {
+  function moveInteraction(event: ReactPointerEvent<SVGElement>) {
     const interaction = interactionRef.current;
     if (!interaction || interaction.pointerId !== event.pointerId) return;
     const point = pointFromEvent(event);
@@ -261,8 +246,7 @@ export function FloorPlanEditor({
       x: point.x - interaction.start.x,
       y: point.y - interaction.start.y,
     };
-
-    updateElement(
+    replaceElement(
       interaction.elementId,
       () => {
         if (interaction.mode === 'MOVE') {
@@ -270,6 +254,8 @@ export function FloorPlanEditor({
             interaction.original,
             delta,
             planDocument.gridSize,
+            planDocument.width,
+            planDocument.height,
           );
         }
         if (interaction.mode === 'RESIZE') {
@@ -277,19 +263,24 @@ export function FloorPlanEditor({
             interaction.original,
             delta,
             planDocument.gridSize,
+            planDocument.width,
+            planDocument.height,
           );
         }
-        return rotateElement(interaction.original, point);
+        return rotateElement(
+          interaction.original,
+          point,
+          planDocument.gridSize,
+        );
       },
       false,
     );
   }
 
-  function finishInteraction(event: ReactPointerEvent<SVGSVGElement>) {
+  function endInteraction(event: ReactPointerEvent<SVGElement>) {
     const interaction = interactionRef.current;
     if (!interaction || interaction.pointerId !== event.pointerId) return;
     interactionRef.current = null;
-    svgRef.current?.releasePointerCapture(event.pointerId);
     setHistory((current) => [...current.slice(-49), interaction.snapshot]);
     setFuture([]);
   }
@@ -297,11 +288,11 @@ export function FloorPlanEditor({
   function undo() {
     const previous = history.at(-1);
     if (!previous) return;
-    setFuture((current) => [planDocument, ...current.slice(0, 49)]);
+    setFuture((current) => [planDocument, ...current].slice(0, 50));
     setHistory((current) => current.slice(0, -1));
     setPlanDocument(previous);
-    setDirty(true);
     setSelectedId(null);
+    setDirty(true);
   }
 
   function redo() {
@@ -310,8 +301,8 @@ export function FloorPlanEditor({
     setHistory((current) => [...current.slice(-49), planDocument]);
     setFuture((current) => current.slice(1));
     setPlanDocument(next);
-    setDirty(true);
     setSelectedId(null);
+    setDirty(true);
   }
 
   function removeSelected() {
@@ -325,15 +316,6 @@ export function FloorPlanEditor({
     setSelectedId(null);
   }
 
-  function patchSelected(patch: Partial<FloorPlanElement>) {
-    if (!selectedId) return;
-    updateElement(
-      selectedId,
-      (element) => ({ ...element, ...patch }),
-      true,
-    );
-  }
-
   async function loadLocation(nextLocationId: string) {
     setPending(true);
     setError(null);
@@ -342,20 +324,18 @@ export function FloorPlanEditor({
       const response = await fetch(
         floorPlanEndpoint(mode, organizationId, nextLocationId),
       );
-      const body = (await response.json()) as FloorPlanView | unknown;
+      const body = (await response.json()) as unknown;
       if (!response.ok) {
-        throw new Error(
-          responseMessage(body, 'Piantina della location non disponibile.'),
-        );
+        throw new Error(responseMessage(body, 'Piantina non disponibile.'));
       }
       const nextView = body as FloorPlanView;
       setLocationId(nextLocationId);
       setView(nextView);
       setPlanDocument(nextView.draft.document);
+      setSelectedId(null);
       setSelectedTableId(
         nextView.tables.find((table) => table.status === 'ACTIVE')?.id ?? '',
       );
-      setSelectedId(null);
       setHistory([]);
       setFuture([]);
       setDirty(false);
@@ -363,32 +343,40 @@ export function FloorPlanEditor({
       setError(
         loadError instanceof Error
           ? loadError.message
-          : 'Piantina della location non disponibile.',
+          : 'Piantina non disponibile.',
       );
     } finally {
       setPending(false);
     }
   }
 
-  async function saveDraft() {
+  async function persist(action: 'draft' | 'publish') {
     setPending(true);
     setError(null);
     setMessage(null);
     try {
       const response = await fetch(
-        `${floorPlanEndpoint(mode, organizationId, locationId)}/draft`,
+        `${floorPlanEndpoint(mode, organizationId, locationId)}/${action}`,
         {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            revision: view.draft.revision,
-            document: planDocument,
-          }),
+          body: JSON.stringify(
+            action === 'draft'
+              ? { revision: view.draft.revision, document: planDocument }
+              : { revision: view.draft.revision },
+          ),
         },
       );
-      const body = (await response.json()) as FloorPlanView | unknown;
+      const body = (await response.json()) as unknown;
       if (!response.ok) {
-        throw new Error(responseMessage(body, 'Bozza non salvata.'));
+        throw new Error(
+          responseMessage(
+            body,
+            action === 'draft'
+              ? 'Bozza non salvata.'
+              : 'Piantina non pubblicata.',
+          ),
+        );
       }
       const nextView = body as FloorPlanView;
       setView(nextView);
@@ -396,68 +384,27 @@ export function FloorPlanEditor({
       setHistory([]);
       setFuture([]);
       setDirty(false);
-      setMessage(`Bozza v${nextView.draft.versionNumber} salvata.`);
+      setMessage(
+        action === 'draft'
+          ? `Bozza v${nextView.draft.versionNumber} salvata.`
+          : `Versione v${nextView.published?.versionNumber ?? ''} pubblicata.`,
+      );
     } catch (saveError) {
       setError(
-        saveError instanceof Error ? saveError.message : 'Bozza non salvata.',
+        saveError instanceof Error
+          ? saveError.message
+          : 'Operazione non completata.',
       );
     } finally {
       setPending(false);
     }
   }
 
-  async function publish() {
-    if (dirty) {
-      setError('Salva la bozza prima di pubblicarla.');
-      return;
-    }
-    setPending(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const response = await fetch(
-        `${floorPlanEndpoint(mode, organizationId, locationId)}/publish`,
-        {
-          method: 'PUT',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ revision: view.draft.revision }),
-        },
-      );
-      const body = (await response.json()) as FloorPlanView | unknown;
-      if (!response.ok) {
-        throw new Error(responseMessage(body, 'Piantina non pubblicata.'));
-      }
-      const nextView = body as FloorPlanView;
-      setView(nextView);
-      setPlanDocument(nextView.draft.document);
-      setHistory([]);
-      setFuture([]);
-      setSelectedId(null);
-      setMessage(
-        `Versione ${nextView.published?.versionNumber ?? ''} pubblicata.`,
-      );
-    } catch (publishError) {
-      setError(
-        publishError instanceof Error
-          ? publishError.message
-          : 'Piantina non pubblicata.',
-      );
-    } finally {
-      setPending(false);
-    }
-  }
-
-  function updateCanvas(field: 'width' | 'height' | 'gridSize', value: number) {
-    const limits =
-      field === 'gridSize'
-        ? { min: 5, max: 100 }
-        : field === 'width'
-          ? { min: 400, max: 5000 }
-          : { min: 300, max: 5000 };
-    commit({
-      ...planDocument,
-      [field]: Math.min(limits.max, Math.max(limits.min, value || limits.min)),
-    });
+  function updateDocumentField(
+    field: 'width' | 'height' | 'gridSize',
+    value: number,
+  ) {
+    commit({ ...planDocument, [field]: value });
   }
 
   return (
@@ -465,7 +412,7 @@ export function FloorPlanEditor({
       <ControlCenterNotification
         message={error}
         onDismiss={() => setError(null)}
-        title="Piantina non aggiornata"
+        title="Operazione non completata"
       />
       <ControlCenterNotification
         message={message}
@@ -477,7 +424,7 @@ export function FloorPlanEditor({
         <label className="field">
           <span>Location</span>
           <select
-            disabled={pending}
+            disabled={pending || dirty}
             onChange={(event) => void loadLocation(event.target.value)}
             value={locationId}
           >
@@ -489,20 +436,37 @@ export function FloorPlanEditor({
           </select>
         </label>
         <div className="floor-plan-version-state">
-          <StatusBadge status={dirty ? 'UNSAVED' : 'DRAFT'} />
+          <StatusBadge status="DRAFT" />
           <span>
-            Bozza v{view.draft.versionNumber} · revisione {view.draft.revision}
+            v{view.draft.versionNumber} · revisione {view.draft.revision}
           </span>
-          <small>
-            Pubblicata:{' '}
-            {view.published ? `v${view.published.versionNumber}` : 'nessuna'}
-          </small>
+          {view.published ? (
+            <span>Pubblicata v{view.published.versionNumber}</span>
+          ) : (
+            <span>Nessuna versione pubblicata</span>
+          )}
         </div>
         <div className="floor-plan-actions">
           <button
             className="button-secondary"
+            disabled={pending || !history.length}
+            onClick={undo}
+            type="button"
+          >
+            Annulla
+          </button>
+          <button
+            className="button-secondary"
+            disabled={pending || !future.length}
+            onClick={redo}
+            type="button"
+          >
+            Ripeti
+          </button>
+          <button
+            className="button-secondary"
             disabled={pending || !dirty}
-            onClick={() => void saveDraft()}
+            onClick={() => void persist('draft')}
             type="button"
           >
             Salva bozza
@@ -510,10 +474,10 @@ export function FloorPlanEditor({
           <button
             className="button-primary"
             disabled={pending || dirty}
-            onClick={() => void publish()}
+            onClick={() => void persist('publish')}
             type="button"
           >
-            Pubblica versione
+            Pubblica
           </button>
         </div>
       </div>
@@ -541,6 +505,7 @@ export function FloorPlanEditor({
                 onChange={(event) => setSelectedTableId(event.target.value)}
                 value={selectedTableId}
               >
+                <option value="">Seleziona tavolo</option>
                 {activeTables.map((table) => (
                   <option
                     disabled={placedTableIds.has(table.id)}
@@ -554,24 +519,15 @@ export function FloorPlanEditor({
             </label>
           ) : null}
 
-          <div className="floor-plan-history-actions">
-            <button disabled={!history.length} onClick={undo} type="button">
-              Annulla
-            </button>
-            <button disabled={!future.length} onClick={redo} type="button">
-              Ripristina
-            </button>
-          </div>
-
           <strong>Tela</strong>
-          <div className="floor-plan-property-grid">
+          <div className="floor-plan-properties">
             <label className="field">
               <span>Larghezza</span>
               <input
                 max={5000}
                 min={400}
                 onChange={(event) =>
-                  updateCanvas('width', Number(event.target.value))
+                  updateDocumentField('width', Number(event.target.value))
                 }
                 type="number"
                 value={planDocument.width}
@@ -583,7 +539,7 @@ export function FloorPlanEditor({
                 max={5000}
                 min={300}
                 onChange={(event) =>
-                  updateCanvas('height', Number(event.target.value))
+                  updateDocumentField('height', Number(event.target.value))
                 }
                 type="number"
                 value={planDocument.height}
@@ -595,105 +551,21 @@ export function FloorPlanEditor({
                 max={100}
                 min={5}
                 onChange={(event) =>
-                  updateCanvas('gridSize', Number(event.target.value))
+                  updateDocumentField('gridSize', Number(event.target.value))
                 }
                 type="number"
                 value={planDocument.gridSize}
               />
             </label>
           </div>
-
-          {selected ? (
-            <>
-              <strong>Elemento selezionato</strong>
-              <div className="floor-plan-property-grid">
-                {(['x', 'y', 'width', 'height', 'rotation'] as const).map(
-                  (field) => (
-                    <label className="field" key={field}>
-                      <span>{field}</span>
-                      <input
-                        onChange={(event) =>
-                          patchSelected({
-                            [field]: Number(event.target.value),
-                          })
-                        }
-                        type="number"
-                        value={selected[field]}
-                      />
-                    </label>
-                  ),
-                )}
-                {selected.type === 'TEXT' ? (
-                  <>
-                    <label className="field span-2">
-                      <span>Testo</span>
-                      <input
-                        maxLength={240}
-                        onChange={(event) =>
-                          patchSelected({ text: event.target.value })
-                        }
-                        value={selected.text ?? ''}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Dimensione</span>
-                      <input
-                        max={120}
-                        min={8}
-                        onChange={(event) =>
-                          patchSelected({
-                            fontSize: Number(event.target.value),
-                          })
-                        }
-                        type="number"
-                        value={selected.fontSize ?? 24}
-                      />
-                    </label>
-                  </>
-                ) : null}
-                {selected.type === 'TABLE' ? (
-                  <label className="field span-2">
-                    <span>Forma tavolo</span>
-                    <select
-                      onChange={(event) =>
-                        patchSelected({
-                          tableShape: event.target.value as
-                            | 'RECTANGLE'
-                            | 'ROUND',
-                        })
-                      }
-                      value={selected.tableShape ?? 'RECTANGLE'}
-                    >
-                      <option value="RECTANGLE">Rettangolare</option>
-                      <option value="ROUND">Rotondo</option>
-                    </select>
-                  </label>
-                ) : null}
-              </div>
-              <button
-                className="button-danger"
-                onClick={removeSelected}
-                type="button"
-              >
-                Elimina elemento
-              </button>
-            </>
-          ) : (
-            <p className="muted">
-              Seleziona un elemento per modificarne posizione, dimensioni e
-              rotazione.
-            </p>
-          )}
         </aside>
 
-        <div className="floor-plan-canvas-shell">
+        <main className="floor-plan-canvas-shell">
           <svg
-            aria-label="Editor grafico della piantina"
-            className={`floor-plan-canvas tool-${tool.toLowerCase()}`}
+            className="floor-plan-canvas"
             onPointerMove={moveInteraction}
-            onPointerUp={finishInteraction}
+            onPointerUp={endInteraction}
             ref={svgRef}
-            role="application"
             viewBox={`0 0 ${planDocument.width} ${planDocument.height}`}
           >
             <defs>
@@ -704,9 +576,8 @@ export function FloorPlanEditor({
                 width={planDocument.gridSize}
               >
                 <path
+                  className="floor-plan-grid-line"
                   d={`M ${planDocument.gridSize} 0 L 0 0 0 ${planDocument.gridSize}`}
-                  fill="none"
-                  vectorEffect="non-scaling-stroke"
                 />
               </pattern>
             </defs>
@@ -719,32 +590,40 @@ export function FloorPlanEditor({
               y={0}
             />
             <rect
-              className="floor-plan-grid"
+              fill="url(#floor-plan-grid)"
               height={planDocument.height}
               pointerEvents="none"
               width={planDocument.width}
               x={0}
               y={0}
             />
+
             {planDocument.elements.map((element) => {
               const centerX = element.x + element.width / 2;
               const centerY = element.y + element.height / 2;
+              const transform = `rotate(${element.rotation} ${centerX} ${centerY})`;
               const table = element.diningTableId
                 ? tableById.get(element.diningTableId)
                 : null;
+
               return (
                 <g
-                  className={`floor-plan-element element-${element.type.toLowerCase()} ${selectedId === element.id ? 'selected' : ''}`}
+                  className={
+                    selectedId === element.id
+                      ? 'floor-plan-element selected'
+                      : 'floor-plan-element'
+                  }
                   key={element.id}
                   onPointerDown={(event) =>
-                    startInteraction(event, element, 'MOVE')
+                    beginInteraction(event, element, 'MOVE')
                   }
-                  transform={`rotate(${element.rotation} ${centerX} ${centerY})`}
+                  transform={transform}
                 >
                   {element.type === 'ELLIPSE' ||
                   (element.type === 'TABLE' &&
                     element.tableShape === 'ROUND') ? (
                     <ellipse
+                      className={`floor-plan-shape type-${element.type.toLowerCase()}`}
                       cx={centerX}
                       cy={centerY}
                       rx={element.width / 2}
@@ -752,6 +631,7 @@ export function FloorPlanEditor({
                     />
                   ) : (
                     <rect
+                      className={`floor-plan-shape type-${element.type.toLowerCase()}`}
                       height={element.height}
                       rx={element.type === 'TABLE' ? 16 : 4}
                       width={element.width}
@@ -759,27 +639,32 @@ export function FloorPlanEditor({
                       y={element.y}
                     />
                   )}
+
                   {element.type === 'TEXT' ? (
                     <text
-                      dominantBaseline="middle"
+                      className="floor-plan-text"
                       fontSize={element.fontSize ?? 24}
-                      textAnchor="middle"
-                      x={centerX}
-                      y={centerY}
+                      x={element.x + 12}
+                      y={element.y + element.height / 2}
                     >
                       {element.text}
                     </text>
                   ) : null}
+
                   {element.type === 'TABLE' ? (
                     <text
-                      dominantBaseline="middle"
+                      className="floor-plan-table-label"
                       textAnchor="middle"
                       x={centerX}
                       y={centerY}
                     >
-                      {table?.code ?? 'Tavolo'} · {table?.capacity ?? 0}
+                      <tspan x={centerX}>{table?.code ?? 'Tavolo'}</tspan>
+                      <tspan dy="20" x={centerX}>
+                        {table?.capacity ?? 0} posti
+                      </tspan>
                     </text>
                   ) : null}
+
                   {selectedId === element.id ? (
                     <>
                       <rect
@@ -790,32 +675,23 @@ export function FloorPlanEditor({
                         x={element.x}
                         y={element.y}
                       />
-                      <line
-                        className="floor-plan-rotation-line"
-                        pointerEvents="none"
-                        x1={centerX}
-                        x2={centerX}
-                        y1={element.y}
-                        y2={element.y - 38}
-                      />
                       <circle
-                        className="floor-plan-rotate-handle"
-                        cx={centerX}
-                        cy={element.y - 48}
+                        className="floor-plan-handle resize"
+                        cx={element.x + element.width}
+                        cy={element.y + element.height}
                         onPointerDown={(event) =>
-                          startInteraction(event, element, 'ROTATE')
+                          beginInteraction(event, element, 'RESIZE')
                         }
                         r={10}
                       />
-                      <rect
-                        className="floor-plan-resize-handle"
-                        height={18}
+                      <circle
+                        className="floor-plan-handle rotate"
+                        cx={centerX}
+                        cy={element.y - 28}
                         onPointerDown={(event) =>
-                          startInteraction(event, element, 'RESIZE')
+                          beginInteraction(event, element, 'ROTATE')
                         }
-                        width={18}
-                        x={element.x + element.width - 9}
-                        y={element.y + element.height - 9}
+                        r={10}
                       />
                     </>
                   ) : null}
@@ -823,18 +699,102 @@ export function FloorPlanEditor({
               );
             })}
           </svg>
-        </div>
+        </main>
 
-        <aside className="floor-plan-versions">
+        <aside className="floor-plan-sidebar properties">
+          <strong>Proprietà</strong>
+          {selected ? (
+            <div className="floor-plan-properties">
+              <span className="muted">{selected.type}</span>
+              {(['x', 'y', 'width', 'height', 'rotation'] as const).map(
+                (field) => (
+                  <label className="field" key={field}>
+                    <span>{field}</span>
+                    <input
+                      onChange={(event) =>
+                        replaceElement(selected.id, (element) => ({
+                          ...element,
+                          [field]: Number(event.target.value),
+                        }))
+                      }
+                      type="number"
+                      value={selected[field]}
+                    />
+                  </label>
+                ),
+              )}
+              {selected.type === 'TEXT' ? (
+                <>
+                  <label className="field">
+                    <span>Testo</span>
+                    <textarea
+                      maxLength={240}
+                      onChange={(event) =>
+                        replaceElement(selected.id, (element) => ({
+                          ...element,
+                          text: event.target.value,
+                        }))
+                      }
+                      value={selected.text ?? ''}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Dimensione testo</span>
+                    <input
+                      max={120}
+                      min={8}
+                      onChange={(event) =>
+                        replaceElement(selected.id, (element) => ({
+                          ...element,
+                          fontSize: Number(event.target.value),
+                        }))
+                      }
+                      type="number"
+                      value={selected.fontSize ?? 24}
+                    />
+                  </label>
+                </>
+              ) : null}
+              {selected.type === 'TABLE' ? (
+                <label className="field">
+                  <span>Forma tavolo</span>
+                  <select
+                    onChange={(event) =>
+                      replaceElement(selected.id, (element) => ({
+                        ...element,
+                        tableShape: event.target.value as 'RECTANGLE' | 'ROUND',
+                      }))
+                    }
+                    value={selected.tableShape ?? 'RECTANGLE'}
+                  >
+                    <option value="RECTANGLE">Rettangolare</option>
+                    <option value="ROUND">Rotondo</option>
+                  </select>
+                </label>
+              ) : null}
+              <button
+                className="button-danger"
+                onClick={removeSelected}
+                type="button"
+              >
+                Elimina elemento
+              </button>
+            </div>
+          ) : (
+            <p className="muted">
+              Seleziona un elemento per modificarne posizione, dimensioni e
+              rotazione.
+            </p>
+          )}
+
           <strong>Versioni</strong>
-          <div className="data-list">
+          <div className="floor-plan-version-list">
             {view.versions.map((version) => (
-              <div className="floor-plan-version-row" key={version.id}>
-                <div>
-                  <strong>Versione {version.versionNumber}</strong>
-                  <small>Revisione {version.revision}</small>
-                </div>
+              <div key={version.id}>
                 <StatusBadge status={version.status} />
+                <span>
+                  v{version.versionNumber} · rev. {version.revision}
+                </span>
               </div>
             ))}
           </div>
