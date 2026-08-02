@@ -1,6 +1,7 @@
 // PHASE_8_TRUE_CONTROL_CENTER
 import { MetricCard, SectionHeading } from '@/components/control-center/shell';
 import { StatusBadge } from '@/components/control-center/status-badge';
+import { LocationAccessManager } from '@/components/platform/location-access-manager';
 import {
   MultiLocationManager,
   type PlatformManagedLocation,
@@ -111,6 +112,23 @@ export default async function OrganizationDetailPage({
           <MultiLocationManager
             initialLocations={managedLocations}
             merchants={detail.merchants}
+            organizationId={organizationId}
+          />
+        </div>
+      </section>
+
+      <section className="glass-panel panel-padding mt-5">
+        <SectionHeading
+          eyebrow="Accesso per location"
+          title="Assegnazioni e permessi"
+        />
+        <p className="muted">
+          Limita manager e operatori a una o più location. OWNER e ADMIN
+          mantengono accesso globale al tenant.
+        </p>
+        <div className="mt-5">
+          <LocationAccessManager
+            members={detail.members}
             organizationId={organizationId}
           />
         </div>
