@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { ControlCenterNotification } from '@/components/control-center/notification';
 import { StatusBadge } from '@/components/control-center/status-badge';
 
@@ -22,7 +22,7 @@ export interface MerchantLocation {
   canManageTables: boolean;
 }
 
-interface DiningArea {
+export interface DiningArea {
   id: string;
   code: string;
   name: string;
@@ -30,7 +30,7 @@ interface DiningArea {
   status: 'ACTIVE' | 'INACTIVE';
 }
 
-interface DiningTable {
+export interface DiningTable {
   id: string;
   areaId: string;
   areaCode: string;
@@ -45,6 +45,8 @@ interface DiningTable {
 interface Props {
   initialLocations: MerchantLocation[];
   initialLocationId: string | null;
+  initialAreas: DiningArea[];
+  initialTables: DiningTable[];
 }
 
 async function responseBody(response: Response) {
@@ -54,11 +56,13 @@ async function responseBody(response: Response) {
 export function LocationConsole({
   initialLocations,
   initialLocationId,
+  initialAreas,
+  initialTables,
 }: Props) {
   const [locations, setLocations] = useState(initialLocations);
   const [locationId, setLocationId] = useState(initialLocationId ?? '');
-  const [areas, setAreas] = useState<DiningArea[]>([]);
-  const [tables, setTables] = useState<DiningTable[]>([]);
+  const [areas, setAreas] = useState(initialAreas);
+  const [tables, setTables] = useState(initialTables);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -88,6 +92,7 @@ export function LocationConsole({
       setTables([]);
       return;
     }
+
     const [areasResponse, tablesResponse] = await Promise.all([
       fetch(
         `/api/control-center/merchant/areas?locationId=${encodeURIComponent(targetLocationId)}`,
@@ -96,24 +101,37 @@ export function LocationConsole({
         `/api/control-center/merchant/tables?locationId=${encodeURIComponent(targetLocationId)}`,
       ),
     ]);
+
     if (!areasResponse.ok || !tablesResponse.ok) {
       const failed = !areasResponse.ok ? areasResponse : tablesResponse;
       const body = await responseBody(failed);
       throw new Error(body.message ?? 'Configurazione locale non caricata.');
     }
+
     setAreas((await areasResponse.json()) as DiningArea[]);
     setTables((await tablesResponse.json()) as DiningTable[]);
   }
 
-  useEffect(() => {
-    void refreshLayout(locationId).catch((loadError) => {
+  async function changeLocation(nextLocationId: string) {
+    setLocationId(nextLocationId);
+    setPending(true);
+    setError(null);
+    setMessage(null);
+    setAreas([]);
+    setTables([]);
+
+    try {
+      await refreshLayout(nextLocationId);
+    } catch (loadError) {
       setError(
         loadError instanceof Error
           ? loadError.message
           : 'Configurazione locale non caricata.',
       );
-    });
-  }, [locationId]);
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function saveLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -140,7 +158,9 @@ export function LocationConsole({
         },
       );
       const body = await responseBody(response);
-      if (!response.ok) throw new Error(body.message ?? 'Location non aggiornata.');
+      if (!response.ok) {
+        throw new Error(body.message ?? 'Location non aggiornata.');
+      }
       await refreshLocations();
       setMessage('Dati della location aggiornati.');
     } catch (saveError) {
@@ -177,7 +197,9 @@ export function LocationConsole({
       await refreshLayout();
       setMessage('Sala creata.');
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Sala non creata.');
+      setError(
+        createError instanceof Error ? createError.message : 'Sala non creata.',
+      );
     } finally {
       setPending(false);
     }
@@ -209,7 +231,9 @@ export function LocationConsole({
       setMessage('Tavolo creato.');
     } catch (createError) {
       setError(
-        createError instanceof Error ? createError.message : 'Tavolo non creato.',
+        createError instanceof Error
+          ? createError.message
+          : 'Tavolo non creato.',
       );
     } finally {
       setPending(false);
@@ -222,11 +246,15 @@ export function LocationConsole({
   ) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await mutate(`/api/control-center/merchant/areas/${area.id}`, {
-      code: String(form.get('code') ?? ''),
-      name: String(form.get('name') ?? ''),
-      status: String(form.get('status') ?? 'ACTIVE'),
-    }, 'Sala aggiornata.');
+    await mutate(
+      `/api/control-center/merchant/areas/${area.id}`,
+      {
+        code: String(form.get('code') ?? ''),
+        name: String(form.get('name') ?? ''),
+        status: String(form.get('status') ?? 'ACTIVE'),
+      },
+      'Sala aggiornata.',
+    );
   }
 
   async function updateTable(
@@ -235,13 +263,17 @@ export function LocationConsole({
   ) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await mutate(`/api/control-center/merchant/tables/${table.id}`, {
-      areaId: String(form.get('areaId') ?? ''),
-      code: String(form.get('code') ?? ''),
-      name: String(form.get('name') ?? ''),
-      capacity: Number(form.get('capacity')),
-      status: String(form.get('status') ?? 'ACTIVE'),
-    }, 'Tavolo aggiornato.');
+    await mutate(
+      `/api/control-center/merchant/tables/${table.id}`,
+      {
+        areaId: String(form.get('areaId') ?? ''),
+        code: String(form.get('code') ?? ''),
+        name: String(form.get('name') ?? ''),
+        capacity: Number(form.get('capacity')),
+        status: String(form.get('status') ?? 'ACTIVE'),
+      },
+      'Tavolo aggiornato.',
+    );
   }
 
   async function mutate(
@@ -287,7 +319,8 @@ export function LocationConsole({
 
       <div className="filter-bar">
         <select
-          onChange={(event) => setLocationId(event.target.value)}
+          disabled={pending}
+          onChange={(event) => void changeLocation(event.target.value)}
           value={locationId}
         >
           {locations.map((item) => (
@@ -308,62 +341,302 @@ export function LocationConsole({
               <div>
                 <strong>Dati location</strong>
                 <p className="muted">
-                  {location.kind === 'TEMPORARY' ? 'Temporanea' : 'Permanente'} ·{' '}
-                  {location.city}
+                  {location.kind === 'TEMPORARY'
+                    ? 'Temporanea'
+                    : 'Permanente'}{' '}
+                  · {location.city}
                 </p>
               </div>
               <StatusBadge status={location.lifecycleStatus} />
             </div>
             <form className="form-grid mt-5" onSubmit={saveLocation}>
-              <label className="field"><span>Codice</span><input defaultValue={location.code} disabled={!location.canManageLocation} name="code" required /></label>
-              <label className="field"><span>Nome</span><input defaultValue={location.name} disabled={!location.canManageLocation} name="name" required /></label>
-              <label className="field span-2"><span>Indirizzo</span><input defaultValue={location.addressLine1} disabled={!location.canManageLocation} name="addressLine1" required /></label>
-              <label className="field span-2"><span>Dettagli indirizzo</span><input defaultValue={location.addressLine2 ?? ''} disabled={!location.canManageLocation} name="addressLine2" /></label>
-              <label className="field"><span>CAP</span><input defaultValue={location.postalCode} disabled={!location.canManageLocation} name="postalCode" required /></label>
-              <label className="field"><span>Città</span><input defaultValue={location.city} disabled={!location.canManageLocation} name="city" required /></label>
-              <label className="field"><span>Provincia</span><input defaultValue={location.province ?? ''} disabled={!location.canManageLocation} name="province" /></label>
-              <label className="field"><span>Timezone</span><input defaultValue={location.timezone} disabled={!location.canManageLocation} name="timezone" required /></label>
-              {location.canManageLocation ? <div className="wizard-actions span-2"><span /><button className="button-primary" disabled={pending} type="submit">Salva dati location</button></div> : null}
+              <label className="field">
+                <span>Codice</span>
+                <input
+                  defaultValue={location.code}
+                  disabled={!location.canManageLocation}
+                  key={`${location.id}-code`}
+                  name="code"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Nome</span>
+                <input
+                  defaultValue={location.name}
+                  disabled={!location.canManageLocation}
+                  key={`${location.id}-name`}
+                  name="name"
+                  required
+                />
+              </label>
+              <label className="field span-2">
+                <span>Indirizzo</span>
+                <input
+                  defaultValue={location.addressLine1}
+                  disabled={!location.canManageLocation}
+                  key={`${location.id}-address-1`}
+                  name="addressLine1"
+                  required
+                />
+              </label>
+              <label className="field span-2">
+                <span>Dettagli indirizzo</span>
+                <input
+                  defaultValue={location.addressLine2 ?? ''}
+                  disabled={!location.canManageLocation}
+                  key={`${location.id}-address-2`}
+                  name="addressLine2"
+                />
+              </label>
+              <label className="field">
+                <span>CAP</span>
+                <input
+                  defaultValue={location.postalCode}
+                  disabled={!location.canManageLocation}
+                  key={`${location.id}-postal-code`}
+                  name="postalCode"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Città</span>
+                <input
+                  defaultValue={location.city}
+                  disabled={!location.canManageLocation}
+                  key={`${location.id}-city`}
+                  name="city"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Provincia</span>
+                <input
+                  defaultValue={location.province ?? ''}
+                  disabled={!location.canManageLocation}
+                  key={`${location.id}-province`}
+                  name="province"
+                />
+              </label>
+              <label className="field">
+                <span>Timezone</span>
+                <input
+                  defaultValue={location.timezone}
+                  disabled={!location.canManageLocation}
+                  key={`${location.id}-timezone`}
+                  name="timezone"
+                  required
+                />
+              </label>
+              {location.canManageLocation ? (
+                <div className="wizard-actions span-2">
+                  <span />
+                  <button
+                    className="button-primary"
+                    disabled={pending}
+                    type="submit"
+                  >
+                    Salva dati location
+                  </button>
+                </div>
+              ) : null}
             </form>
           </section>
 
           <section className="glass-panel panel-padding mt-5">
-            <div className="wizard-actions"><strong>Sale</strong><span className="muted">Organizza gli spazi operativi</span></div>
+            <div className="wizard-actions">
+              <strong>Sale</strong>
+              <span className="muted">Organizza gli spazi operativi</span>
+            </div>
             {location.canManageTables ? (
               <form className="form-grid mt-5" onSubmit={createArea}>
-                <label className="field"><span>Codice nuova sala</span><input name="code" placeholder="SALA1" required /></label>
-                <label className="field"><span>Nome nuova sala</span><input name="name" placeholder="Sala principale" required /></label>
-                <div className="wizard-actions span-2"><span /><button className="button-primary" disabled={pending} type="submit">Aggiungi sala</button></div>
+                <label className="field">
+                  <span>Codice nuova sala</span>
+                  <input name="code" placeholder="SALA1" required />
+                </label>
+                <label className="field">
+                  <span>Nome nuova sala</span>
+                  <input
+                    name="name"
+                    placeholder="Sala principale"
+                    required
+                  />
+                </label>
+                <div className="wizard-actions span-2">
+                  <span />
+                  <button
+                    className="button-primary"
+                    disabled={pending}
+                    type="submit"
+                  >
+                    Aggiungi sala
+                  </button>
+                </div>
               </form>
             ) : null}
             <div className="data-list mt-5">
               {areas.map((area) => (
-                <form className="data-row" key={area.id} onSubmit={(event) => void updateArea(event, area)}>
-                  <div><input defaultValue={area.name} disabled={!location.canManageTables} name="name" required /><small>{area.code}</small></div>
-                  <div><input defaultValue={area.code} disabled={!location.canManageTables} name="code" required /><select defaultValue={area.status} disabled={!location.canManageTables} name="status"><option value="ACTIVE">Attiva</option><option value="INACTIVE">Inattiva</option></select></div>
-                  {location.canManageTables ? <button className="button-secondary" disabled={pending} type="submit">Salva</button> : <StatusBadge status={area.status} />}
+                <form
+                  className="data-row"
+                  key={area.id}
+                  onSubmit={(event) => void updateArea(event, area)}
+                >
+                  <div>
+                    <input
+                      defaultValue={area.name}
+                      disabled={!location.canManageTables}
+                      name="name"
+                      required
+                    />
+                    <small>{area.code}</small>
+                  </div>
+                  <div>
+                    <input
+                      defaultValue={area.code}
+                      disabled={!location.canManageTables}
+                      name="code"
+                      required
+                    />
+                    <select
+                      defaultValue={area.status}
+                      disabled={!location.canManageTables}
+                      name="status"
+                    >
+                      <option value="ACTIVE">Attiva</option>
+                      <option value="INACTIVE">Inattiva</option>
+                    </select>
+                  </div>
+                  {location.canManageTables ? (
+                    <button
+                      className="button-secondary"
+                      disabled={pending}
+                      type="submit"
+                    >
+                      Salva
+                    </button>
+                  ) : (
+                    <StatusBadge status={area.status} />
+                  )}
                 </form>
               ))}
             </div>
           </section>
 
           <section className="glass-panel panel-padding mt-5">
-            <div className="wizard-actions"><strong>Tavoli e capienze</strong><span className="muted">Capienza totale attiva: {totalCapacity}</span></div>
+            <div className="wizard-actions">
+              <strong>Tavoli e capienze</strong>
+              <span className="muted">
+                Capienza totale attiva: {totalCapacity}
+              </span>
+            </div>
             {location.canManageTables && areas.length ? (
               <form className="form-grid mt-5" onSubmit={createTable}>
-                <label className="field"><span>Sala</span><select name="areaId" required>{areas.filter((area) => area.status === 'ACTIVE').map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label>
-                <label className="field"><span>Codice</span><input name="code" placeholder="T1" required /></label>
-                <label className="field"><span>Nome</span><input name="name" placeholder="Tavolo 1" required /></label>
-                <label className="field"><span>Posti</span><input max={100} min={1} name="capacity" required type="number" /></label>
-                <div className="wizard-actions span-2"><span /><button className="button-primary" disabled={pending} type="submit">Aggiungi tavolo</button></div>
+                <label className="field">
+                  <span>Sala</span>
+                  <select name="areaId" required>
+                    {areas
+                      .filter((area) => area.status === 'ACTIVE')
+                      .map((area) => (
+                        <option key={area.id} value={area.id}>
+                          {area.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Codice</span>
+                  <input name="code" placeholder="T1" required />
+                </label>
+                <label className="field">
+                  <span>Nome</span>
+                  <input name="name" placeholder="Tavolo 1" required />
+                </label>
+                <label className="field">
+                  <span>Posti</span>
+                  <input
+                    max={100}
+                    min={1}
+                    name="capacity"
+                    required
+                    type="number"
+                  />
+                </label>
+                <div className="wizard-actions span-2">
+                  <span />
+                  <button
+                    className="button-primary"
+                    disabled={pending}
+                    type="submit"
+                  >
+                    Aggiungi tavolo
+                  </button>
+                </div>
               </form>
             ) : null}
             <div className="data-list mt-5">
               {tables.map((table) => (
-                <form className="data-row" key={table.id} onSubmit={(event) => void updateTable(event, table)}>
-                  <div><input defaultValue={table.name} disabled={!location.canManageTables} name="name" required /><small>{table.code} · {table.areaName}</small></div>
-                  <div><select defaultValue={table.areaId} disabled={!location.canManageTables} name="areaId">{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select><input defaultValue={table.code} disabled={!location.canManageTables} name="code" required /></div>
-                  <div><input defaultValue={table.capacity} disabled={!location.canManageTables} max={100} min={1} name="capacity" type="number" /><select defaultValue={table.status} disabled={!location.canManageTables} name="status"><option value="ACTIVE">Attivo</option><option value="INACTIVE">Inattivo</option></select>{location.canManageTables ? <button className="button-secondary" disabled={pending} type="submit">Salva</button> : null}</div>
+                <form
+                  className="data-row"
+                  key={table.id}
+                  onSubmit={(event) => void updateTable(event, table)}
+                >
+                  <div>
+                    <input
+                      defaultValue={table.name}
+                      disabled={!location.canManageTables}
+                      name="name"
+                      required
+                    />
+                    <small>
+                      {table.code} · {table.areaName}
+                    </small>
+                  </div>
+                  <div>
+                    <select
+                      defaultValue={table.areaId}
+                      disabled={!location.canManageTables}
+                      name="areaId"
+                    >
+                      {areas.map((area) => (
+                        <option key={area.id} value={area.id}>
+                          {area.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      defaultValue={table.code}
+                      disabled={!location.canManageTables}
+                      name="code"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <input
+                      defaultValue={table.capacity}
+                      disabled={!location.canManageTables}
+                      max={100}
+                      min={1}
+                      name="capacity"
+                      type="number"
+                    />
+                    <select
+                      defaultValue={table.status}
+                      disabled={!location.canManageTables}
+                      name="status"
+                    >
+                      <option value="ACTIVE">Attivo</option>
+                      <option value="INACTIVE">Inattivo</option>
+                    </select>
+                    {location.canManageTables ? (
+                      <button
+                        className="button-secondary"
+                        disabled={pending}
+                        type="submit"
+                      >
+                        Salva
+                      </button>
+                    ) : null}
+                  </div>
                 </form>
               ))}
             </div>
