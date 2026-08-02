@@ -31,7 +31,7 @@ export class LocationsController {
     return this.locationsService.get(auth, locationId);
   }
 
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @Roles('OWNER', 'ADMIN')
   @Post()
   create(@CurrentAuth() auth: AuthContext, @Body() dto: CreateLocationDto) {
     return this.locationsService.create(auth, dto);
