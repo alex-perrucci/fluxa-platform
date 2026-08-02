@@ -11,6 +11,7 @@ import {
   type NormalizedBookingRules,
 } from './event-policy';
 import { EventsAccessService } from './events-access.service';
+import { EventsService } from './events.service';
 
 interface EventRow extends QueryResultRow {
   id: string;
@@ -38,6 +39,7 @@ export class EventInventoryPublishingService {
   constructor(
     private readonly database: DatabaseService,
     private readonly access: EventsAccessService,
+    private readonly events: EventsService,
   ) {}
 
   async publish(auth: AuthContext, eventId: string) {
@@ -103,7 +105,7 @@ export class EventInventoryPublishingService {
       );
     });
 
-    return { eventId, published: true };
+    return this.events.get(auth, eventId);
   }
 
   private async inventoryMetrics(
