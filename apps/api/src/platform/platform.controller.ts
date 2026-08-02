@@ -15,6 +15,7 @@ import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { PlatformAdminOnly } from '../auth/decorators/platform-admin.decorator';
 import { TenantOptional } from '../auth/decorators/tenant-optional.decorator';
+import { ReplacePlatformLocationAccessDto } from './dto/platform-location-access.dto';
 import {
   CreatePlatformLocationDto,
   PlatformLocationLifecycleDto,
@@ -22,6 +23,7 @@ import {
 } from './dto/platform-location.dto';
 import { PlatformOnboardingDto } from './dto/platform-onboarding.dto';
 import { PlatformTableLayoutDto } from './dto/platform-table-layout.dto';
+import { PlatformLocationAccessService } from './platform-location-access.service';
 import { PlatformLocationsService } from './platform-locations.service';
 import { PlatformService } from './platform.service';
 import { PlatformTableLayoutService } from './platform-table-layout.service';
@@ -34,6 +36,7 @@ export class PlatformController {
     private readonly platform: PlatformService,
     private readonly tableLayouts: PlatformTableLayoutService,
     private readonly locations: PlatformLocationsService,
+    private readonly locationAccess: PlatformLocationAccessService,
   ) {}
 
   @Get('overview')
@@ -102,6 +105,29 @@ export class PlatformController {
     @Param('locationId', ParseUUIDPipe) locationId: string,
   ) {
     return this.locations.archive(auth, organizationId, locationId);
+  }
+
+  @Get('organizations/:organizationId/members/:membershipId/location-access')
+  memberLocationAccess(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+  ) {
+    return this.locationAccess.list(organizationId, membershipId);
+  }
+
+  @Put('organizations/:organizationId/members/:membershipId/location-access')
+  replaceMemberLocationAccess(
+    @CurrentAuth() auth: AuthContext,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Body() dto: ReplacePlatformLocationAccessDto,
+  ) {
+    return this.locationAccess.replace(
+      auth,
+      organizationId,
+      membershipId,
+      dto,
+    );
   }
 
   @Get('organizations/:organizationId/table-layout')
