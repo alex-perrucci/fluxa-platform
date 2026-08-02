@@ -15,16 +15,21 @@ import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CancelEventDto } from './dto/cancel-event.dto';
+import { CreateEventTableGroupDto } from './dto/create-event-table-group.dto';
 import { CreateEventDto } from './dto/create-event.dto';
 import { EventBookingRulesDto } from './dto/event-booking-rules.dto';
 import { EventListQueryDto } from './dto/event-list-query.dto';
 import { ReplaceEventTablesDto } from './dto/replace-event-tables.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { EventTableGroupsService } from './event-table-groups.service';
 import { EventsService } from './events.service';
 
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly tableGroups: EventTableGroupsService,
+  ) {}
 
   @Get()
   list(@CurrentAuth() auth: AuthContext, @Query() query: EventListQueryDto) {
@@ -37,6 +42,35 @@ export class EventsController {
     @Param('eventId', ParseUUIDPipe) eventId: string,
   ) {
     return this.eventsService.get(auth, eventId);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @Get(':eventId/inventory')
+  inventory(
+    @CurrentAuth() auth: AuthContext,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+  ) {
+    return this.tableGroups.get(auth, eventId);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @Post(':eventId/table-groups')
+  mergeTables(
+    @CurrentAuth() auth: AuthContext,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Body() dto: CreateEventTableGroupDto,
+  ) {
+    return this.tableGroups.merge(auth, eventId, dto);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @Delete(':eventId/table-groups/:groupId')
+  splitTables(
+    @CurrentAuth() auth: AuthContext,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.tableGroups.split(auth, eventId, groupId);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER')
