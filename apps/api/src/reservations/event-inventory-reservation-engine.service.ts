@@ -126,17 +126,13 @@ export class EventInventoryReservationEngineService extends ReservationEngineSer
       partySize,
       available: availableUnitCount > 0 && remainingCapacity >= partySize,
       availableTableCount: availableUnitCount,
-      smallestTableCapacity:
-        availability.rows[0]?.smallestUnitCapacity ?? null,
+      smallestTableCapacity: availability.rows[0]?.smallestUnitCapacity ?? null,
       remainingCapacity,
       holdMinutes: rules.holdMinutes,
     };
   }
 
-  override async createHold(
-    slugInput: string,
-    dto: CreateReservationHoldDto,
-  ) {
+  override async createHold(slugInput: string, dto: CreateReservationHoldDto) {
     const slug = slugInput.trim().toLowerCase();
     const publicTokenHash = hashPublicToken(dto.holdToken);
     const idempotencyKey = dto.idempotencyKey.trim();
