@@ -110,7 +110,8 @@ export class PlatformLocationsService {
     ) {
       throw new BadRequestException({
         code: 'SOURCE_LOCATION_REQUIRED',
-        message: 'Seleziona una location sorgente per copiare le configurazioni.',
+        message:
+          'Seleziona una location sorgente per copiare le configurazioni.',
       });
     }
 
@@ -171,7 +172,12 @@ export class PlatformLocationsService {
         );
 
         if (dto.sourceLocationId && copy.layout) {
-          await this.copyLayout(client, organizationId, dto.sourceLocationId, id);
+          await this.copyLayout(
+            client,
+            organizationId,
+            dto.sourceLocationId,
+            id,
+          );
         }
         if (dto.sourceLocationId && copy.catalog) {
           await client.query(
@@ -281,9 +287,16 @@ export class PlatformLocationsService {
             activeUntil ? new Date(activeUntil) : null,
           ],
         );
-        await this.audit(client, organizationId, auth.userId, locationId, 'updated', {
-          kind,
-        });
+        await this.audit(
+          client,
+          organizationId,
+          auth.userId,
+          locationId,
+          'updated',
+          {
+            kind,
+          },
+        );
       });
       return this.get(organizationId, locationId);
     } catch (error) {
@@ -351,7 +364,14 @@ export class PlatformLocationsService {
          WHERE location_id=$1 AND organization_id=$2`,
         [locationId, organizationId, auth.userId],
       );
-      await this.audit(client, organizationId, auth.userId, locationId, 'archived', {});
+      await this.audit(
+        client,
+        organizationId,
+        auth.userId,
+        locationId,
+        'archived',
+        {},
+      );
     });
     return this.get(organizationId, locationId);
   }
@@ -499,7 +519,11 @@ export class PlatformLocationsService {
         message: 'Una location temporanea richiede data di inizio e fine.',
       });
     }
-    if (activeFrom && activeUntil && new Date(activeUntil) <= new Date(activeFrom)) {
+    if (
+      activeFrom &&
+      activeUntil &&
+      new Date(activeUntil) <= new Date(activeFrom)
+    ) {
       throw new BadRequestException({
         code: 'INVALID_LOCATION_WINDOW',
         message: 'La fine della location deve essere successiva all’inizio.',
