@@ -60,7 +60,9 @@ export function resizeElement(
 export function rotateElement(
   element: FloorPlanElement,
   pointer: Point,
+  gridSize?: number,
 ): FloorPlanElement {
+  void gridSize;
   const centerX = element.x + element.width / 2;
   const centerY = element.y + element.height / 2;
   const radians = Math.atan2(pointer.y - centerY, pointer.x - centerX);
