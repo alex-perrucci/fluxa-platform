@@ -21,6 +21,7 @@ import { EventBookingRulesDto } from './dto/event-booking-rules.dto';
 import { EventListQueryDto } from './dto/event-list-query.dto';
 import { ReplaceEventTablesDto } from './dto/replace-event-tables.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { EventInventoryPublishingService } from './event-inventory-publishing.service';
 import { EventTableGroupsService } from './event-table-groups.service';
 import { EventsService } from './events.service';
 
@@ -29,6 +30,7 @@ export class EventsController {
   constructor(
     private readonly eventsService: EventsService,
     private readonly tableGroups: EventTableGroupsService,
+    private readonly inventoryPublishing: EventInventoryPublishingService,
   ) {}
 
   @Get()
@@ -115,7 +117,7 @@ export class EventsController {
     @CurrentAuth() auth: AuthContext,
     @Param('eventId', ParseUUIDPipe) eventId: string,
   ) {
-    return this.eventsService.publish(auth, eventId);
+    return this.inventoryPublishing.publish(auth, eventId);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER')
