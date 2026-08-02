@@ -1,6 +1,8 @@
 import { EmptyState, SectionHeading } from '@/components/control-center/shell';
 import {
   LocationConsole,
+  type DiningArea,
+  type DiningTable,
   type MerchantLocation,
 } from '@/components/merchant/location-console';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
@@ -30,7 +32,7 @@ export default async function MerchantLocationPage({
   const initialLocationId =
     requested?.id ?? defaultLocation?.id ?? locations[0]?.id ?? null;
 
-  if (!locations.length) {
+  if (!locations.length || !initialLocationId) {
     return (
       <section className="glass-panel">
         <EmptyState
@@ -40,6 +42,15 @@ export default async function MerchantLocationPage({
       </section>
     );
   }
+
+  const [initialAreas, initialTables] = await Promise.all([
+    authenticatedFluxaFetch<DiningArea[]>(
+      `/dining-areas?locationId=${encodeURIComponent(initialLocationId)}`,
+    ),
+    authenticatedFluxaFetch<DiningTable[]>(
+      `/dining-tables?locationId=${encodeURIComponent(initialLocationId)}`,
+    ),
+  ]);
 
   return (
     <>
@@ -55,8 +66,10 @@ export default async function MerchantLocationPage({
       </section>
       <div className="mt-5">
         <LocationConsole
+          initialAreas={initialAreas}
           initialLocationId={initialLocationId}
           initialLocations={locations}
+          initialTables={initialTables}
         />
       </div>
     </>
