@@ -122,12 +122,7 @@ export class PlatformController {
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Body() dto: ReplacePlatformLocationAccessDto,
   ) {
-    return this.locationAccess.replace(
-      auth,
-      organizationId,
-      membershipId,
-      dto,
-    );
+    return this.locationAccess.replace(auth, organizationId, membershipId, dto);
   }
 
   @Get('organizations/:organizationId/table-layout')
