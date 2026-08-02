@@ -2,89 +2,18 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1784422448182,
-      "tag": "0000_parched_captain_flint",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1784537427089,
-      "tag": "0001_block_02_identity",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1784573632021,
-      "tag": "0002_real_ogun",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1784576326624,
-      "tag": "0003_tricky_stryfe",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1784578462626,
-      "tag": "0004_warm_gwen_stacy",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1784583046812,
-      "tag": "0005_busy_vanisher",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1784584880911,
-      "tag": "0006_previous_shaman",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1784587964115,
-      "tag": "0007_bent_golden_guardian",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1784885703521,
-      "tag": "0008_member_default_location",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1785105096352,
-      "tag": "0009_conscious_baron_strucker",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1785109619645,
-      "tag": "0010_flowery_infant_terrible",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1785629460000,
-      "tag": "0011_multi_location_lifecycle",
-      "breakpoints": true
-    }
+    { "idx": 0, "version": "7", "when": 1784422448182, "tag": "0000_parched_captain_flint", "breakpoints": true },
+    { "idx": 1, "version": "7", "when": 1784537427089, "tag": "0001_block_02_identity", "breakpoints": true },
+    { "idx": 2, "version": "7", "when": 1784573632021, "tag": "0002_real_ogun", "breakpoints": true },
+    { "idx": 3, "version": "7", "when": 1784576326624, "tag": "0003_tricky_stryfe", "breakpoints": true },
+    { "idx": 4, "version": "7", "when": 1784578462626, "tag": "0004_warm_gwen_stacy", "breakpoints": true },
+    { "idx": 5, "version": "7", "when": 1784583046812, "tag": "0005_busy_vanisher", "breakpoints": true },
+    { "idx": 6, "version": "7", "when": 1784584880911, "tag": "0006_previous_shaman", "breakpoints": true },
+    { "idx": 7, "version": "7", "when": 1784587964115, "tag": "0007_bent_golden_guardian", "breakpoints": true },
+    { "idx": 8, "version": "7", "when": 1784885703521, "tag": "0008_member_default_location", "breakpoints": true },
+    { "idx": 9, "version": "7", "when": 1785105096352, "tag": "0009_conscious_baron_strucker", "breakpoints": true },
+    { "idx": 10, "version": "7", "when": 1785109619645, "tag": "0010_flowery_infant_terrible", "breakpoints": true },
+    { "idx": 11, "version": "7", "when": 1785629460000, "tag": "0011_multi_location_lifecycle", "breakpoints": true },
+    { "idx": 12, "version": "7", "when": 1785686340000, "tag": "0012_location_access_scope", "breakpoints": true }
   ]
 }
