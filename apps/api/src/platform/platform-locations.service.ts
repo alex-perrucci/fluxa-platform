@@ -344,11 +344,7 @@ export class PlatformLocationsService {
     return this.get(organizationId, locationId);
   }
 
-  async archive(
-    auth: AuthContext,
-    organizationId: string,
-    locationId: string,
-  ) {
+  async archive(auth: AuthContext, organizationId: string, locationId: string) {
     const current = await this.get(organizationId, locationId);
     if (current.lifecycleStatus === 'ARCHIVED') return current;
     await this.assertCanStop(organizationId, locationId);
