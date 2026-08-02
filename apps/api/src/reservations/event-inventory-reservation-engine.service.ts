@@ -56,12 +56,13 @@ interface FeeRuleRow extends QueryResultRow {
 }
 
 @Injectable()
-export class EventInventoryReservationEngineService extends ReservationEngineService {
-  constructor(private readonly eventInventoryDatabase: DatabaseService) {
-    super(eventInventoryDatabase);
-  }
+export class EventInventoryReservationEngineService {
+  constructor(
+    private readonly eventInventoryDatabase: DatabaseService,
+    private readonly baseEngine: ReservationEngineService,
+  ) {}
 
-  override async availability(slugInput: string, partySize: number) {
+  async availability(slugInput: string, partySize: number) {
     const slug = slugInput.trim().toLowerCase();
     const event = await this.loadPublicEvent(
       this.eventInventoryDatabase.pool,
@@ -132,7 +133,7 @@ export class EventInventoryReservationEngineService extends ReservationEngineSer
     };
   }
 
-  override async createHold(slugInput: string, dto: CreateReservationHoldDto) {
+  async createHold(slugInput: string, dto: CreateReservationHoldDto) {
     const slug = slugInput.trim().toLowerCase();
     const publicTokenHash = hashPublicToken(dto.holdToken);
     const idempotencyKey = dto.idempotencyKey.trim();
@@ -345,6 +346,14 @@ export class EventInventoryReservationEngineService extends ReservationEngineSer
     } catch (error) {
       this.rethrowInventoryConstraint(error);
     }
+  }
+
+  getHold(holdToken: string) {
+    return this.baseEngine.getHold(holdToken);
+  }
+
+  cancelHold(holdToken: string) {
+    return this.baseEngine.cancelHold(holdToken);
   }
 
   private async physicalTableIds(
