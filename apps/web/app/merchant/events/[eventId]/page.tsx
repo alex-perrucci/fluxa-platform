@@ -1,8 +1,12 @@
 // PHASE_8_TRUE_CONTROL_CENTER
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
-import { EventActions } from '@/components/merchant/event-actions';
 import { StatusBadge } from '@/components/control-center/status-badge';
+import { EventActions } from '@/components/merchant/event-actions';
+import {
+  EventTableGroupsManager,
+  type EventInventoryView,
+} from '@/components/merchant/event-table-groups-manager';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import type { EventDetail } from '@/lib/control-center/types';
 
@@ -26,9 +30,12 @@ export default async function EventDetailPage({
   params: Promise<{ eventId: string }>;
 }) {
   const { eventId } = await params;
-  const event = await authenticatedFluxaFetch<EventDetail>(
-    `/events/${eventId}`,
-  );
+  const [event, inventory] = await Promise.all([
+    authenticatedFluxaFetch<EventDetail>(`/events/${eventId}`),
+    authenticatedFluxaFetch<EventInventoryView>(
+      `/events/${eventId}/inventory`,
+    ),
+  ]);
   const cover = event.coverImageUrl
     ? `url("${event.coverImageUrl.replaceAll('"', '%22')}")`
     : 'none';
@@ -72,21 +79,22 @@ export default async function EventDetailPage({
         </article>
         <article>
           <span>Inventario</span>
-          <strong>{event.tables.length} tavoli</strong>
+          <strong>{inventory.metrics.unitCount} unità</strong>
         </article>
       </div>
 
       <div className="dashboard-grid">
         <section className="glass-panel panel-padding">
           <p className="eyebrow">Table inventory</p>
-          <h2>Tavoli abilitati</h2>
+          <h2>Unità prenotabili</h2>
           <div className="table-selector mt-5">
-            {event.tables.map((table) => (
-              <div className="selected" key={table.diningTableId}>
-                <span>{table.tableCode}</span>
-                <strong>{table.tableName}</strong>
+            {inventory.units.map((unit) => (
+              <div className="selected" key={unit.inventoryId}>
+                <span>{unit.code}</span>
+                <strong>{unit.name}</strong>
                 <small>
-                  {table.tableCapacity} posti · {table.areaName}
+                  {unit.capacity} posti ·{' '}
+                  {unit.kind === 'GROUP' ? 'gruppo' : unit.areaName}
                 </small>
               </div>
             ))}
@@ -127,6 +135,13 @@ export default async function EventDetailPage({
           ) : null}
         </aside>
       </div>
+
+      <section className="mt-5">
+        <EventTableGroupsManager
+          eventId={event.id}
+          initialInventory={inventory}
+        />
+      </section>
     </>
   );
 }
