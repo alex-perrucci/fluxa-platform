@@ -4,11 +4,7 @@ export const FLOOR_PLAN_SCHEMA_VERSION = 1;
 export const FLOOR_PLAN_MAX_ELEMENTS = 500;
 
 export type FloorPlanElementType =
-  | 'WALL'
-  | 'RECTANGLE'
-  | 'ELLIPSE'
-  | 'TEXT'
-  | 'TABLE';
+  'WALL' | 'RECTANGLE' | 'ELLIPSE' | 'TEXT' | 'TABLE';
 
 export interface FloorPlanElement {
   id: string;
@@ -42,9 +38,7 @@ export function emptyFloorPlanDocument(): FloorPlanDocument {
   };
 }
 
-export function validateFloorPlanDocument(
-  value: unknown,
-): FloorPlanDocument {
+export function validateFloorPlanDocument(value: unknown): FloorPlanDocument {
   if (!isRecord(value)) {
     invalid('Il documento della piantina non è valido.');
   }
@@ -70,7 +64,9 @@ export function validateFloorPlanDocument(
   }
 
   if (value.elements.length > FLOOR_PLAN_MAX_ELEMENTS) {
-    invalid(`La piantina può contenere al massimo ${FLOOR_PLAN_MAX_ELEMENTS} elementi.`);
+    invalid(
+      `La piantina può contenere al massimo ${FLOOR_PLAN_MAX_ELEMENTS} elementi.`,
+    );
   }
 
   const ids = new Set<string>();
@@ -148,12 +144,7 @@ function validateElement(
     invalid(`Le dimensioni dell'elemento ${index + 1} non sono valide.`);
   }
 
-  if (
-    x < -width ||
-    y < -height ||
-    x > canvasWidth ||
-    y > canvasHeight
-  ) {
+  if (x < -width || y < -height || x > canvasWidth || y > canvasHeight) {
     invalid(`L'elemento ${index + 1} è fuori dalla tela.`);
   }
 
