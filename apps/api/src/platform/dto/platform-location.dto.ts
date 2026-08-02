@@ -1,6 +1,5 @@
 import { Type } from 'class-transformer';
 import {
-  IsArray,
   IsBoolean,
   IsIn,
   IsISO8601,
@@ -11,6 +10,7 @@ import {
   Matches,
   MaxLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 
 export class PlatformLocationCopyOptionsDto {
@@ -88,6 +88,7 @@ export class CreatePlatformLocationDto {
   sourceLocationId?: string;
 
   @IsOptional()
+  @ValidateNested()
   @Type(() => PlatformLocationCopyOptionsDto)
   copy?: PlatformLocationCopyOptionsDto;
 }
