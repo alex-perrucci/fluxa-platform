@@ -1,5 +1,6 @@
 // PHASE_6_STRIPE_RESERVATION_PAYMENTS
 import { Module } from '@nestjs/common';
+import { EventInventoryReservationEngineService } from './event-inventory-reservation-engine.service';
 import {
   PublicEventReservationsController,
   PublicReservationHoldsController,
@@ -23,11 +24,13 @@ import { ReservationStripeService } from './reservation-stripe.service';
   ],
   providers: [
     ReservationEngineService,
+    EventInventoryReservationEngineService,
     ReservationConversionService,
     ReservationStripeService,
   ],
   exports: [
     ReservationEngineService,
+    EventInventoryReservationEngineService,
     ReservationConversionService,
     ReservationStripeService,
   ],
