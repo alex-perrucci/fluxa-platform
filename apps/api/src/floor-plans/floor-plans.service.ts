@@ -8,7 +8,6 @@ import type { PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import { LocationAccessService } from '../auth/location-access.service';
 import type { AuthContext } from '../auth/auth.types';
-import { assertOrganizationScope } from '../auth/tenant-scope';
 import type { PublishFloorPlanDto } from './dto/publish-floor-plan.dto';
 import type { SaveFloorPlanDraftDto } from './dto/save-floor-plan-draft.dto';
 import {
@@ -126,12 +125,7 @@ export class FloorPlansService {
     locationId: string,
     dto: SaveFloorPlanDraftDto,
   ) {
-    return this.saveDraftScoped(
-      organizationId,
-      locationId,
-      auth.userId,
-      dto,
-    );
+    return this.saveDraftScoped(organizationId, locationId, auth.userId, dto);
   }
 
   async publishForPlatform(
@@ -140,12 +134,7 @@ export class FloorPlansService {
     locationId: string,
     dto: PublishFloorPlanDto,
   ) {
-    return this.publishScoped(
-      organizationId,
-      locationId,
-      auth.userId,
-      dto,
-    );
+    return this.publishScoped(organizationId, locationId, auth.userId, dto);
   }
 
   private async getScoped(
@@ -155,47 +144,52 @@ export class FloorPlansService {
   ) {
     await this.ensureFloorPlan(organizationId, locationId, actorUserId);
 
-    const [planResult, draftResult, publishedResult, versionsResult, tablesResult] =
-      await Promise.all([
-        this.database.pool.query<FloorPlanRow>(
-          `${this.planSelect()}
-           WHERE fp.organization_id=$1 AND fp.location_id=$2
-           LIMIT 1`,
-          [organizationId, locationId],
-        ),
-        this.database.pool.query<FloorPlanVersionRow>(
-          `${this.versionSelect()}
-           WHERE fpv.organization_id=$1 AND fpv.location_id=$2
-             AND fpv.status='DRAFT'
-           LIMIT 1`,
-          [organizationId, locationId],
-        ),
-        this.database.pool.query<FloorPlanVersionRow>(
-          `${this.versionSelect()}
-           JOIN floor_plans fp ON fp.published_version_id=fpv.id
-           WHERE fp.organization_id=$1 AND fp.location_id=$2
-           LIMIT 1`,
-          [organizationId, locationId],
-        ),
-        this.database.pool.query<FloorPlanVersionSummaryRow>(
-          `SELECT id, version_number AS "versionNumber", revision, status,
-             published_at AS "publishedAt", created_at AS "createdAt",
-             updated_at AS "updatedAt"
-           FROM floor_plan_versions
-           WHERE organization_id=$1 AND location_id=$2
-           ORDER BY version_number DESC`,
-          [organizationId, locationId],
-        ),
-        this.database.pool.query<FloorPlanTableRow>(
-          `SELECT t.id, t.area_id AS "areaId", a.name AS "areaName",
-             t.code, t.name, t.capacity, t.status
-           FROM dining_tables t
-           JOIN dining_areas a ON a.id=t.area_id
-           WHERE t.organization_id=$1 AND t.location_id=$2
-           ORDER BY a.sort_order, t.sort_order, t.name`,
-          [organizationId, locationId],
-        ),
-      ]);
+    const [
+      planResult,
+      draftResult,
+      publishedResult,
+      versionsResult,
+      tablesResult,
+    ] = await Promise.all([
+      this.database.pool.query<FloorPlanRow>(
+        `${this.planSelect()}
+         WHERE fp.organization_id=$1 AND fp.location_id=$2
+         LIMIT 1`,
+        [organizationId, locationId],
+      ),
+      this.database.pool.query<FloorPlanVersionRow>(
+        `${this.versionSelect()}
+         WHERE fpv.organization_id=$1 AND fpv.location_id=$2
+           AND fpv.status='DRAFT'
+         LIMIT 1`,
+        [organizationId, locationId],
+      ),
+      this.database.pool.query<FloorPlanVersionRow>(
+        `${this.versionSelect()}
+         JOIN floor_plans fp ON fp.published_version_id=fpv.id
+         WHERE fp.organization_id=$1 AND fp.location_id=$2
+         LIMIT 1`,
+        [organizationId, locationId],
+      ),
+      this.database.pool.query<FloorPlanVersionSummaryRow>(
+        `SELECT id, version_number AS "versionNumber", revision, status,
+           published_at AS "publishedAt", created_at AS "createdAt",
+           updated_at AS "updatedAt"
+         FROM floor_plan_versions
+         WHERE organization_id=$1 AND location_id=$2
+         ORDER BY version_number DESC`,
+        [organizationId, locationId],
+      ),
+      this.database.pool.query<FloorPlanTableRow>(
+        `SELECT t.id, t.area_id AS "areaId", a.name AS "areaName",
+           t.code, t.name, t.capacity, t.status
+         FROM dining_tables t
+         JOIN dining_areas a ON a.id=t.area_id
+         WHERE t.organization_id=$1 AND t.location_id=$2
+         ORDER BY a.sort_order, t.sort_order, t.name`,
+        [organizationId, locationId],
+      ),
+    ]);
 
     const plan = planResult.rows[0];
     const draft = draftResult.rows[0];
