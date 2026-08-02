@@ -1,6 +1,10 @@
 // PHASE_8_TRUE_CONTROL_CENTER
 import { MetricCard, SectionHeading } from '@/components/control-center/shell';
 import { StatusBadge } from '@/components/control-center/status-badge';
+import {
+  MultiLocationManager,
+  type PlatformManagedLocation,
+} from '@/components/platform/multi-location-manager';
 import { PlatformTableLayoutEditor } from '@/components/platform/table-layout-editor';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import type {
@@ -21,15 +25,34 @@ export default async function OrganizationDetailPage({
   params: Promise<{ organizationId: string }>;
 }) {
   const { organizationId } = await params;
-  const detail = await authenticatedFluxaFetch<PlatformOrganizationDetail>(
-    `/platform/organizations/${organizationId}`,
+  const [detail, managedLocations] = await Promise.all([
+    authenticatedFluxaFetch<PlatformOrganizationDetail>(
+      `/platform/organizations/${organizationId}`,
+    ),
+    authenticatedFluxaFetch<PlatformManagedLocation[]>(
+      `/platform/organizations/${organizationId}/locations`,
+    ),
+  ]);
+  const firstActiveLocation = managedLocations.find(
+    (location) => location.lifecycleStatus === 'ACTIVE',
   );
-  const firstLocation = detail.locations[0];
-  const initialLayout = firstLocation
+  const initialLayout = firstActiveLocation
     ? await authenticatedFluxaFetch<PlatformTableLayout>(
-        `/platform/organizations/${organizationId}/table-layout?locationId=${encodeURIComponent(firstLocation.id)}`,
+        `/platform/organizations/${organizationId}/table-layout?locationId=${encodeURIComponent(firstActiveLocation.id)}`,
       )
     : null;
+  const layoutLocations = managedLocations
+    .filter((location) => location.lifecycleStatus !== 'ARCHIVED')
+    .map((location) => ({
+      id: location.id,
+      merchantId: location.merchantId,
+      code: location.code,
+      name: location.name,
+      city: location.city,
+      province: location.province,
+      timezone: location.timezone,
+      status: location.status,
+    }));
 
   return (
     <>
@@ -47,7 +70,7 @@ export default async function OrganizationDetailPage({
 
       <div className="metrics-grid mt-5">
         <MetricCard
-          hint={`${detail.metrics.locations} sedi`}
+          hint={`${managedLocations.length} location`}
           icon="building"
           label="Merchant"
           value={detail.metrics.merchants}
@@ -77,62 +100,58 @@ export default async function OrganizationDetailPage({
 
       <section className="glass-panel panel-padding mt-5">
         <SectionHeading
-          eyebrow="Layout operativo"
-          title="Sale, tavoli e capienza"
+          eyebrow="Multi-location"
+          title="Location permanenti e temporanee"
         />
         <p className="muted">
-          Modifica il numero dei tavoli e i posti disponibili per ciascuna sede.
+          Crea nuove sedi sotto lo stesso merchant fiscale, copia le
+          configurazioni operative e gestisci disattivazione o archiviazione.
         </p>
         <div className="mt-5">
-          <PlatformTableLayoutEditor
-            initialLayout={initialLayout}
-            locations={detail.locations}
+          <MultiLocationManager
+            initialLocations={managedLocations}
+            merchants={detail.merchants}
             organizationId={organizationId}
           />
         </div>
       </section>
 
-      <div className="dashboard-grid">
-        <section className="glass-panel panel-padding">
-          <SectionHeading eyebrow="Locations" title="Sedi operative" />
-          <div className="data-list">
-            {detail.locations.map((location) => (
-              <div className="data-row" key={location.id}>
-                <div>
-                  <strong>{location.name}</strong>
-                  <small>
-                    {location.code} · {location.city}
-                  </small>
-                </div>
-                <div>
-                  <span>{location.timezone}</span>
-                  <small>{location.province ?? '—'}</small>
-                </div>
-                <StatusBadge status={location.status} />
-              </div>
-            ))}
-          </div>
-        </section>
+      <section className="glass-panel panel-padding mt-5">
+        <SectionHeading
+          eyebrow="Layout operativo"
+          title="Sale, tavoli e capienza"
+        />
+        <p className="muted">
+          Modifica il numero dei tavoli e i posti disponibili per ciascuna
+          location non archiviata.
+        </p>
+        <div className="mt-5">
+          <PlatformTableLayoutEditor
+            initialLayout={initialLayout}
+            locations={layoutLocations}
+            organizationId={organizationId}
+          />
+        </div>
+      </section>
 
-        <aside className="glass-panel panel-padding">
-          <SectionHeading eyebrow="People" title="Membri" />
-          <div className="data-list">
-            {detail.members.map((member) => (
-              <div className="data-row" key={member.membershipId}>
-                <div>
-                  <strong>{member.displayName}</strong>
-                  <small>{member.email}</small>
-                </div>
-                <div>
-                  <span>{member.role}</span>
-                  <small>{member.defaultLocationName ?? 'Nessuna sede'}</small>
-                </div>
-                <StatusBadge status={member.status} />
+      <section className="glass-panel panel-padding mt-5">
+        <SectionHeading eyebrow="People" title="Membri" />
+        <div className="data-list">
+          {detail.members.map((member) => (
+            <div className="data-row" key={member.membershipId}>
+              <div>
+                <strong>{member.displayName}</strong>
+                <small>{member.email}</small>
               </div>
-            ))}
-          </div>
-        </aside>
-      </div>
+              <div>
+                <span>{member.role}</span>
+                <small>{member.defaultLocationName ?? 'Nessuna sede'}</small>
+              </div>
+              <StatusBadge status={member.status} />
+            </div>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
