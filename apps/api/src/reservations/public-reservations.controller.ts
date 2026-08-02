@@ -13,13 +13,13 @@ import { Public } from '../auth/decorators/public.decorator';
 import { AvailabilityQueryDto } from './dto/availability-query.dto';
 import { ConvertHoldToReservationDto } from './dto/convert-hold-to-reservation.dto';
 import { CreateReservationHoldDto } from './dto/create-reservation-hold.dto';
+import { EventInventoryReservationEngineService } from './event-inventory-reservation-engine.service';
 import { ReservationConversionService } from './reservation-conversion.service';
-import { ReservationEngineService } from './reservation-engine.service';
 
 @Public()
 @Controller('public/events')
 export class PublicEventReservationsController {
-  constructor(private readonly engine: ReservationEngineService) {}
+  constructor(private readonly engine: EventInventoryReservationEngineService) {}
 
   @Get(':slug/availability')
   availability(
@@ -42,7 +42,7 @@ export class PublicEventReservationsController {
 @Controller('public/reservation-holds')
 export class PublicReservationHoldsController {
   constructor(
-    private readonly engine: ReservationEngineService,
+    private readonly engine: EventInventoryReservationEngineService,
     private readonly conversion: ReservationConversionService,
   ) {}
 
