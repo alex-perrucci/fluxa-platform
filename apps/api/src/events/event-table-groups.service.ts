@@ -426,9 +426,7 @@ export class EventTableGroupsService {
       ],
       metrics: {
         unitCount: individuals.rows.length + groups.rows.length,
-        physicalTableCount:
-          individuals.rows.length +
-          members.rows.length,
+        physicalTableCount: individuals.rows.length + members.rows.length,
         capacity: [...individuals.rows, ...groups.rows]
           .filter((unit) => unit.enabled)
           .reduce((total, unit) => total + unit.capacity, 0),
@@ -441,10 +439,9 @@ export class EventTableGroupsService {
     organizationId: string,
     eventId: string,
   ) {
-    await client.query(
-      `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
-      [`event-inventory:${eventId}`],
-    );
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+      `event-inventory:${eventId}`,
+    ]);
     return this.requireEvent(client, organizationId, eventId, true);
   }
 
@@ -501,7 +498,9 @@ export class EventTableGroupsService {
       [eventId, organizationId],
     );
     const version = result.rows[0]?.version;
-    if (!version) throw new Error('Event inventory update returned no version.');
+    if (!version) {
+      throw new Error('Event inventory update returned no version.');
+    }
     return version;
   }
 
