@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
@@ -10,27 +14,43 @@ interface MembershipRow extends QueryResultRow {
   role: string;
 }
 
+interface PlatformLocationAccessRow extends QueryResultRow {
+  locationId: string;
+  locationCode: string;
+  locationName: string;
+  active: boolean;
+  canManageLocation: boolean;
+  canManageEvents: boolean;
+  canManageTables: boolean;
+  canManageFloorPlan: boolean;
+  canManageStaff: boolean;
+}
+
 @Injectable()
 export class PlatformLocationAccessService {
   constructor(private readonly database: DatabaseService) {}
 
-  async list(organizationId: string, membershipId: string) {
+  async list(
+    organizationId: string,
+    membershipId: string,
+  ): Promise<PlatformLocationAccessRow[]> {
     await this.requireMembership(organizationId, membershipId);
-    const result = await this.database.pool.query(
-      `SELECT l.id AS "locationId", l.code AS "locationCode", l.name AS "locationName",
-        COALESCE(oml.active,FALSE) AS active,
-        COALESCE(oml.can_manage_location,FALSE) AS "canManageLocation",
-        COALESCE(oml.can_manage_events,FALSE) AS "canManageEvents",
-        COALESCE(oml.can_manage_tables,FALSE) AS "canManageTables",
-        COALESCE(oml.can_manage_floor_plan,FALSE) AS "canManageFloorPlan",
-        COALESCE(oml.can_manage_staff,FALSE) AS "canManageStaff"
-       FROM locations l
-       LEFT JOIN organization_membership_locations oml
-         ON oml.location_id=l.id AND oml.membership_id=$2
-       WHERE l.organization_id=$1
-       ORDER BY l.name`,
-      [organizationId, membershipId],
-    );
+    const result =
+      await this.database.pool.query<PlatformLocationAccessRow>(
+        `SELECT l.id AS "locationId", l.code AS "locationCode", l.name AS "locationName",
+          COALESCE(oml.active,FALSE) AS active,
+          COALESCE(oml.can_manage_location,FALSE) AS "canManageLocation",
+          COALESCE(oml.can_manage_events,FALSE) AS "canManageEvents",
+          COALESCE(oml.can_manage_tables,FALSE) AS "canManageTables",
+          COALESCE(oml.can_manage_floor_plan,FALSE) AS "canManageFloorPlan",
+          COALESCE(oml.can_manage_staff,FALSE) AS "canManageStaff"
+         FROM locations l
+         LEFT JOIN organization_membership_locations oml
+           ON oml.location_id=l.id AND oml.membership_id=$2
+         WHERE l.organization_id=$1
+         ORDER BY l.name`,
+        [organizationId, membershipId],
+      );
     return result.rows;
   }
 
@@ -40,7 +60,10 @@ export class PlatformLocationAccessService {
     membershipId: string,
     dto: ReplacePlatformLocationAccessDto,
   ) {
-    const membership = await this.requireMembership(organizationId, membershipId);
+    const membership = await this.requireMembership(
+      organizationId,
+      membershipId,
+    );
     if (membership.role === 'OWNER' || membership.role === 'ADMIN') {
       throw new BadRequestException({
         code: 'GLOBAL_ROLE_DOES_NOT_NEED_LOCATION_SCOPE',
@@ -93,9 +116,16 @@ export class PlatformLocationAccessService {
              can_manage_staff=EXCLUDED.can_manage_staff,
              active=TRUE,updated_at=NOW()`,
           [
-            randomUUID(), organizationId, membershipId, item.locationId,
-            item.canManageLocation, item.canManageEvents, item.canManageTables,
-            item.canManageFloorPlan, item.canManageStaff, auth.userId,
+            randomUUID(),
+            organizationId,
+            membershipId,
+            item.locationId,
+            item.canManageLocation,
+            item.canManageEvents,
+            item.canManageTables,
+            item.canManageFloorPlan,
+            item.canManageStaff,
+            auth.userId,
           ],
         );
       }
@@ -110,7 +140,10 @@ export class PlatformLocationAccessService {
     return this.list(organizationId, membershipId);
   }
 
-  private async requireMembership(organizationId: string, membershipId: string) {
+  private async requireMembership(
+    organizationId: string,
+    membershipId: string,
+  ) {
     const result = await this.database.pool.query<MembershipRow>(
       `SELECT id,role::text FROM organization_memberships
        WHERE id=$1 AND organization_id=$2 LIMIT 1`,
