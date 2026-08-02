@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const nav = [
   { href: '/merchant', label: 'Panoramica', icon: 'dashboard' as const },
+  { href: '/merchant/location', label: 'Locale', icon: 'building' as const },
   { href: '/merchant/events', label: 'Eventi', icon: 'calendar' as const },
   {
     href: '/merchant/reservations',

@@ -3,67 +3,143 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import type { QueryResultRow } from 'pg';
 import { auditEvents, locations, merchants } from '@fluxa/database';
 import { DatabaseService } from '@fluxa/database';
+import { LocationAccessService } from '../auth/location-access.service';
 import type { AuthContext } from '../auth/auth.types';
 import { assertOrganizationScope } from '../auth/tenant-scope';
 import type { CreateLocationDto } from './dto/create-location.dto';
 import type { UpdateLocationDto } from './dto/update-location.dto';
 
+interface LocationSummaryRow extends QueryResultRow {
+  id: string;
+  organizationId: string;
+  merchantId: string;
+  merchantLegalName: string;
+  code: string;
+  name: string;
+  addressLine1: string;
+  addressLine2: string | null;
+  postalCode: string;
+  city: string;
+  province: string | null;
+  countryCode: string;
+  timezone: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  kind: 'PERMANENT' | 'TEMPORARY';
+  lifecycleStatus: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  activeFrom: Date | null;
+  activeUntil: Date | null;
+  canManageLocation: boolean;
+  canManageTables: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 @Injectable()
 export class LocationsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly locationAccess: LocationAccessService,
+  ) {}
 
-  async list(auth: AuthContext) {
+  async list(auth: AuthContext): Promise<LocationSummaryRow[]> {
     const organizationId = assertOrganizationScope(auth);
-
-    return this.database.db
-      .select({
-        id: locations.id,
-        organizationId: locations.organizationId,
-        merchantId: locations.merchantId,
-        merchantLegalName: merchants.legalName,
-        code: locations.code,
-        name: locations.name,
-        addressLine1: locations.addressLine1,
-        addressLine2: locations.addressLine2,
-        postalCode: locations.postalCode,
-        city: locations.city,
-        province: locations.province,
-        countryCode: locations.countryCode,
-        timezone: locations.timezone,
-        status: locations.status,
-        createdAt: locations.createdAt,
-        updatedAt: locations.updatedAt,
-      })
-      .from(locations)
-      .innerJoin(merchants, eq(merchants.id, locations.merchantId))
-      .where(eq(locations.organizationId, organizationId))
-      .orderBy(asc(locations.name));
+    const globallyScoped = auth.role === 'OWNER' || auth.role === 'ADMIN';
+    const result = await this.database.pool.query<LocationSummaryRow>(
+      `SELECT
+         l.id,
+         l.organization_id AS "organizationId",
+         l.merchant_id AS "merchantId",
+         m.legal_name AS "merchantLegalName",
+         l.code,
+         l.name,
+         l.address_line_1 AS "addressLine1",
+         l.address_line_2 AS "addressLine2",
+         l.postal_code AS "postalCode",
+         l.city,
+         l.province,
+         l.country_code AS "countryCode",
+         l.timezone,
+         l.status,
+         COALESCE(ll.kind::text, 'PERMANENT') AS kind,
+         COALESCE(ll.lifecycle_status::text, l.status::text) AS "lifecycleStatus",
+         ll.active_from AS "activeFrom",
+         ll.active_until AS "activeUntil",
+         CASE WHEN $3::boolean THEN TRUE ELSE COALESCE(oml.can_manage_location,FALSE) END AS "canManageLocation",
+         CASE WHEN $3::boolean THEN TRUE ELSE COALESCE(oml.can_manage_tables,FALSE) END AS "canManageTables",
+         l.created_at AS "createdAt",
+         l.updated_at AS "updatedAt"
+       FROM locations l
+       JOIN merchants m ON m.id=l.merchant_id
+       LEFT JOIN location_lifecycle ll ON ll.location_id=l.id
+       LEFT JOIN organization_membership_locations oml
+         ON oml.organization_id=l.organization_id
+        AND oml.location_id=l.id
+        AND oml.membership_id=$2
+        AND oml.active=TRUE
+       WHERE l.organization_id=$1
+         AND ($3::boolean OR oml.id IS NOT NULL)
+         AND COALESCE(ll.lifecycle_status::text, l.status::text) <> 'ARCHIVED'
+       ORDER BY l.name`,
+      [organizationId, auth.membershipId, globallyScoped],
+    );
+    return result.rows;
   }
 
   async get(auth: AuthContext, locationId: string) {
+    await this.locationAccess.assert(auth, locationId);
     const organizationId = assertOrganizationScope(auth);
-
-    const [location] = await this.database.db
-      .select()
-      .from(locations)
-      .where(
-        and(
-          eq(locations.id, locationId),
-          eq(locations.organizationId, organizationId),
-        ),
-      )
-      .limit(1);
-
+    const result = await this.database.pool.query<LocationSummaryRow>(
+      `SELECT
+         l.id,
+         l.organization_id AS "organizationId",
+         l.merchant_id AS "merchantId",
+         m.legal_name AS "merchantLegalName",
+         l.code,
+         l.name,
+         l.address_line_1 AS "addressLine1",
+         l.address_line_2 AS "addressLine2",
+         l.postal_code AS "postalCode",
+         l.city,
+         l.province,
+         l.country_code AS "countryCode",
+         l.timezone,
+         l.status,
+         COALESCE(ll.kind::text, 'PERMANENT') AS kind,
+         COALESCE(ll.lifecycle_status::text, l.status::text) AS "lifecycleStatus",
+         ll.active_from AS "activeFrom",
+         ll.active_until AS "activeUntil",
+         CASE WHEN $4::boolean THEN TRUE ELSE COALESCE(oml.can_manage_location,FALSE) END AS "canManageLocation",
+         CASE WHEN $4::boolean THEN TRUE ELSE COALESCE(oml.can_manage_tables,FALSE) END AS "canManageTables",
+         l.created_at AS "createdAt",
+         l.updated_at AS "updatedAt"
+       FROM locations l
+       JOIN merchants m ON m.id=l.merchant_id
+       LEFT JOIN location_lifecycle ll ON ll.location_id=l.id
+       LEFT JOIN organization_membership_locations oml
+         ON oml.organization_id=l.organization_id
+        AND oml.location_id=l.id
+        AND oml.membership_id=$3
+        AND oml.active=TRUE
+       WHERE l.id=$1 AND l.organization_id=$2
+       LIMIT 1`,
+      [
+        locationId,
+        organizationId,
+        auth.membershipId,
+        auth.role === 'OWNER' || auth.role === 'ADMIN',
+      ],
+    );
+    const location = result.rows[0];
     if (!location) {
       throw new NotFoundException({
         code: 'LOCATION_NOT_FOUND',
         message: 'Punto vendita non trovato.',
       });
     }
-
     return location;
   }
 
@@ -110,12 +186,12 @@ export class LocationsService {
             "Il codice del punto vendita è già usato nell'organizzazione.",
         });
       }
-
       throw error;
     }
   }
 
   async update(auth: AuthContext, locationId: string, dto: UpdateLocationDto) {
+    await this.locationAccess.assert(auth, locationId, 'manage_location');
     const current = await this.get(auth, locationId);
     const merchantId = dto.merchantId ?? current.merchantId;
 
@@ -141,7 +217,6 @@ export class LocationsService {
               : current.province,
           countryCode: dto.countryCode?.toUpperCase() ?? current.countryCode,
           timezone: dto.timezone?.trim() ?? current.timezone,
-          status: dto.status ?? current.status,
           updatedAt: new Date(),
         })
         .where(
@@ -158,10 +233,14 @@ export class LocationsService {
         action: 'location.updated',
         entityType: 'location',
         entityId: location.id,
-        payload: { status: location.status },
+        payload: {
+          code: location.code,
+          name: location.name,
+          city: location.city,
+        },
       });
 
-      return location;
+      return this.get(auth, locationId);
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException({
@@ -170,7 +249,6 @@ export class LocationsService {
             "Il codice del punto vendita è già usato nell'organizzazione.",
         });
       }
-
       throw error;
     }
   }
