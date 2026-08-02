@@ -19,7 +19,9 @@ import { ReservationConversionService } from './reservation-conversion.service';
 @Public()
 @Controller('public/events')
 export class PublicEventReservationsController {
-  constructor(private readonly engine: EventInventoryReservationEngineService) {}
+  constructor(
+    private readonly engine: EventInventoryReservationEngineService,
+  ) {}
 
   @Get(':slug/availability')
   availability(
