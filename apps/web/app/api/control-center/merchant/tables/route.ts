@@ -19,3 +19,10 @@ export async function GET(request: NextRequest) {
     `/dining-tables?locationId=${encodeURIComponent(locationId)}`,
   );
 }
+
+export async function POST(request: NextRequest) {
+  return proxyAuthenticatedJson('/dining-tables', {
+    method: 'POST',
+    body: JSON.stringify(await request.json()),
+  });
+}
