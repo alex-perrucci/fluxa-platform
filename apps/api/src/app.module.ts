@@ -16,6 +16,7 @@ import { ControlCenterModule } from './control-center/control-center.module';
 import { DevicesModule } from './devices/devices.module';
 import { EventsModule } from './events/events.module';
 import { FiscalModule } from './fiscal/fiscal.module';
+import { FloorPlansModule } from './floor-plans/floor-plans.module';
 import { HealthModule } from './health/health.module';
 import { HospitalityModule } from './hospitality/hospitality.module';
 import { LocationsModule } from './locations/locations.module';
@@ -66,6 +67,7 @@ import { RootController } from './root.controller';
     HealthModule,
     EventsModule,
     FiscalModule,
+    FloorPlansModule,
     HospitalityModule,
     OrdersModule,
     OrganizationsModule,

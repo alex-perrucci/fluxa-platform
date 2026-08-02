@@ -1,4 +1,5 @@
 // PHASE_8_TRUE_CONTROL_CENTER
+import Link from 'next/link';
 import { MetricCard, SectionHeading } from '@/components/control-center/shell';
 import { StatusBadge } from '@/components/control-center/status-badge';
 import { LocationAccessManager } from '@/components/platform/location-access-manager';
@@ -132,6 +133,25 @@ export default async function OrganizationDetailPage({
             organizationId={organizationId}
           />
         </div>
+      </section>
+
+      <section className="glass-panel panel-padding mt-5">
+        <SectionHeading
+          action={
+            <Link
+              className="button-primary"
+              href={`/platform-admin/organizations/${organizationId}/floor-plan`}
+            >
+              Apri editor SVG
+            </Link>
+          }
+          eyebrow="Floor plan"
+          title="Piantine versionate"
+        />
+        <p className="muted">
+          Disegna pareti, forme, testi e tavoli, quindi pubblica snapshot
+          immutabili per ciascuna location attiva.
+        </p>
       </section>
 
       <section className="glass-panel panel-padding mt-5">

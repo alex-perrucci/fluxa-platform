@@ -15,6 +15,9 @@ import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { PlatformAdminOnly } from '../auth/decorators/platform-admin.decorator';
 import { TenantOptional } from '../auth/decorators/tenant-optional.decorator';
+import { PublishFloorPlanDto } from '../floor-plans/dto/publish-floor-plan.dto';
+import { SaveFloorPlanDraftDto } from '../floor-plans/dto/save-floor-plan-draft.dto';
+import { FloorPlansService } from '../floor-plans/floor-plans.service';
 import { ReplacePlatformLocationAccessDto } from './dto/platform-location-access.dto';
 import {
   CreatePlatformLocationDto,
@@ -37,6 +40,7 @@ export class PlatformController {
     private readonly tableLayouts: PlatformTableLayoutService,
     private readonly locations: PlatformLocationsService,
     private readonly locationAccess: PlatformLocationAccessService,
+    private readonly floorPlans: FloorPlansService,
   ) {}
 
   @Get('overview')
@@ -105,6 +109,45 @@ export class PlatformController {
     @Param('locationId', ParseUUIDPipe) locationId: string,
   ) {
     return this.locations.archive(auth, organizationId, locationId);
+  }
+
+  @Get('organizations/:organizationId/locations/:locationId/floor-plan')
+  floorPlan(
+    @CurrentAuth() auth: AuthContext,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Param('locationId', ParseUUIDPipe) locationId: string,
+  ) {
+    return this.floorPlans.getForPlatform(auth, organizationId, locationId);
+  }
+
+  @Put('organizations/:organizationId/locations/:locationId/floor-plan/draft')
+  saveFloorPlanDraft(
+    @CurrentAuth() auth: AuthContext,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Param('locationId', ParseUUIDPipe) locationId: string,
+    @Body() dto: SaveFloorPlanDraftDto,
+  ) {
+    return this.floorPlans.saveDraftForPlatform(
+      auth,
+      organizationId,
+      locationId,
+      dto,
+    );
+  }
+
+  @Put('organizations/:organizationId/locations/:locationId/floor-plan/publish')
+  publishFloorPlan(
+    @CurrentAuth() auth: AuthContext,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Param('locationId', ParseUUIDPipe) locationId: string,
+    @Body() dto: PublishFloorPlanDto,
+  ) {
+    return this.floorPlans.publishForPlatform(
+      auth,
+      organizationId,
+      locationId,
+      dto,
+    );
   }
 
   @Get('organizations/:organizationId/members/:membershipId/location-access')
