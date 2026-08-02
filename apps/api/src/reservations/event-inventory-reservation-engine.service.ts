@@ -340,7 +340,8 @@ export class EventInventoryReservationEngineService extends ReservationEngineSer
         });
       });
 
-      return this.getHold(dto.holdToken);
+      const hold = await this.getHold(dto.holdToken);
+      return { holdToken: dto.holdToken, ...hold };
     } catch (error) {
       this.rethrowInventoryConstraint(error);
     }
