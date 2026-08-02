@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from './auth.types';
