@@ -35,22 +35,21 @@ export class PlatformLocationAccessService {
     membershipId: string,
   ): Promise<PlatformLocationAccessRow[]> {
     await this.requireMembership(organizationId, membershipId);
-    const result =
-      await this.database.pool.query<PlatformLocationAccessRow>(
-        `SELECT l.id AS "locationId", l.code AS "locationCode", l.name AS "locationName",
-          COALESCE(oml.active,FALSE) AS active,
-          COALESCE(oml.can_manage_location,FALSE) AS "canManageLocation",
-          COALESCE(oml.can_manage_events,FALSE) AS "canManageEvents",
-          COALESCE(oml.can_manage_tables,FALSE) AS "canManageTables",
-          COALESCE(oml.can_manage_floor_plan,FALSE) AS "canManageFloorPlan",
-          COALESCE(oml.can_manage_staff,FALSE) AS "canManageStaff"
-         FROM locations l
-         LEFT JOIN organization_membership_locations oml
-           ON oml.location_id=l.id AND oml.membership_id=$2
-         WHERE l.organization_id=$1
-         ORDER BY l.name`,
-        [organizationId, membershipId],
-      );
+    const result = await this.database.pool.query<PlatformLocationAccessRow>(
+      `SELECT l.id AS "locationId", l.code AS "locationCode", l.name AS "locationName",
+        COALESCE(oml.active,FALSE) AS active,
+        COALESCE(oml.can_manage_location,FALSE) AS "canManageLocation",
+        COALESCE(oml.can_manage_events,FALSE) AS "canManageEvents",
+        COALESCE(oml.can_manage_tables,FALSE) AS "canManageTables",
+        COALESCE(oml.can_manage_floor_plan,FALSE) AS "canManageFloorPlan",
+        COALESCE(oml.can_manage_staff,FALSE) AS "canManageStaff"
+       FROM locations l
+       LEFT JOIN organization_membership_locations oml
+         ON oml.location_id=l.id AND oml.membership_id=$2
+       WHERE l.organization_id=$1
+       ORDER BY l.name`,
+      [organizationId, membershipId],
+    );
     return result.rows;
   }
 
