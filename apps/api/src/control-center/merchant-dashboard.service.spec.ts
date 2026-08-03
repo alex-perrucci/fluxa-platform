@@ -71,10 +71,7 @@ describe('MerchantDashboardService', () => {
     expect(query).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('location_id=ANY($2::uuid[])'),
-      [
-        auth.organizationId,
-        locations.map((location) => location.id),
-      ],
+      [auth.organizationId, locations.map((location) => location.id)],
     );
     expect(locationAccess.assert).not.toHaveBeenCalled();
   });
@@ -82,9 +79,11 @@ describe('MerchantDashboardService', () => {
   it('rejects a selected location outside the manager assignment scope', async () => {
     const query = jest.fn().mockResolvedValueOnce({ rows: locations });
     const locationAccess = {
-      assert: jest.fn().mockRejectedValue(
-        new ForbiddenException({ code: 'LOCATION_ACCESS_DENIED' }),
-      ),
+      assert: jest
+        .fn()
+        .mockRejectedValue(
+          new ForbiddenException({ code: 'LOCATION_ACCESS_DENIED' }),
+        ),
     };
     const service = new MerchantDashboardService(
       { pool: { query } } as never,
@@ -92,10 +91,13 @@ describe('MerchantDashboardService', () => {
     );
     const forbiddenLocationId = '30000000-0000-4000-8000-000000000001';
 
-    await expect(service.overview(auth, forbiddenLocationId)).rejects.toThrow(
-      ForbiddenException,
+    await expect(
+      service.overview(auth, forbiddenLocationId),
+    ).rejects.toThrow(ForbiddenException);
+    expect(locationAccess.assert).toHaveBeenCalledWith(
+      auth,
+      forbiddenLocationId,
     );
-    expect(locationAccess.assert).toHaveBeenCalledWith(auth, forbiddenLocationId);
     expect(query).toHaveBeenCalledTimes(1);
   });
 });
