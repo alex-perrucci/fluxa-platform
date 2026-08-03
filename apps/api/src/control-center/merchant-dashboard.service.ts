@@ -50,8 +50,8 @@ export class MerchantDashboardService {
       return this.emptyOverview(locations, selectedLocation);
     }
 
-    const [metricsResult, eventsResult, reservationsResult] =
-      await Promise.all([
+    const [metricsResult, eventsResult, reservationsResult] = await Promise.all(
+      [
         this.database.pool.query<DashboardMetricsRow>(
           `SELECT
              (
@@ -157,7 +157,8 @@ export class MerchantDashboardService {
            LIMIT 7`,
           [organizationId, locationIds],
         ),
-      ]);
+      ],
+    );
 
     return {
       scope: {
