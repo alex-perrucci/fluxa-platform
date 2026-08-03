@@ -3,10 +3,17 @@ import { CheckoutsController } from './checkouts.controller';
 import { PaymentAccessService } from './payment-access.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { RefundProviderService } from './refund-provider.service';
+import { RefundsService } from './refunds.service';
 
 @Module({
   controllers: [CheckoutsController, PaymentsController],
-  providers: [PaymentsService, PaymentAccessService],
-  exports: [PaymentsService],
+  providers: [
+    PaymentsService,
+    PaymentAccessService,
+    RefundProviderService,
+    RefundsService,
+  ],
+  exports: [PaymentsService, RefundsService],
 })
 export class PaymentsModule {}

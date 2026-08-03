@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { MetricCard, SectionHeading } from '@/components/control-center/shell';
 import { StatusBadge } from '@/components/control-center/status-badge';
+import { PaymentRefundAction } from '@/components/merchant/payment-refund-action';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import type { SalesOrderDetail } from '@/lib/control-center/sales-backoffice-types';
 
@@ -52,7 +53,11 @@ export default async function SalesOrderPage({
             label="Pagamenti POS"
             value={euro(
               order.payments
-                .filter((payment) => payment.status === 'CAPTURED')
+                .filter((payment) =>
+                  ['CAPTURED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(
+                    payment.status,
+                  ),
+                )
                 .reduce((sum, payment) => sum + payment.amountCents, 0),
             )}
           />
@@ -103,7 +108,7 @@ export default async function SalesOrderPage({
         </section>
 
         <aside className="glass-panel panel-padding">
-          <SectionHeading eyebrow="Incasso" title="Pagamenti" />
+          <SectionHeading eyebrow="Incasso" title="Pagamenti e rimborsi" />
           <div className="data-list">
             {order.payments.map((payment) => (
               <div className="data-row" key={payment.id}>
@@ -114,6 +119,11 @@ export default async function SalesOrderPage({
                 <div>
                   <span>{euro(payment.amountCents)}</span>
                   <StatusBadge status={payment.status} />
+                  {['CAPTURED', 'PARTIALLY_REFUNDED'].includes(
+                    payment.status,
+                  ) && ['CASH', 'CARD'].includes(payment.method) ? (
+                    <PaymentRefundAction paymentId={payment.id} />
+                  ) : null}
                 </div>
               </div>
             ))}

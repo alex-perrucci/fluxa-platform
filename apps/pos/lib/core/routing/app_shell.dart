@@ -11,7 +11,7 @@ class AppShell extends ConsumerWidget {
 
   final StatefulNavigationShell navigationShell;
 
-  static const _printingDestinationIndex = 4;
+  static const _printingDestinationIndex = 5;
 
   static const destinations = [
     NavigationDestination(
@@ -28,6 +28,11 @@ class AppShell extends ConsumerWidget {
       icon: Icon(Icons.receipt_long_outlined),
       selectedIcon: Icon(Icons.receipt_long),
       label: 'Ordini',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.undo_outlined),
+      selectedIcon: Icon(Icons.undo),
+      label: 'Rimborsi',
     ),
     NavigationDestination(
       icon: Icon(Icons.soup_kitchen_outlined),

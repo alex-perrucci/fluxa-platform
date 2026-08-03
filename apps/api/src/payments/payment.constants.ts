@@ -13,11 +13,23 @@ export const PAYMENT_STATUSES = [
   'CAPTURED',
   'FAILED',
   'CANCELLED',
+  'PARTIALLY_REFUNDED',
+  'REFUNDED',
 ] as const;
 
 export const PAYMENT_EVENT_TYPES = [
   'CREATED',
   'CAPTURED',
+  'FAILED',
+  'CANCELLED',
+  'REFUND_REQUESTED',
+  'REFUND_SUCCEEDED',
+  'REFUND_FAILED',
+] as const;
+
+export const PAYMENT_REFUND_STATUSES = [
+  'PENDING',
+  'SUCCEEDED',
   'FAILED',
   'CANCELLED',
 ] as const;
