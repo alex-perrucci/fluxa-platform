@@ -87,15 +87,24 @@ class _RefundsScreenState extends ConsumerState<RefundsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Quota disponibile', style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Quota disponibile',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 12),
                   _MoneyLine(
                     label: 'Pagamento acquisito',
-                    value: formatPaymentMoney(quote.capturedCents, quote.currency),
+                    value: formatPaymentMoney(
+                      quote.capturedCents,
+                      quote.currency,
+                    ),
                   ),
                   _MoneyLine(
                     label: 'Già rimborsato',
-                    value: formatPaymentMoney(quote.refundedCents, quote.currency),
+                    value: formatPaymentMoney(
+                      quote.refundedCents,
+                      quote.currency,
+                    ),
                   ),
                   if (quote.pendingRefundCents > 0)
                     _MoneyLine(
@@ -107,14 +116,21 @@ class _RefundsScreenState extends ConsumerState<RefundsScreen> {
                     ),
                   _MoneyLine(
                     label: 'Ancora rimborsabile',
-                    value: formatPaymentMoney(quote.refundableCents, quote.currency),
+                    value: formatPaymentMoney(
+                      quote.refundableCents,
+                      quote.currency,
+                    ),
                     emphasized: true,
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _amountController,
-                    decoration: const InputDecoration(labelText: 'Importo rimborso'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Importo rimborso',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -134,7 +150,9 @@ class _RefundsScreenState extends ConsumerState<RefundsScreen> {
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     key: const Key('refund-submit-button'),
-                    onPressed: _busy || quote.refundableCents <= 0 ? null : _submit,
+                    onPressed: _busy || quote.refundableCents <= 0
+                        ? null
+                        : _submit,
                     icon: const Icon(Icons.undo),
                     label: const Text('Conferma rimborso'),
                   ),
@@ -215,13 +233,57 @@ class _RefundsScreenState extends ConsumerState<RefundsScreen> {
         reason: reason,
         providerReference: _providerReferenceController.text.trim(),
       );
-      setState(() {
-        _quote = result.quote;
-        _amountController.text = moneyInputValue(result.quote.refundableCents);
-        _message =
-            'Rimborso ${result.refund.status}. Residuo ${formatPaymentMoney(result.quote.refundableCents, result.quote.currency)}.';
-        _error = false;
-      });
+      var notice =
+          'Rimborso ${result.refund.status}. Residuo ${formatPaymentMoney(result.quote.refundableCents, result.quote.currency)}.';
+
+      if (result.refund.status == 'SUCCEEDED' &&
+          result.quote.fullyRefunded &&
+          mounted) {
+        final shouldVoid = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Storno fiscale'),
+            content: const Text(
+              'L’ordine risulta integralmente rimborsato. Accodare anche lo storno del documento fiscale emesso?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Non ora'),
+              ),
+              FilledButton(
+                key: const Key('refund-fiscal-void-confirm-button'),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Accoda storno'),
+              ),
+            ],
+          ),
+        );
+        if (shouldVoid == true) {
+          try {
+            final status = await ref.read(refundsApiProvider).createFiscalVoid(
+              refundId: result.refund.id,
+              mutationId: UuidV4.generate(),
+              reason: reason,
+            );
+            notice += ' Storno fiscale $status.';
+          } on BackendError catch (error) {
+            notice +=
+                ' Rimborso riuscito; storno fiscale non accodato: ${error.message}';
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _quote = result.quote;
+          _amountController.text = moneyInputValue(
+            result.quote.refundableCents,
+          );
+          _message = notice;
+          _error = false;
+        });
+      }
     } on BackendError catch (error) {
       _show(error.message, error: true);
       await _loadQuote();
