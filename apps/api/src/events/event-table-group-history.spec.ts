@@ -34,9 +34,7 @@ describe('event table group assignment history', () => {
     expect(migration).toContain(
       'WHERE assignment."table_group_id" = group_row."id"',
     );
-    expect(migration).not.toContain(
-      'WHERE assignment."status" = \'ACTIVE\'',
-    );
+    expect(migration).not.toContain('WHERE assignment."status" = \'ACTIVE\'');
   });
 
   it('keeps released or cancelled reservation history after a split', () => {
