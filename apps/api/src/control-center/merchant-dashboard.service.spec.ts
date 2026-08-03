@@ -91,9 +91,9 @@ describe('MerchantDashboardService', () => {
     );
     const forbiddenLocationId = '30000000-0000-4000-8000-000000000001';
 
-    await expect(
-      service.overview(auth, forbiddenLocationId),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(service.overview(auth, forbiddenLocationId)).rejects.toThrow(
+      ForbiddenException,
+    );
     expect(locationAccess.assert).toHaveBeenCalledWith(
       auth,
       forbiddenLocationId,
