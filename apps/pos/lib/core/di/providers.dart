@@ -18,6 +18,7 @@ import '../../features/hospitality/presentation/table_controller.dart';
 import '../../features/orders/data/orders_api.dart';
 import '../../features/orders/presentation/order_controller.dart';
 import '../../features/payments/data/payments_api.dart';
+import '../../features/payments/data/refunds_api.dart';
 import '../../features/payments/presentation/checkout_controller.dart';
 import '../../features/printing/data/local_printer_mapping_store.dart';
 import '../../features/printing/data/printing_api.dart';
@@ -75,6 +76,9 @@ final ordersApiProvider = Provider<OrdersApi>(
 );
 final paymentsApiProvider = Provider<PaymentsApi>(
   (ref) => PaymentsApi(ref.watch(apiClientProvider).dio),
+);
+final refundsApiProvider = Provider<RefundsApi>(
+  (ref) => RefundsApi(ref.watch(apiClientProvider).dio),
 );
 final fiscalApiProvider = Provider<FiscalApi>(
   (ref) => FiscalApi(ref.watch(apiClientProvider).dio),
