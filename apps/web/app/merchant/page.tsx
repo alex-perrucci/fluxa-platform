@@ -1,4 +1,5 @@
 // PHASE_8_TRUE_CONTROL_CENTER
+import { cookies } from 'next/headers';
 import Link from 'next/link';
 import {
   EmptyState,
@@ -7,9 +8,11 @@ import {
 } from '@/components/control-center/shell';
 import { Icon } from '@/components/control-center/icons';
 import { StatusBadge } from '@/components/control-center/status-badge';
+import { DashboardLocationSelector } from '@/components/merchant/dashboard-location-selector';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { requireMerchantSession } from '@/lib/auth/session';
-import type { MerchantOverview } from '@/lib/control-center/types';
+import type { LocationSummary } from '@/lib/control-center/types';
+import type { MerchantDashboardOverview } from '@/lib/control-center/merchant-dashboard-types';
 
 function euro(cents: string | number) {
   return new Intl.NumberFormat('it-IT', {
@@ -25,31 +28,67 @@ function date(value: string) {
   }).format(new Date(value));
 }
 
-export default async function MerchantDashboardPage() {
+export default async function MerchantDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ locationId?: string }>;
+}) {
   const session = await requireMerchantSession();
-  const membership = session.availableOrganizations.find(
-    (organization) =>
-      organization.organizationId === session.session.organizationId,
-  );
-  const locationId = membership?.defaultLocationId;
+  const params = await searchParams;
+  const organizationId = session.session.organizationId;
+  const cookieName = `fluxa-dashboard-location-${organizationId}`;
+  const cookieStore = await cookies();
+  const savedSelection = cookieStore.get(cookieName)?.value;
+  const locations =
+    await authenticatedFluxaFetch<LocationSummary[]>('/locations');
+  const accessibleIds = new Set(locations.map((location) => location.id));
 
-  if (!locationId) {
+  const requestedSelection = params.locationId ?? savedSelection ?? 'all';
+  const selected = accessibleIds.has(requestedSelection)
+    ? requestedSelection
+    : 'all';
+  const overviewPath =
+    selected === 'all'
+      ? '/control-center/merchant-overview'
+      : `/control-center/merchant-overview?locationId=${selected}`;
+  const overview =
+    await authenticatedFluxaFetch<MerchantDashboardOverview>(overviewPath);
+  const aggregate = overview.scope.kind === 'ALL';
+
+  if (overview.scope.locations.length === 0) {
     return (
       <div className="glass-panel">
         <EmptyState
-          description="Assegna una sede predefinita al tuo account per aprire il Control Center."
+          description="Assegna almeno una sede attiva al tuo account per aprire il Control Center."
           title="Nessuna sede operativa"
         />
       </div>
     );
   }
 
-  const overview = await authenticatedFluxaFetch<MerchantOverview>(
-    `/control-center/merchant-overview?locationId=${locationId}`,
-  );
-
   return (
     <>
+      <section className="glass-panel panel-padding dashboard-scope-panel">
+        <div>
+          <span className="eyebrow">Perimetro operativo</span>
+          <h2>
+            {aggregate
+              ? 'Tutte le sedi accessibili'
+              : overview.scope.location?.name}
+          </h2>
+          <p>
+            {aggregate
+              ? 'Metriche aggregate esclusivamente sulle sedi assegnate al tuo account.'
+              : `${overview.scope.location?.city} · ${overview.scope.location?.timezone}`}
+          </p>
+        </div>
+        <DashboardLocationSelector
+          cookieName={cookieName}
+          locations={overview.scope.locations}
+          selected={selected}
+        />
+      </section>
+
       <div className="metrics-grid">
         <MetricCard
           accent="blue"
@@ -76,8 +115,22 @@ export default async function MerchantDashboardPage() {
           accent={overview.metrics.refundPending > 0 ? 'rose' : 'blue'}
           hint={`${overview.metrics.refundPending} rimborsi da gestire`}
           icon="money"
-          label="Volume incassato"
-          value={euro(overview.metrics.paidVolumeCents)}
+          label="Depositi prenotazioni"
+          value={euro(overview.metrics.bookingDepositsCents)}
+        />
+        <MetricCard
+          accent="blue"
+          hint="Ordini POS pagati"
+          icon="money"
+          label="Vendite POS"
+          value={overview.metrics.posOrders}
+        />
+        <MetricCard
+          accent="cyan"
+          hint="Pagamenti POS acquisiti"
+          icon="money"
+          label="Incasso POS"
+          value={euro(overview.metrics.posSalesCents)}
         />
       </div>
 
@@ -110,7 +163,10 @@ export default async function MerchantDashboardPage() {
                     </div>
                     <div>
                       <strong>{event.title}</strong>
-                      <small>{date(event.startsAt)}</small>
+                      <small>
+                        {aggregate ? `${event.locationName} · ` : ''}
+                        {date(event.startsAt)}
+                      </small>
                     </div>
                   </div>
                   <div>
@@ -163,7 +219,10 @@ export default async function MerchantDashboardPage() {
               <div className="data-row" key={reservation.id}>
                 <div>
                   <strong>{reservation.customerName}</strong>
-                  <small>{reservation.eventTitle}</small>
+                  <small>
+                    {aggregate ? `${reservation.locationName} · ` : ''}
+                    {reservation.eventTitle}
+                  </small>
                 </div>
                 <div>
                   <span>{reservation.partySize} persone</span>

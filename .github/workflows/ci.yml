@@ -87,7 +87,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -144,6 +143,17 @@ jobs:
           path: apps/pos/ci-logs
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Reclaim disk before cache cleanup
+        if: always()
+        shell: bash
+        run: |
+          echo 'Disk usage before cleanup:'
+          df -h
+          rm -rf build .dart_tool/flutter_build
+          rm -rf "$HOME/.gradle/caches" "$HOME/.gradle/daemon"
+          echo 'Disk usage after cleanup:'
+          df -h
 
   release-e2e:
     name: Release E2E
