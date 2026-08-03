@@ -226,13 +226,15 @@ class _RefundsScreenState extends ConsumerState<RefundsScreen> {
       _message = null;
     });
     try {
-      final result = await ref.read(refundsApiProvider).create(
-        paymentId: quote.paymentId,
-        clientRefundId: UuidV4.generate(),
-        amountCents: amountCents,
-        reason: reason,
-        providerReference: _providerReferenceController.text.trim(),
-      );
+      final result = await ref
+          .read(refundsApiProvider)
+          .create(
+            paymentId: quote.paymentId,
+            clientRefundId: UuidV4.generate(),
+            amountCents: amountCents,
+            reason: reason,
+            providerReference: _providerReferenceController.text.trim(),
+          );
       setState(() {
         _quote = result.quote;
         _amountController.text = moneyInputValue(result.quote.refundableCents);
