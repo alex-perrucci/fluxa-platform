@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import './minimal-cut.css';
 import './floor-plan.css';
+import './merchant-dashboard.css';
 
 export const metadata: Metadata = {
   title: {
