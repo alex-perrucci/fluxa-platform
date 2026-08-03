@@ -29,7 +29,9 @@ export function calculateRefundQuote(
     }
   }
 
-  if (!['CAPTURED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(payment.status)) {
+  if (
+    !['CAPTURED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(payment.status)
+  ) {
     throw new ConflictException({
       code: 'PAYMENT_NOT_REFUNDABLE',
       message: 'È rimborsabile soltanto un pagamento acquisito.',
