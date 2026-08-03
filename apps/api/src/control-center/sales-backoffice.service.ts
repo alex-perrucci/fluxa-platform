@@ -21,12 +21,55 @@ interface CountRow extends QueryResultRow {
   count: number;
 }
 
+interface OrderDetailRow extends QueryResultRow {
+  id: string;
+  locationId: string;
+  locationName: string;
+  number: string;
+  businessDate: string;
+  status: string;
+  serviceMode: string;
+  customerNote: string | null;
+  currency: string;
+  version: number;
+  subtotalCents: number;
+  discountCents: number;
+  totalCents: number;
+  netTotalCents: number;
+  taxTotalCents: number;
+  heldAt: Date | null;
+  cancelledAt: Date | null;
+  cancelReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface ReportTotalRow extends QueryResultRow {
   todayCents: string;
   weekCents: string;
   monthCents: string;
   bookingDepositsCents: string;
   paidOrders: number;
+}
+
+interface ReportLocationRow extends QueryResultRow {
+  locationId: string;
+  locationName: string;
+  orders: number;
+  posRevenueCents: string;
+}
+
+interface ReportMethodRow extends QueryResultRow {
+  method: string;
+  payments: number;
+  orders: number;
+  posRevenueCents: string;
+}
+
+interface ReportDailyRow extends QueryResultRow {
+  date: string;
+  orders: number;
+  posRevenueCents: string;
 }
 
 @Injectable()
@@ -108,7 +151,7 @@ export class SalesBackofficeService {
 
   async order(auth: AuthContext, orderId: string) {
     const scope = await this.scope(auth);
-    const order = await this.database.pool.query(
+    const order = await this.database.pool.query<OrderDetailRow>(
       `SELECT
          o.id,o.location_id AS "locationId",l.name AS "locationName",o.number,
          o.business_date AS "businessDate",o.status,o.service_mode AS "serviceMode",
@@ -123,8 +166,9 @@ export class SalesBackofficeService {
        LIMIT 1`,
       [orderId, scope.organizationId, scope.locationIds],
     );
+    const selectedOrder = order.rows[0];
 
-    if (!order.rows[0]) {
+    if (!selectedOrder) {
       throw new NotFoundException({
         code: 'ORDER_NOT_FOUND',
         message: 'Ordine non trovato nel perimetro autorizzato.',
@@ -182,7 +226,7 @@ export class SalesBackofficeService {
       ]);
 
     return {
-      ...order.rows[0],
+      ...selectedOrder,
       items: items.rows,
       adjustments: adjustments.rows,
       vatSummaries: vats.rows,
@@ -325,7 +369,7 @@ export class SalesBackofficeService {
          FROM payment_transactions pt WHERE ${paymentWhere}`,
         values,
       ),
-      this.database.pool.query(
+      this.database.pool.query<ReportLocationRow>(
         `SELECT l.id AS "locationId",l.name AS "locationName",
            COUNT(DISTINCT pt.order_id)::int AS orders,
            COALESCE(SUM(pt.amount_cents),0)::text AS "posRevenueCents"
@@ -333,7 +377,7 @@ export class SalesBackofficeService {
          WHERE ${paymentWhere} GROUP BY l.id,l.name ORDER BY l.name`,
         values,
       ),
-      this.database.pool.query(
+      this.database.pool.query<ReportMethodRow>(
         `SELECT pt.method,COUNT(*)::int AS payments,
            COUNT(DISTINCT pt.order_id)::int AS orders,
            COALESCE(SUM(pt.amount_cents),0)::text AS "posRevenueCents"
@@ -341,7 +385,7 @@ export class SalesBackofficeService {
          GROUP BY pt.method ORDER BY pt.method`,
         values,
       ),
-      this.database.pool.query(
+      this.database.pool.query<ReportDailyRow>(
         `SELECT pt.captured_at::date::text AS date,
            COUNT(DISTINCT pt.order_id)::int AS orders,
            COALESCE(SUM(pt.amount_cents),0)::text AS "posRevenueCents"
@@ -365,29 +409,6 @@ export class SalesBackofficeService {
     };
   }
 
-  async reportCsv(auth: AuthContext, query: SalesReportQueryDto) {
-    const report = await this.report(auth, query);
-    const rows = [
-      ['location', 'payment_method', 'orders', 'pos_revenue_cents'],
-      ...report.byLocation.flatMap((location) =>
-        report.byMethod.map((method) => [
-          String(location.locationName),
-          String(method.method),
-          String(method.orders),
-          String(method.posRevenueCents),
-        ]),
-      ),
-      [],
-      ['booking_deposits_cents', report.totals.bookingDepositsCents],
-    ];
-    return rows.map((row) => row.map(this.csvCell).join(',')).join('\n');
-  }
-
-  private csvCell(value: unknown) {
-    const text = String(value ?? '');
-    return `"${text.replaceAll('"', '""')}"`;
-  }
-
   private async scope(auth: AuthContext, requestedLocationId?: string) {
     const organizationId = assertOrganizationScope(auth);
     if (requestedLocationId) {
@@ -405,7 +426,12 @@ export class SalesBackofficeService {
          AND ($3::boolean OR oml.id IS NOT NULL)
          AND ($4::uuid IS NULL OR l.id=$4)
        ORDER BY l.name`,
-      [organizationId, auth.membershipId, globallyScoped, requestedLocationId ?? null],
+      [
+        organizationId,
+        auth.membershipId,
+        globallyScoped,
+        requestedLocationId ?? null,
+      ],
     );
     const locationIds = locations.rows.map((location) => location.id);
     return {
@@ -413,7 +439,7 @@ export class SalesBackofficeService {
       locationIds,
       view: {
         kind: requestedLocationId ? ('LOCATION' as const) : ('ALL' as const),
-        location: requestedLocationId ? locations.rows[0] ?? null : null,
+        location: requestedLocationId ? (locations.rows[0] ?? null) : null,
         locations: locations.rows,
       },
     };
