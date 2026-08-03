@@ -29,6 +29,7 @@ import { ReservationOperationDto } from './dto/reservation-operation.dto';
 import { ReservationOperationAction } from './reservation-operations-policy';
 import { ReservationOperationsService } from './reservation-operations.service';
 import { SalesBackofficeService } from './sales-backoffice.service';
+import { SalesExportService } from './sales-export.service';
 
 const SALES_READ_ROLES = [
   'OWNER',
@@ -46,6 +47,7 @@ export class ControlCenterController {
     private readonly merchantDashboard: MerchantDashboardService,
     private readonly operations: ReservationOperationsService,
     private readonly salesBackoffice: SalesBackofficeService,
+    private readonly salesExport: SalesExportService,
   ) {}
 
   @Get('merchant-overview')
@@ -113,7 +115,7 @@ export class ControlCenterController {
       'content-disposition',
       'attachment; filename="fluxa-sales-report.csv"',
     );
-    return this.salesBackoffice.reportCsv(auth, query);
+    return this.salesExport.csv(auth, query);
   }
 
   @Get('reservations')
