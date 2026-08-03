@@ -5,6 +5,7 @@ import { FiscalDocumentsService } from './fiscal-documents.service';
 import { FiscalProfilesController } from './fiscal-profiles.controller';
 import { FiscalProfilesService } from './fiscal-profiles.service';
 import { FiscalQueueService } from './fiscal-queue.service';
+import { RefundFiscalVoidService } from './refund-fiscal-void.service';
 
 @Module({
   controllers: [FiscalProfilesController, FiscalDocumentsController],
@@ -13,7 +14,8 @@ import { FiscalQueueService } from './fiscal-queue.service';
     FiscalProfilesService,
     FiscalDocumentsService,
     FiscalQueueService,
+    RefundFiscalVoidService,
   ],
-  exports: [FiscalDocumentsService],
+  exports: [FiscalDocumentsService, RefundFiscalVoidService],
 })
 export class FiscalModule {}
