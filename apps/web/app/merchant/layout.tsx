@@ -19,6 +19,14 @@ const nav = [
     label: 'Prenotazioni',
     icon: 'ticket' as const,
   },
+  { href: '/merchant/sales', label: 'Vendite', icon: 'money' as const },
+  { href: '/merchant/payments', label: 'Pagamenti', icon: 'money' as const },
+  {
+    href: '/merchant/fiscal-documents',
+    label: 'Fiscale',
+    icon: 'building' as const,
+  },
+  { href: '/merchant/reports', label: 'Report', icon: 'dashboard' as const },
 ];
 
 export default async function MerchantLayout({
