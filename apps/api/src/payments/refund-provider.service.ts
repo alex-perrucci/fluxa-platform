@@ -28,12 +28,12 @@ class CashRefundAdapter implements RefundProviderAdapter {
     return input.method === 'CASH' && input.provider === 'CASH';
   }
 
-  async refund(input: RefundProviderInput): Promise<RefundProviderResult> {
-    return {
+  refund(input: RefundProviderInput): Promise<RefundProviderResult> {
+    return Promise.resolve({
       status: 'SUCCEEDED',
       providerReference: `CASH-REFUND-${input.refundId}`,
       providerEventId: input.providerEventId,
-    };
+    });
   }
 }
 
@@ -42,15 +42,15 @@ class TerminalRefundAdapter implements RefundProviderAdapter {
     return input.method === 'CARD' && input.provider !== 'CASH';
   }
 
-  async refund(input: RefundProviderInput): Promise<RefundProviderResult> {
-    return {
+  refund(input: RefundProviderInput): Promise<RefundProviderResult> {
+    return Promise.resolve({
       status: 'SUCCEEDED',
       providerReference:
         input.requestedProviderReference ??
         input.originalProviderReference ??
         `CARD-REFUND-${input.refundId}`,
       providerEventId: input.providerEventId,
-    };
+    });
   }
 }
 
@@ -61,8 +61,10 @@ export class RefundProviderService {
     new TerminalRefundAdapter(),
   ];
 
-  async refund(input: RefundProviderInput): Promise<RefundProviderResult> {
-    const adapter = this.adapters.find((candidate) => candidate.supports(input));
+  refund(input: RefundProviderInput): Promise<RefundProviderResult> {
+    const adapter = this.adapters.find((candidate) =>
+      candidate.supports(input),
+    );
     if (!adapter) {
       throw new Error(
         `No refund adapter for ${input.method}/${input.provider}.`,
