@@ -22,7 +22,7 @@ describe('merchant sales backoffice boundaries', () => {
   });
 
   it('keeps POS revenue separate from booking deposits', () => {
-    expect(service).toContain("FROM payment_transactions pt");
+    expect(service).toContain('FROM payment_transactions pt');
     expect(service).toContain("pt.status='CAPTURED'");
     expect(service).toContain('AS "posRevenueCents"');
     expect(service).toContain('FROM reservation_payments rp');
