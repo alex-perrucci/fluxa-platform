@@ -21,9 +21,7 @@ describe('refund-linked fiscal void lifecycle', () => {
     expect(service).toContain(
       'refundState.refundedCents < refundState.orderTotalCents',
     );
-    expect(service).toContain(
-      'PARTIAL_REFUND_CANNOT_VOID_FISCAL_DOCUMENT',
-    );
+    expect(service).toContain('PARTIAL_REFUND_CANNOT_VOID_FISCAL_DOCUMENT');
   });
 
   it('serializes void creation and links it to exactly one refund', () => {

@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
@@ -87,7 +91,11 @@ export class RefundFiscalVoidService {
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
         `fiscal-refund-void:${organizationId}:${refundId}`,
       ]);
-      const lockedRefund = await this.lockRefund(client, organizationId, refundId);
+      const lockedRefund = await this.lockRefund(
+        client,
+        organizationId,
+        refundId,
+      );
       if (lockedRefund.status !== 'SUCCEEDED') {
         throw new ConflictException({
           code: 'REFUND_NOT_COMPLETED',
@@ -96,12 +104,17 @@ export class RefundFiscalVoidService {
         });
       }
 
-      const existing = await this.findVoidByRefund(client, organizationId, refundId);
+      const existing = await this.findVoidByRefund(
+        client,
+        organizationId,
+        refundId,
+      );
       if (existing) {
         if (existing.requestHash !== requestHash) {
           throw new ConflictException({
             code: 'REFUND_FISCAL_VOID_ALREADY_EXISTS',
-            message: 'Il rimborso è già collegato a uno storno fiscale diverso.',
+            message:
+              'Il rimborso è già collegato a uno storno fiscale diverso.',
             documentId: existing.id,
           });
         }
