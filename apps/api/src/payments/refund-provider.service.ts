@@ -61,7 +61,7 @@ export class RefundProviderService {
     new TerminalRefundAdapter(),
   ];
 
-  async refund(input: RefundProviderInput): Promise<RefundProviderResult> {
+  refund(input: RefundProviderInput): Promise<RefundProviderResult> {
     const adapter = this.adapters.find((candidate) =>
       candidate.supports(input),
     );
