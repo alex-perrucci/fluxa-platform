@@ -38,6 +38,8 @@ describe('merchant sales backoffice boundaries', () => {
   it('applies membership location scope to aggregate views', () => {
     expect(service).toContain('organization_membership_locations');
     expect(service).toContain('oml.membership_id=$2');
-    expect(service).toContain('l.id=ANY($2::uuid[])');
+    expect(service).toContain('o.location_id=ANY($2::uuid[])');
+    expect(service).toContain('pt.location_id=ANY($2::uuid[])');
+    expect(service).toContain('fd.location_id=ANY($2::uuid[])');
   });
 });
