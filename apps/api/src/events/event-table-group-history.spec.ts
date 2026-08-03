@@ -35,7 +35,7 @@ describe('event table group assignment history', () => {
       'WHERE assignment."table_group_id" = group_row."id"',
     );
     expect(migration).not.toContain(
-      "WHERE assignment.\"status\" = 'ACTIVE'",
+      'WHERE assignment."status" = \'ACTIVE\'',
     );
   });
 
@@ -45,7 +45,7 @@ describe('event table group assignment history', () => {
       'CREATE TRIGGER "reservation_assignment_group_snapshot_trg"',
     );
     expect(migration).toContain(
-      "jsonb_array_length(\"table_group_members_snapshot\") >= 2",
+      'jsonb_array_length("table_group_members_snapshot") >= 2',
     );
   });
 
@@ -60,6 +60,8 @@ describe('event table group assignment history', () => {
 
   it('keeps repeated split attempts deterministic', () => {
     expect(service).toContain("code: 'EVENT_TABLE_GROUP_NOT_FOUND'");
-    expect(service).toContain("message: 'Gruppo tavoli non trovato per questo evento.'");
+    expect(service).toContain(
+      "message: 'Gruppo tavoli non trovato per questo evento.'",
+    );
   });
 });
