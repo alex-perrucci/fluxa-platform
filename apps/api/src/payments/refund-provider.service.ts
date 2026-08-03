@@ -44,7 +44,7 @@ class TerminalRefundAdapter implements RefundProviderAdapter {
 
   async refund(input: RefundProviderInput): Promise<RefundProviderResult> {
     return {
-      status: input.provider === 'EXTERNAL_TERMINAL' ? 'PENDING' : 'SUCCEEDED',
+      status: 'SUCCEEDED',
       providerReference:
         input.requestedProviderReference ??
         input.originalProviderReference ??
