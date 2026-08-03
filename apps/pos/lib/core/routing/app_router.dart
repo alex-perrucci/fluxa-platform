@@ -14,6 +14,7 @@ import '../../features/hospitality/presentation/kitchen_screen.dart';
 import '../../features/hospitality/presentation/tables_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/payments/presentation/checkout_screen.dart';
+import '../../features/payments/presentation/refunds_screen.dart';
 import '../../features/printing/presentation/printing_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/async_states.dart';
@@ -103,6 +104,14 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
             GoRoute(
               path: '/orders',
               builder: (context, state) => const OrdersScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/refunds',
+              builder: (context, state) => const RefundsScreen(),
             ),
           ],
         ),
