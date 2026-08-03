@@ -1,0 +1,55 @@
+name: Format fiscal void files once
+
+on:
+  push:
+    branches:
+      - feat/fiscal-voids
+
+permissions:
+  contents: write
+
+concurrency:
+  group: format-fiscal-voids-once
+  cancel-in-progress: false
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/fiscal-voids
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format fiscal void files
+        run: |
+          npx prettier --write \
+            apps/api/src/fiscal/refund-fiscal-void.service.ts \
+            apps/api/src/fiscal/refund-fiscal-void.spec.ts
+          rm .github/workflows/format-fiscal-voids-once.yml
+
+      - name: Commit formatted files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/api/src/fiscal/refund-fiscal-void.service.ts \
+            apps/api/src/fiscal/refund-fiscal-void.spec.ts \
+            .github/workflows/format-fiscal-voids-once.yml
+          git commit -m "style(fiscal): format refund-linked void lifecycle"
+          git push origin HEAD:feat/fiscal-voids
