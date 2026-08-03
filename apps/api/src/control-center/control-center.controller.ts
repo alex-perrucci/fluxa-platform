@@ -13,6 +13,7 @@ import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ControlCenterService } from './control-center.service';
+import { MerchantDashboardService } from './merchant-dashboard.service';
 import { MerchantOverviewQueryDto } from './dto/merchant-overview-query.dto';
 import { MerchantReservationListQueryDto } from './dto/merchant-reservation-list-query.dto';
 import { ReservationFeedQueryDto } from './dto/reservation-feed-query.dto';
@@ -24,6 +25,7 @@ import { ReservationOperationsService } from './reservation-operations.service';
 export class ControlCenterController {
   constructor(
     private readonly controlCenter: ControlCenterService,
+    private readonly merchantDashboard: MerchantDashboardService,
     private readonly operations: ReservationOperationsService,
   ) {}
 
@@ -32,7 +34,7 @@ export class ControlCenterController {
     @CurrentAuth() auth: AuthContext,
     @Query() query: MerchantOverviewQueryDto,
   ) {
-    return this.controlCenter.merchantOverview(auth, query.locationId);
+    return this.merchantDashboard.overview(auth, query.locationId);
   }
 
   @Get('reservations')
