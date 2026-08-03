@@ -1,17 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { PoolClient, QueryResultRow } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
 import { assertOrganizationScope } from '../auth/tenant-scope';
 import type { CreateRefundDto } from './dto/create-refund.dto';
 import { PaymentAccessService } from './payment-access.service';
 import { financialRequestHash } from './payment-idempotency';
-import {
-  assertRefundAmount,
-  calculateRefundQuote,
-  type RefundQuote,
-} from './refund-policy';
+import { assertRefundAmount, calculateRefundQuote } from './refund-policy';
 import { RefundProviderService } from './refund-provider.service';
 
 interface RefundablePaymentRow extends QueryResultRow {
@@ -56,6 +52,8 @@ export interface PaymentRefundRow extends QueryResultRow {
   createdAt: Date;
   updatedAt: Date;
 }
+
+type IdempotentRefundRow = PaymentRefundRow & { requestHash: string };
 
 @Injectable()
 export class RefundsService {
@@ -219,7 +217,7 @@ export class RefundsService {
               providerReference: providerResult.providerReference,
             },
           });
-          await this.refreshPaymentStatus(client, lockedPayment, dto.amountCents);
+          await this.refreshPaymentStatus(client, lockedPayment);
         }
 
         await this.auditAndOutbox(client, {
@@ -286,11 +284,8 @@ export class RefundsService {
   private findPayment(organizationId: string, paymentId: string) {
     return this.database.pool
       .query<RefundablePaymentRow>(
-        `SELECT id,organization_id AS "organizationId",location_id AS "locationId",
-           order_id AS "orderId",status::text,method::text,provider::text,
-           amount_cents AS "amountCents",'EUR'::text AS currency,
-           provider_reference AS "providerReference"
-         FROM payment_transactions WHERE organization_id=$1 AND id=$2 LIMIT 1`,
+        `${this.paymentSelect()}
+         WHERE pt.organization_id=$1 AND pt.id=$2 LIMIT 1`,
         [organizationId, paymentId],
       )
       .then((result) => result.rows[0] ?? null);
@@ -302,11 +297,8 @@ export class RefundsService {
     paymentId: string,
   ) {
     const result = await client.query<RefundablePaymentRow>(
-      `SELECT id,organization_id AS "organizationId",location_id AS "locationId",
-         order_id AS "orderId",status::text,method::text,provider::text,
-         amount_cents AS "amountCents",'EUR'::text AS currency,
-         provider_reference AS "providerReference"
-       FROM payment_transactions WHERE organization_id=$1 AND id=$2 FOR UPDATE`,
+      `${this.paymentSelect()}
+       WHERE pt.organization_id=$1 AND pt.id=$2 FOR UPDATE OF pt`,
       [organizationId, paymentId],
     );
     const payment = result.rows[0];
@@ -314,8 +306,18 @@ export class RefundsService {
     return payment;
   }
 
+  private paymentSelect() {
+    return `SELECT pt.id,pt.organization_id AS "organizationId",
+      pt.location_id AS "locationId",pt.order_id AS "orderId",
+      pt.status::text,pt.method::text,pt.provider::text,
+      pt.amount_cents AS "amountCents",cs.currency,
+      pt.provider_reference AS "providerReference"
+      FROM payment_transactions pt
+      INNER JOIN checkout_sessions cs ON cs.id=pt.checkout_session_id`;
+  }
+
   private async refundTotals(
-    queryable: Pick<PoolClient, 'query'>,
+    queryable: Pool | PoolClient,
     paymentId: string,
   ): Promise<RefundTotalsRow> {
     const result = await queryable.query<RefundTotalsRow>(
@@ -325,26 +327,23 @@ export class RefundsService {
        FROM payment_refunds WHERE payment_id=$1`,
       [paymentId],
     );
-    return (
-      result.rows[0] ?? { refundedCents: 0, pendingRefundCents: 0 }
-    );
+    return result.rows[0] ?? { refundedCents: 0, pendingRefundCents: 0 };
   }
 
   private async refreshPaymentStatus(
     client: PoolClient,
     payment: RefundablePaymentRow,
-    currentRefundCents: number,
-  ) {
+  ): Promise<void> {
     const totals = await this.refundTotals(client, payment.id);
-    const refundedCents = totals.refundedCents;
     const status =
-      refundedCents >= payment.amountCents ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+      totals.refundedCents >= payment.amountCents
+        ? 'REFUNDED'
+        : 'PARTIALLY_REFUNDED';
     await client.query(
       `UPDATE payment_transactions SET status=$2::payment_status,updated_at=NOW()
        WHERE id=$1`,
       [payment.id, status],
     );
-    return { status, refundedCents, currentRefundCents };
   }
 
   private insertPaymentEvent(
@@ -420,8 +419,8 @@ export class RefundsService {
     clientRefundId: string,
   ) {
     return this.database.pool
-      .query<PaymentRefundRow & { requestHash: string }>(
-        `${this.refundSelect()},pr.request_hash AS "requestHash"
+      .query<IdempotentRefundRow>(
+        `${this.refundSelect(true)}
          WHERE pr.organization_id=$1 AND pr.requested_by_device_id=$2
            AND pr.client_refund_id=$3 LIMIT 1`,
         [organizationId, deviceId, clientRefundId],
@@ -436,8 +435,8 @@ export class RefundsService {
     clientRefundId: string,
   ) {
     return client
-      .query<PaymentRefundRow & { requestHash: string }>(
-        `${this.refundSelect()},pr.request_hash AS "requestHash"
+      .query<IdempotentRefundRow>(
+        `${this.refundSelect(true)}
          WHERE pr.organization_id=$1 AND pr.requested_by_device_id=$2
            AND pr.client_refund_id=$3 LIMIT 1`,
         [organizationId, deviceId, clientRefundId],
@@ -455,7 +454,7 @@ export class RefundsService {
   }
 
   private assertEquivalent(
-    refund: PaymentRefundRow & { requestHash: string },
+    refund: IdempotentRefundRow,
     paymentId: string,
     requestHash: string,
   ) {
@@ -467,7 +466,7 @@ export class RefundsService {
     }
   }
 
-  private refundSelect() {
+  private refundSelect(includeRequestHash = false) {
     return `SELECT pr.id,pr.organization_id AS "organizationId",
       pr.location_id AS "locationId",pr.payment_id AS "paymentId",
       pr.order_id AS "orderId",pr.client_refund_id AS "clientRefundId",
@@ -479,6 +478,7 @@ export class RefundsService {
       pr.version,pr.requested_at AS "requestedAt",
       pr.completed_at AS "completedAt",pr.failed_at AS "failedAt",
       pr.created_at AS "createdAt",pr.updated_at AS "updatedAt"
+      ${includeRequestHash ? ',pr.request_hash AS "requestHash"' : ''}
       FROM payment_refunds pr`;
   }
 
