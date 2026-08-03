@@ -43,6 +43,23 @@ class RefundsApi {
     }
   }
 
+  Future<String> createFiscalVoid({
+    required String refundId,
+    required String mutationId,
+    required String reason,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, Object?>>(
+        'payment-refunds/$refundId/fiscal-void',
+        data: {'mutationId': mutationId, 'reason': reason},
+      );
+      final payload = _requireData(response.data);
+      return payload['status']?.toString() ?? 'QUEUED';
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
   Map<String, Object?> _requireData(Map<String, Object?>? data) {
     if (data == null) {
       throw const BackendError(message: 'Risposta rimborso vuota.');
