@@ -226,13 +226,15 @@ class _RefundsScreenState extends ConsumerState<RefundsScreen> {
       _message = null;
     });
     try {
-      final result = await ref.read(refundsApiProvider).create(
-        paymentId: quote.paymentId,
-        clientRefundId: UuidV4.generate(),
-        amountCents: amountCents,
-        reason: reason,
-        providerReference: _providerReferenceController.text.trim(),
-      );
+      final result = await ref
+          .read(refundsApiProvider)
+          .create(
+            paymentId: quote.paymentId,
+            clientRefundId: UuidV4.generate(),
+            amountCents: amountCents,
+            reason: reason,
+            providerReference: _providerReferenceController.text.trim(),
+          );
       var notice =
           'Rimborso ${result.refund.status}. Residuo ${formatPaymentMoney(result.quote.refundableCents, result.quote.currency)}.';
 
@@ -261,11 +263,13 @@ class _RefundsScreenState extends ConsumerState<RefundsScreen> {
         );
         if (shouldVoid == true) {
           try {
-            final status = await ref.read(refundsApiProvider).createFiscalVoid(
-              refundId: result.refund.id,
-              mutationId: UuidV4.generate(),
-              reason: reason,
-            );
+            final status = await ref
+                .read(refundsApiProvider)
+                .createFiscalVoid(
+                  refundId: result.refund.id,
+                  mutationId: UuidV4.generate(),
+                  reason: reason,
+                );
             notice += ' Storno fiscale $status.';
           } on BackendError catch (error) {
             notice +=
