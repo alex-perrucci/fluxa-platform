@@ -10,6 +10,7 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CreateRefundFiscalVoidDto } from './dto/create-refund-fiscal-void.dto';
 import { FiscalDocumentListQueryDto } from './dto/fiscal-document-list-query.dto';
 import {
   FiscalMutationDto,
@@ -17,10 +18,14 @@ import {
 } from './dto/fiscal-mutation.dto';
 import { IssueFiscalDocumentDto } from './dto/issue-fiscal-document.dto';
 import { FiscalDocumentsService } from './fiscal-documents.service';
+import { RefundFiscalVoidService } from './refund-fiscal-void.service';
 
 @Controller()
 export class FiscalDocumentsController {
-  constructor(private readonly documents: FiscalDocumentsService) {}
+  constructor(
+    private readonly documents: FiscalDocumentsService,
+    private readonly refundVoids: RefundFiscalVoidService,
+  ) {}
 
   @Roles(
     'OWNER',
@@ -82,5 +87,15 @@ export class FiscalDocumentsController {
     @Body() dto: VoidFiscalDocumentDto,
   ) {
     return this.documents.void(auth, documentId, dto);
+  }
+
+  @Roles('OWNER', 'ADMIN')
+  @Post('payment-refunds/:refundId/fiscal-void')
+  refundVoid(
+    @CurrentAuth() auth: AuthContext,
+    @Param('refundId', ParseUUIDPipe) refundId: string,
+    @Body() dto: CreateRefundFiscalVoidDto,
+  ) {
+    return this.refundVoids.create(auth, refundId, dto);
   }
 }

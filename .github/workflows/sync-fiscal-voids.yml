@@ -1,0 +1,77 @@
+name: Sync fiscal voids with main
+
+on:
+  push:
+    branches:
+      - feat/fiscal-voids
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-fiscal-voids
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout fiscal voids branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/fiscal-voids
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Flutter formatter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.32.5
+          channel: stable
+          cache: true
+
+      - name: Merge main and preserve fiscal void UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "Branch already contains main."
+            exit 0
+          fi
+
+          set +e
+          git merge --no-ff origin/main -m "merge: sync fiscal voids with merged payment refunds"
+          merge_status=$?
+          set -e
+
+          if [ "$merge_status" -ne 0 ]; then
+            conflicted="$(git diff --name-only --diff-filter=U)"
+            allowed="apps/pos/lib/features/payments/presentation/refunds_screen.dart"
+
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+              if [ "$file" != "$allowed" ]; then
+                echo "Unexpected merge conflict: $file"
+                exit 1
+              fi
+            done <<< "$conflicted"
+
+            git checkout --ours "$allowed"
+            git add "$allowed"
+            git commit --no-edit
+          fi
+
+          dart format apps/pos/lib/features/payments/presentation/refunds_screen.dart
+          if ! git diff --quiet; then
+            git add apps/pos/lib/features/payments/presentation/refunds_screen.dart
+            git commit -m "style(pos): format fiscal refund flow after main sync"
+          fi
+
+          git push origin HEAD:feat/fiscal-voids

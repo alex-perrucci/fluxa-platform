@@ -18,6 +18,7 @@
     { "idx": 13, "version": "7", "when": 1785689280000, "tag": "0013_floor_plan_versions", "breakpoints": true },
     { "idx": 14, "version": "7", "when": 1785694020000, "tag": "0014_event_table_groups", "breakpoints": true },
     { "idx": 15, "version": "7", "when": 1785790440000, "tag": "0015_event_table_group_history", "breakpoints": true },
-    { "idx": 16, "version": "7", "when": 1785797100000, "tag": "0016_payment_refunds", "breakpoints": true }
+    { "idx": 16, "version": "7", "when": 1785797100000, "tag": "0016_payment_refunds", "breakpoints": true },
+    { "idx": 17, "version": "7", "when": 1785798300000, "tag": "0017_refund_fiscal_voids", "breakpoints": true }
   ]
 }

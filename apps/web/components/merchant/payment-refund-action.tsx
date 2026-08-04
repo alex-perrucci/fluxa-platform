@@ -84,18 +84,50 @@ export function PaymentRefundAction({ paymentId }: { paymentId: string }) {
         },
       );
       const payload = (await response.json()) as {
-        refund?: { status?: string };
-        quote?: { refundableCents?: number };
+        refund?: { id?: string; status?: string };
+        quote?: { refundableCents?: number; fullyRefunded?: boolean };
         message?: string;
       };
       if (!response.ok) {
         throw new Error(payload.message ?? 'Rimborso non riuscito.');
       }
-      setMessage(
-        `Rimborso ${payload.refund?.status ?? 'registrato'}. Residuo ${euro(
-          payload.quote?.refundableCents ?? 0,
-        )}.`,
-      );
+
+      let notice = `Rimborso ${payload.refund?.status ?? 'registrato'}. Residuo ${euro(
+        payload.quote?.refundableCents ?? 0,
+      )}.`;
+      const refundId = payload.refund?.id;
+      if (
+        refundId &&
+        payload.refund?.status === 'SUCCEEDED' &&
+        payload.quote?.fullyRefunded === true &&
+        window.confirm(
+          'L’ordine risulta integralmente rimborsato. Accodare anche lo storno fiscale?',
+        )
+      ) {
+        const fiscalResponse = await fetch(
+          `/api/control-center/merchant/refunds/${refundId}/fiscal-void`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              mutationId: uuidV4(),
+              reason: reason.trim(),
+            }),
+          },
+        );
+        const fiscalPayload = (await fiscalResponse.json()) as {
+          status?: string;
+          message?: string;
+        };
+        if (!fiscalResponse.ok) {
+          throw new Error(
+            fiscalPayload.message ??
+              'Rimborso riuscito, ma storno fiscale non accodato.',
+          );
+        }
+        notice += ` Storno fiscale ${fiscalPayload.status ?? 'accodato'}.`;
+      }
+      setMessage(notice);
       window.location.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Rimborso non riuscito.');

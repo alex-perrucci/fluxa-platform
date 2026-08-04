@@ -235,13 +235,59 @@ class _RefundsScreenState extends ConsumerState<RefundsScreen> {
             reason: reason,
             providerReference: _providerReferenceController.text.trim(),
           );
-      setState(() {
-        _quote = result.quote;
-        _amountController.text = moneyInputValue(result.quote.refundableCents);
-        _message =
-            'Rimborso ${result.refund.status}. Residuo ${formatPaymentMoney(result.quote.refundableCents, result.quote.currency)}.';
-        _error = false;
-      });
+      var notice =
+          'Rimborso ${result.refund.status}. Residuo ${formatPaymentMoney(result.quote.refundableCents, result.quote.currency)}.';
+
+      if (result.refund.status == 'SUCCEEDED' &&
+          result.quote.fullyRefunded &&
+          mounted) {
+        final shouldVoid = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Storno fiscale'),
+            content: const Text(
+              'L’ordine risulta integralmente rimborsato. Accodare anche lo storno del documento fiscale emesso?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Non ora'),
+              ),
+              FilledButton(
+                key: const Key('refund-fiscal-void-confirm-button'),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Accoda storno'),
+              ),
+            ],
+          ),
+        );
+        if (shouldVoid == true) {
+          try {
+            final status = await ref
+                .read(refundsApiProvider)
+                .createFiscalVoid(
+                  refundId: result.refund.id,
+                  mutationId: UuidV4.generate(),
+                  reason: reason,
+                );
+            notice += ' Storno fiscale $status.';
+          } on BackendError catch (error) {
+            notice +=
+                ' Rimborso riuscito; storno fiscale non accodato: ${error.message}';
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _quote = result.quote;
+          _amountController.text = moneyInputValue(
+            result.quote.refundableCents,
+          );
+          _message = notice;
+          _error = false;
+        });
+      }
     } on BackendError catch (error) {
       _show(error.message, error: true);
       await _loadQuote();
