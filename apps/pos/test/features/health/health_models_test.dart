@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/features/health/domain/health_models.dart';
 
+// dart format off
 void main() {
   test('parses operational health and exports only returned safe fields', () {
     final health = OperationalHealth.fromJson({
@@ -33,3 +34,4 @@ void main() {
     expect(exported.containsKey('token'), false);
   });
 }
+// dart format on

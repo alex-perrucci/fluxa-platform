@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+// dart format off
 enum HealthStatus {
   ok('OK'),
   degraded('DEGRADED'),
@@ -85,3 +86,4 @@ class OperationalHealth {
         },
       });
 }
+// dart format on

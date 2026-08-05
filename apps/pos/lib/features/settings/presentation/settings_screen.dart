@@ -7,6 +7,7 @@ import '../../../core/di/providers.dart';
 import '../../health/data/health_api.dart';
 import '../../health/domain/health_models.dart';
 
+// dart format off
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -91,16 +92,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   builder: (context, snapshot) => _Row(
                     label: 'Versione',
                     value: snapshot.hasData
-                        ? '${snapshot.data!.version}+'
-                              '${snapshot.data!.buildNumber}'
+                        ? '${snapshot.data!.version}+${snapshot.data!.buildNumber}'
                         : 'Caricamento…',
                   ),
                 ),
                 _Row(label: 'Device', value: session.device.name),
                 _Row(
                   label: 'Modalità',
-                  value:
-                      assignment?.assignment.operatorMode.wireValue ?? 'AUTO',
+                  value: assignment?.assignment.operatorMode.wireValue ?? 'AUTO',
                 ),
                 _Row(
                   label: 'Sede',
@@ -184,9 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 8),
                 for (final suggestion in
                     _health?.suggestions ??
-                        const [
-                          'Aggiorna la diagnostica per ricevere indicazioni.',
-                        ])
+                        const ['Aggiorna la diagnostica per ricevere indicazioni.'])
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Text('• $suggestion'),
@@ -284,3 +281,4 @@ class _Row extends StatelessWidget {
     ),
   );
 }
+// dart format on
