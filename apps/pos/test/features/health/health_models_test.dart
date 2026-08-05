@@ -16,16 +16,19 @@ void main() {
         ],
         'lastJob': {'status': 'COMPLETED'},
       },
-      'fiscal': {'status': 'DEGRADED', 'provider': 'ACUBE_SMART_RECEIPTS'},
+      'fiscal': {
+        'status': 'DEGRADED',
+        'provider': 'ACUBE_SMART_RECEIPTS',
+      },
       'paymentTerminal': {'status': 'NOT_CONFIGURED'},
       'suggestions': ['Controlla il documento fiscale.'],
     });
 
     expect(health.printerCount, 1);
     expect(health.fiscalStatus, HealthStatus.degraded);
-    final exported = jsonDecode(
-      health.exportJson(networkOnline: true),
-    ) as Map<String, Object?>;
+    final exported =
+        jsonDecode(health.exportJson(networkOnline: true))
+            as Map<String, Object?>;
     expect((exported['client'] as Map)['networkOnline'], true);
     expect(exported.containsKey('token'), false);
   });

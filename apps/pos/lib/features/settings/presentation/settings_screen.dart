@@ -33,8 +33,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _error = null;
     });
     try {
-      final health = await HealthApi(ref.read(apiClientProvider).dio)
-          .operational(locationId: locationId);
+      final health = await HealthApi(
+        ref.read(apiClientProvider).dio,
+      ).operational(locationId: locationId);
       if (!mounted) return;
       setState(() {
         _health = health;
@@ -69,10 +70,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Diagnostica POS', style: Theme.of(context).textTheme.headlineMedium),
+        Text(
+          'Diagnostica POS',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
         const SizedBox(height: 4),
         const Text(
-          'Configurazioni e credenziali restano nel Venue Control Center. Qui sono mostrati solo segnali operativi privi di segreti.',
+          'Configurazioni e credenziali restano nel Venue Control Center. '
+          'Qui sono mostrati solo segnali operativi privi di segreti.',
         ),
         const SizedBox(height: 16),
         Card(
@@ -86,14 +91,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   builder: (context, snapshot) => _Row(
                     label: 'Versione',
                     value: snapshot.hasData
-                        ? '${snapshot.data!.version}+${snapshot.data!.buildNumber}'
+                        ? '${snapshot.data!.version}+'
+                              '${snapshot.data!.buildNumber}'
                         : 'Caricamento…',
                   ),
                 ),
                 _Row(label: 'Device', value: session.device.name),
                 _Row(
                   label: 'Modalità',
-                  value: assignment?.assignment.operatorMode.wireValue ?? 'AUTO',
+                  value:
+                      assignment?.assignment.operatorMode.wireValue ?? 'AUTO',
                 ),
                 _Row(
                   label: 'Sede',
@@ -158,7 +165,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               leading: const Icon(Icons.print),
               title: const Text('Ultimo job di stampa'),
               subtitle: Text(
-                '${job['printerName'] ?? ''} · ${job['documentType'] ?? ''} · ${job['status'] ?? ''}',
+                '${job['printerName'] ?? ''} · '
+                '${job['documentType'] ?? ''} · '
+                '${job['status'] ?? ''}',
               ),
             ),
           ),
@@ -168,11 +177,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Ripristino', style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  'Ripristino',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 8),
                 for (final suggestion in
                     _health?.suggestions ??
-                        const ['Aggiorna la diagnostica per ricevere indicazioni.'])
+                        const [
+                          'Aggiorna la diagnostica per ricevere indicazioni.',
+                        ])
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Text('• $suggestion'),
@@ -245,11 +259,11 @@ class _StatusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _Row(
-        label: label,
-        value: detail == null
-            ? status.wireValue
-            : '${status.wireValue} · $detail',
-      );
+    label: label,
+    value: detail == null
+        ? status.wireValue
+        : '${status.wireValue} · $detail',
+  );
 }
 
 class _Row extends StatelessWidget {
@@ -260,13 +274,13 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: 118, child: Text(label)),
-            Expanded(child: SelectableText(value, maxLines: 4)),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 7),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 118, child: Text(label)),
+        Expanded(child: SelectableText(value, maxLines: 4)),
+      ],
+    ),
+  );
 }

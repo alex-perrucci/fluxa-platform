@@ -11,9 +11,9 @@ enum HealthStatus {
   final String wireValue;
 
   static HealthStatus fromWire(Object? value) => values.firstWhere(
-        (item) => item.wireValue == value?.toString(),
-        orElse: () => HealthStatus.unknown,
-      );
+    (item) => item.wireValue == value?.toString(),
+    orElse: () => HealthStatus.unknown,
+  );
 }
 
 class OperationalHealth {
@@ -37,7 +37,9 @@ class OperationalHealth {
     final api = Map<String, Object?>.from(json['api']! as Map);
     final printers = Map<String, Object?>.from(json['printers']! as Map);
     final fiscal = Map<String, Object?>.from(json['fiscal']! as Map);
-    final payment = Map<String, Object?>.from(json['paymentTerminal']! as Map);
+    final payment = Map<String, Object?>.from(
+      json['paymentTerminal']! as Map,
+    );
     final rawItems = printers['items'] as List? ?? const [];
     final rawSuggestions = json['suggestions'] as List? ?? const [];
     final lastJob = printers['lastJob'];
@@ -74,9 +76,8 @@ class OperationalHealth {
   final List<String> suggestions;
   final Map<String, Object?> raw;
 
-  String exportJson({required bool networkOnline}) => const JsonEncoder.withIndent(
-        '  ',
-      ).convert({
+  String exportJson({required bool networkOnline}) =>
+      const JsonEncoder.withIndent('  ').convert({
         ...raw,
         'client': {
           'networkOnline': networkOnline,
