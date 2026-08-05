@@ -19,9 +19,7 @@ class OfflineSyncController extends ChangeNotifier {
   List<OfflineOperation> get operations => _operations;
   bool get syncing => _syncing;
   int get pendingCount => _operations
-      .where(
-        (operation) => operation.status != OfflineOperationStatus.synced,
-      )
+      .where((operation) => operation.status != OfflineOperationStatus.synced)
       .length;
 
   Future<void> start() async {
