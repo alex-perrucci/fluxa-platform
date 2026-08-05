@@ -1,9 +1,5 @@
 export type OperationalHealthStatus =
-  | 'OK'
-  | 'DEGRADED'
-  | 'DOWN'
-  | 'NOT_CONFIGURED'
-  | 'UNKNOWN';
+  'OK' | 'DEGRADED' | 'DOWN' | 'NOT_CONFIGURED' | 'UNKNOWN';
 
 export function statusFromLastSeen(
   enabled: boolean,
@@ -18,9 +14,7 @@ export function statusFromLastSeen(
   return 'DOWN';
 }
 
-export function statusFromJob(
-  status: string | null,
-): OperationalHealthStatus {
+export function statusFromJob(status: string | null): OperationalHealthStatus {
   if (!status) return 'UNKNOWN';
   if (['COMPLETED', 'ISSUED', 'VOIDED', 'CAPTURED'].includes(status)) {
     return 'OK';

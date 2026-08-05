@@ -25,7 +25,29 @@ export default function InfrastructureHealthPage() {
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/control-center/platform/health', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Stato infrastruttura non disponibile.');
+        }
+        return (await response.json()) as Infrastructure;
+      })
+      .then((payload) => {
+        if (!cancelled) setData(payload);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setMessage(
+            error instanceof Error ? error.message : 'Errore inatteso.',
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return <main className="space-y-6">
     <header className="space-y-2"><p className="text-sm font-semibold uppercase tracking-[0.18em] text-neutral-500">Amministrazione Fluxa</p><h1 className="text-3xl font-semibold">Infrastruttura e code</h1><p className="text-sm text-neutral-600">Visibile solo agli amministratori di piattaforma. Nessun endpoint, host Redis o segreto viene esposto.</p></header>

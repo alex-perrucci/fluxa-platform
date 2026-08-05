@@ -71,6 +71,8 @@ export default function HealthPage() {
       window.removeEventListener('online', updateNetwork);
       window.removeEventListener('offline', updateNetwork);
     };
+    // The initial request deliberately runs once; later refreshes are explicit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function exportDiagnostics() {

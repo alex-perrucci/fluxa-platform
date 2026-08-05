@@ -240,7 +240,10 @@ export class HealthService implements OnModuleDestroy {
         status: printerStatus,
         items: printers,
         lastJob: lastPrintJob
-          ? { ...lastPrintJob, lastError: this.safeText(lastPrintJob.lastError) }
+          ? {
+              ...lastPrintJob,
+              lastError: this.safeText(lastPrintJob.lastError),
+            }
           : null,
       },
       fiscal: fiscal
