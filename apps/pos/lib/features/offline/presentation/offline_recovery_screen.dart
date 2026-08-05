@@ -56,8 +56,7 @@ class OfflineRecoveryScreen extends ConsumerWidget {
             for (final operation in controller.operations)
               _OperationCard(operation: operation, controller: controller),
             if (controller.operations.any(
-              (operation) =>
-                  operation.status == OfflineOperationStatus.synced,
+              (operation) => operation.status == OfflineOperationStatus.synced,
             ))
               Padding(
                 padding: const EdgeInsets.only(top: 12),
