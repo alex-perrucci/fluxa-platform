@@ -5,6 +5,7 @@ import '../../../core/di/providers.dart';
 import '../../../core/offline/offline_models.dart';
 import '../../../core/offline/offline_sync_controller.dart';
 
+// dart format off
 class OfflineRecoveryScreen extends ConsumerWidget {
   const OfflineRecoveryScreen({super.key});
 
