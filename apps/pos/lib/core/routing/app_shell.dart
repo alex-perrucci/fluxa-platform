@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/device/domain/device_assignment_models.dart';
 import '../di/providers.dart';
 import '../theme/fluxa_theme.dart';
 import '../widgets/fluxa_brand.dart';
