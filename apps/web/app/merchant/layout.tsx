@@ -16,7 +16,7 @@ const nav = [
   {
     href: '/merchant/pos-configuration',
     label: 'Configurazione POS',
-    icon: 'settings' as const,
+    icon: 'activity' as const,
   },
   { href: '/merchant/events', label: 'Eventi', icon: 'calendar' as const },
   {
