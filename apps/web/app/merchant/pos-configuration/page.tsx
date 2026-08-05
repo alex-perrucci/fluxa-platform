@@ -24,6 +24,11 @@ type Location = {
   name: string;
 };
 
+type PosConfiguration = {
+  devices: Device[];
+  locations: Location[];
+};
+
 const modeCopy: Record<OperatorMode, string> = {
   AUTO: 'Deriva dal ruolo dell’utente',
   CASHIER: 'Cassa, Tavoli, Ordini, stampa e diagnostica',
@@ -31,25 +36,38 @@ const modeCopy: Record<OperatorMode, string> = {
   MANAGER: 'Tutte le sezioni operative',
 };
 
+async function fetchPosConfiguration(): Promise<PosConfiguration> {
+  const [devicesResponse, locationsResponse] = await Promise.all([
+    fetch('/api/control-center/merchant/devices', { cache: 'no-store' }),
+    fetch('/api/control-center/merchant/locations', { cache: 'no-store' }),
+  ]);
+
+  if (!devicesResponse.ok || !locationsResponse.ok) {
+    throw new Error('Configurazione POS non disponibile.');
+  }
+
+  return {
+    devices: (await devicesResponse.json()) as Device[],
+    locations: (await locationsResponse.json()) as Location[],
+  };
+}
+
 export default function PosConfigurationPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function load() {
+  function applyConfiguration(configuration: PosConfiguration) {
+    setDevices(configuration.devices);
+    setLocations(configuration.locations);
+  }
+
+  async function reload() {
     setLoading(true);
     setMessage(null);
     try {
-      const [devicesResponse, locationsResponse] = await Promise.all([
-        fetch('/api/control-center/merchant/devices', { cache: 'no-store' }),
-        fetch('/api/control-center/merchant/locations', { cache: 'no-store' }),
-      ]);
-      if (!devicesResponse.ok || !locationsResponse.ok) {
-        throw new Error('Configurazione POS non disponibile.');
-      }
-      setDevices((await devicesResponse.json()) as Device[]);
-      setLocations((await locationsResponse.json()) as Location[]);
+      applyConfiguration(await fetchPosConfiguration());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Errore inatteso.');
     } finally {
@@ -58,7 +76,29 @@ export default function PosConfigurationPage() {
   }
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+
+    void fetchPosConfiguration()
+      .then((configuration) => {
+        if (!cancelled) {
+          setDevices(configuration.devices);
+          setLocations(configuration.locations);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setMessage(error instanceof Error ? error.message : 'Errore inatteso.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const activeDevices = useMemo(
@@ -93,7 +133,7 @@ export default function PosConfigurationPage() {
     setMessage(
       `Configurazione di ${device.deviceName} salvata. Il POS la riceverà alla prossima sincronizzazione.`,
     );
-    await load();
+    await reload();
   }
 
   return (
