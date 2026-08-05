@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
@@ -29,6 +31,9 @@ import '../../features/printing/presentation/printing_controller.dart';
 import '../config/app_config.dart';
 import '../network/api_client.dart';
 import '../network/session_expiry_bus.dart';
+import '../offline/offline_database.dart';
+import '../offline/offline_replay_service.dart';
+import '../offline/offline_sync_controller.dart';
 import '../platform/installation_identity.dart';
 import '../routing/app_router.dart';
 import '../storage/secure_store.dart';
@@ -106,6 +111,22 @@ final authRepositoryProvider = Provider<AuthRepository>(
     refreshCoordinator: ref.watch(apiClientProvider).refreshCoordinator,
   ),
 );
+
+final offlineDatabaseProvider = Provider<OfflineDatabase>(
+  (_) => OfflineDatabase(),
+);
+final offlineReplayServiceProvider = Provider<OfflineReplayService>(
+  (ref) => OfflineReplayService(ref.watch(apiClientProvider).dio),
+);
+final offlineSyncControllerProvider =
+    ChangeNotifierProvider<OfflineSyncController>((ref) {
+      final controller = OfflineSyncController(
+        ref.watch(offlineDatabaseProvider),
+        ref.watch(offlineReplayServiceProvider).call,
+      );
+      unawaited(controller.start());
+      return controller;
+    });
 
 final adminControllerProvider = ChangeNotifierProvider<AdminController>(
   (ref) => AdminController(ref.watch(adminApiProvider)),
