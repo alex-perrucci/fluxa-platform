@@ -25,9 +25,12 @@ class OfflineRecoveryScreen extends ConsumerWidget {
                       ? Icons.cloud_done_outlined
                       : Icons.cloud_upload_outlined,
                 ),
-                title: Text('${controller.pendingCount} operazioni da verificare'),
+                title: Text(
+                  '${controller.pendingCount} operazioni da verificare',
+                ),
                 subtitle: const Text(
-                  'Pagamenti, fiscale, cucina e operazioni sensibili non vengono mai accodati offline.',
+                  'Pagamenti, fiscale, cucina e operazioni sensibili non '
+                  'vengono mai accodati offline.',
                 ),
                 trailing: controller.syncing
                     ? const SizedBox.square(
@@ -53,7 +56,8 @@ class OfflineRecoveryScreen extends ConsumerWidget {
             for (final operation in controller.operations)
               _OperationCard(operation: operation, controller: controller),
             if (controller.operations.any(
-              (operation) => operation.status == OfflineOperationStatus.synced,
+              (operation) =>
+                  operation.status == OfflineOperationStatus.synced,
             ))
               Padding(
                 padding: const EdgeInsets.only(top: 12),
