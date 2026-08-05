@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/core/network/backend_error.dart';
 import 'package:fluxa_pos/core/network/session_expiry_bus.dart';
 import 'package:fluxa_pos/core/platform/installation_identity.dart';
+import 'package:fluxa_pos/core/routing/operator_navigation_policy.dart';
 import 'package:fluxa_pos/core/storage/secure_store.dart';
 import 'package:fluxa_pos/core/storage/session_store.dart';
 import 'package:fluxa_pos/features/auth/data/auth_repository.dart';
