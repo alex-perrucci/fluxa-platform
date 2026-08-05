@@ -97,6 +97,10 @@ interface BatchRow extends QueryResultRow {
   clientBatchId: string;
   createdAt: Date;
 }
+interface IdempotentBatchRow extends QueryResultRow {
+  id: string;
+  requestHash: string;
+}
 
 @Injectable()
 export class KitchenService {
@@ -233,21 +237,30 @@ export class KitchenService {
   ) {
     const org = assertOrganizationScope(auth);
     const requestHash = hospitalityRequestHash({ orderId });
-    const existing = await this.database.pool.query<
-      { id: string; requestHash: string } & QueryResultRow
-    >(
-      `SELECT id,request_hash AS "requestHash" FROM kitchen_ticket_batches WHERE organization_id=$1 AND device_id=$2 AND client_batch_id=$3`,
-      [org, auth.deviceId, dto.clientBatchId],
+    const existing = await this.findIdempotentBatch(
+      this.database.pool,
+      org,
+      auth.deviceId,
+      dto.clientBatchId,
     );
-    if (existing.rows[0]) {
-      if (existing.rows[0].requestHash !== requestHash)
-        throw new ConflictException({
-          code: 'CLIENT_BATCH_ID_REUSED',
-          message: 'Il clientBatchId è già stato usato con dati differenti.',
-        });
-      return this.batchResult(auth, existing.rows[0].id);
+    if (existing) {
+      this.assertEquivalentBatch(existing, requestHash);
+      return this.batchResult(auth, existing.id);
     }
     const batchId = await this.withTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `kitchen-dispatch:${org}:${auth.deviceId}:${dto.clientBatchId}`,
+      ]);
+      const repeated = await this.findIdempotentBatch(
+        client,
+        org,
+        auth.deviceId,
+        dto.clientBatchId,
+      );
+      if (repeated) {
+        this.assertEquivalentBatch(repeated, requestHash);
+        return repeated.id;
+      }
       const orderResult = await client.query<OrderRow>(
         `SELECT id,organization_id AS "organizationId",location_id AS "locationId",business_date AS "businessDate",number,status,service_mode AS "serviceMode" FROM orders WHERE id=$1 AND organization_id=$2 FOR UPDATE`,
         [orderId, org],
@@ -486,6 +499,28 @@ export class KitchenService {
       [batchId],
     );
     return { ...batch.rows[0], tickets: tickets.rows };
+  }
+  private async findIdempotentBatch(
+    queryable: Pick<PoolClient, 'query'>,
+    organizationId: string,
+    deviceId: string,
+    clientBatchId: string,
+  ) {
+    const result = await queryable.query<IdempotentBatchRow>(
+      `SELECT id,request_hash AS "requestHash" FROM kitchen_ticket_batches WHERE organization_id=$1 AND device_id=$2 AND client_batch_id=$3`,
+      [organizationId, deviceId, clientBatchId],
+    );
+    return result.rows[0] ?? null;
+  }
+  private assertEquivalentBatch(
+    batch: IdempotentBatchRow,
+    requestHash: string,
+  ) {
+    if (batch.requestHash !== requestHash)
+      throw new ConflictException({
+        code: 'CLIENT_BATCH_ID_REUSED',
+        message: 'Il clientBatchId è già stato usato con dati differenti.',
+      });
   }
   private async requireStation(org: string, id: string) {
     const r = await this.database.pool.query<StationRow>(
