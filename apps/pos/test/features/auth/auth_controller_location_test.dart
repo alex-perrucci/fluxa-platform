@@ -129,6 +129,7 @@ CurrentDeviceAssignmentContext _context(DeviceOperationalStatus status) {
       id: 'assignment-1',
       organizationId: 'organization-1',
       locationId: hasLocation ? 'location-1' : null,
+      operatorMode: PosOperatorMode.auto,
       active: status != DeviceOperationalStatus.assignmentRevoked,
       assignedAt: DateTime.utc(2026, 7, 20),
       revokedAt: status == DeviceOperationalStatus.assignmentRevoked
@@ -313,6 +314,7 @@ class _FakeAuthRepository implements AuthRepository {
         id: 'assignment-2',
         organizationId: organizationId,
         locationId: 'location-2',
+        operatorMode: PosOperatorMode.auto,
         active: true,
         assignedAt: DateTime.utc(2026, 7, 20),
         revokedAt: null,
