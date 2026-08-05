@@ -91,23 +91,14 @@ class OfflineDatabase extends _$OfflineDatabase {
     return rows.map(_mapOperation).toList(growable: false);
   }
 
-  Future<void> markSyncing(String id) => _setStatus(
-    id,
-    OfflineOperationStatus.syncing,
-    clearError: true,
-  );
+  Future<void> markSyncing(String id) =>
+      _setStatus(id, OfflineOperationStatus.syncing, clearError: true);
 
-  Future<void> markSynced(String id) => _setStatus(
-    id,
-    OfflineOperationStatus.synced,
-    clearError: true,
-  );
+  Future<void> markSynced(String id) =>
+      _setStatus(id, OfflineOperationStatus.synced, clearError: true);
 
-  Future<void> markConflict(String id, String message) => _setStatus(
-    id,
-    OfflineOperationStatus.conflict,
-    error: message,
-  );
+  Future<void> markConflict(String id, String message) =>
+      _setStatus(id, OfflineOperationStatus.conflict, error: message);
 
   Future<void> markFailed(
     String id,
