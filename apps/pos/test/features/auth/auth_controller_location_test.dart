@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/core/network/backend_error.dart';
 import 'package:fluxa_pos/core/network/session_expiry_bus.dart';
 import 'package:fluxa_pos/core/platform/installation_identity.dart';
-import 'package:fluxa_pos/core/routing/operator_navigation_policy.dart';
 import 'package:fluxa_pos/core/storage/secure_store.dart';
 import 'package:fluxa_pos/core/storage/session_store.dart';
 import 'package:fluxa_pos/features/auth/data/auth_repository.dart';
@@ -130,7 +129,7 @@ CurrentDeviceAssignmentContext _context(DeviceOperationalStatus status) {
       id: 'assignment-1',
       organizationId: 'organization-1',
       locationId: hasLocation ? 'location-1' : null,
-      operatorMode: PosOperatorMode.auto,
+      operatorMode: DeviceOperatorMode.auto,
       active: status != DeviceOperationalStatus.assignmentRevoked,
       assignedAt: DateTime.utc(2026, 7, 20),
       revokedAt: status == DeviceOperationalStatus.assignmentRevoked
@@ -315,7 +314,7 @@ class _FakeAuthRepository implements AuthRepository {
         id: 'assignment-2',
         organizationId: organizationId,
         locationId: 'location-2',
-        operatorMode: PosOperatorMode.auto,
+        operatorMode: DeviceOperatorMode.auto,
         active: true,
         assignedAt: DateTime.utc(2026, 7, 20),
         revokedAt: null,
