@@ -19,21 +19,17 @@ jobs:
     name: Backend quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
-
       - name: Install backend dependencies
         run: npm ci
-
       - name: Verify backend release gates
         run: npm run verify:ci
 
@@ -44,27 +40,21 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-
       - name: Install web dependencies
         run: npm ci
-
       - name: Lint web application
         run: npm run lint
-
       - name: Test web application
         run: npm run test
-
       - name: Build web application
         run: npm run build
         env:
@@ -77,64 +67,53 @@ jobs:
     defaults:
       run:
         working-directory: apps/pos
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.32.5
           channel: stable
           cache: true
-
       - name: Prepare CI logs
         run: mkdir -p ci-logs
-
       - name: Resolve Flutter dependencies
         shell: bash
         run: |
           set -o pipefail
           flutter pub get 2>&1 | tee ci-logs/flutter-pub-get.log
-
       - name: Verify Dart formatting
         shell: bash
         run: |
           set -o pipefail
           dart format --output=none --set-exit-if-changed . 2>&1 |
             tee ci-logs/dart-format.log
-
       - name: Analyze Flutter application
         shell: bash
         run: |
           set -o pipefail
           flutter analyze 2>&1 | tee ci-logs/flutter-analyze.log
-
       - name: Test Flutter application
         shell: bash
         run: |
           set -o pipefail
           flutter test 2>&1 | tee ci-logs/flutter-test.log
-
       - name: Build Flutter web
         shell: bash
         run: |
           set -o pipefail
           flutter build web 2>&1 | tee ci-logs/flutter-build-web.log
-
       - name: Build Android debug APK
         shell: bash
         run: |
           set -o pipefail
           flutter build apk --debug 2>&1 | tee ci-logs/flutter-build-apk.log
-
       - name: Upload Flutter logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -143,7 +122,6 @@ jobs:
           path: apps/pos/ci-logs
           if-no-files-found: warn
           retention-days: 14
-
       - name: Reclaim disk before cache cleanup
         if: always()
         shell: bash
@@ -158,12 +136,11 @@ jobs:
   release-e2e:
     name: Release E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     needs:
       - backend
       - web
       - pos
-
     services:
       postgres:
         image: postgres:17-alpine
@@ -178,7 +155,6 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
-
       redis:
         image: redis:7.4-alpine
         ports:
@@ -188,7 +164,6 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
-
     env:
       NODE_ENV: development
       API_PORT: '3000'
@@ -223,35 +198,31 @@ jobs:
       FLUXA_E2E_ADMIN_PASSWORD: E2E_Admin_Password_2026!
       RELEASE_SHA: ${{ github.sha }}
       RELEASE_VERSION: 0.8.0
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Build API
-        run: npm run build:api
-
+      - name: Build API and fiscal worker
+        run: |
+          npm run build:api
+          npm run build:fiscal-worker
       - name: Apply migrations
         run: npm run db:migrate
-
       - name: Seed platform administrator
         run: npm run db:seed
-
-      - name: Start API
+      - name: Start API and fiscal worker
         run: |
           node dist/apps/api/main.js > api.log 2>&1 &
           echo $! > api.pid
-
+          node dist/apps/fiscal-worker/main.js > fiscal-worker.log 2>&1 &
+          echo $! > fiscal-worker.pid
       - name: Wait for readiness
         run: |
           for attempt in $(seq 1 40); do
@@ -262,22 +233,27 @@ jobs:
             sleep 2
           done
           cat api.log
+          cat fiscal-worker.log
           exit 1
-
       - name: Run release candidate E2E
         run: npm run e2e:release
-
-      - name: Upload API log on failure
+      - name: Run POS sales E2E
+        run: npm run e2e:pos-sales
+      - name: Upload service logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: fluxa-api-e2e-log
-          path: api.log
+          name: fluxa-service-e2e-logs
+          path: |
+            api.log
+            fiscal-worker.log
           if-no-files-found: ignore
-
-      - name: Stop API
+      - name: Stop services
         if: always()
         run: |
           if [ -f api.pid ]; then
             kill "$(cat api.pid)" || true
+          fi
+          if [ -f fiscal-worker.pid ]; then
+            kill "$(cat fiscal-worker.pid)" || true
           fi
