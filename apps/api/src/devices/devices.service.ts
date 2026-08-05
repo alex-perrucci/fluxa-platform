@@ -168,7 +168,7 @@ export class DevicesService {
         dto.operatorMode ?? 'AUTO',
       ],
     );
-    const assignment = result.rows[0]!;
+    const assignment = result.rows[0];
 
     await this.database.db.insert(auditEvents).values({
       organizationId,
