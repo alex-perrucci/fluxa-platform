@@ -3,6 +3,7 @@ import {
   DEVICE_OPERATIONAL_STATUSES,
   type DeviceOperationalStatus,
 } from '../device-assignment-status';
+import { POS_OPERATOR_MODES, type PosOperatorMode } from './assign-device.dto';
 
 export class CurrentDeviceViewDto {
   @ApiProperty({ format: 'uuid' })
@@ -42,6 +43,9 @@ export class CurrentDeviceAssignmentViewDto {
 
   @ApiProperty()
   active!: boolean;
+
+  @ApiProperty({ enum: POS_OPERATOR_MODES })
+  operatorMode!: PosOperatorMode;
 
   @ApiProperty({ type: String, format: 'date-time' })
   assignedAt!: Date;

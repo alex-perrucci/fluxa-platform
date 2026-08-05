@@ -1,19 +1,38 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import type { QueryResultRow } from 'pg';
 import {
   auditEvents,
   authSessions,
-  deviceAssignments,
   devices,
   locations,
   organizationMemberships,
-  users,
 } from '@fluxa/database';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
 import { assertOrganizationScope } from '../auth/tenant-scope';
 import type { AssignDeviceDto } from './dto/assign-device.dto';
 import type { UpdateCurrentDeviceDto } from './dto/update-current-device.dto';
+
+interface DeviceAssignmentListRow extends QueryResultRow {
+  assignmentId: string;
+  active: boolean;
+  operatorMode: 'AUTO' | 'CASHIER' | 'KITCHEN' | 'MANAGER';
+  assignedAt: Date;
+  revokedAt: Date | null;
+  deviceId: string;
+  installationId: string;
+  deviceName: string;
+  platform: string;
+  model: string | null;
+  appVersion: string | null;
+  lastSeenAt: Date;
+  userId: string;
+  userEmail: string;
+  userDisplayName: string;
+  locationId: string | null;
+  locationName: string | null;
+}
 
 @Injectable()
 export class DevicesService {
@@ -62,32 +81,25 @@ export class DevicesService {
 
   async list(auth: AuthContext) {
     const organizationId = assertOrganizationScope(auth);
-
-    return this.database.db
-      .select({
-        assignmentId: deviceAssignments.id,
-        active: deviceAssignments.active,
-        assignedAt: deviceAssignments.assignedAt,
-        revokedAt: deviceAssignments.revokedAt,
-        deviceId: devices.id,
-        installationId: devices.installationId,
-        deviceName: devices.name,
-        platform: devices.platform,
-        model: devices.model,
-        appVersion: devices.appVersion,
-        lastSeenAt: devices.lastSeenAt,
-        userId: users.id,
-        userEmail: users.email,
-        userDisplayName: users.displayName,
-        locationId: locations.id,
-        locationName: locations.name,
-      })
-      .from(deviceAssignments)
-      .innerJoin(devices, eq(devices.id, deviceAssignments.deviceId))
-      .innerJoin(users, eq(users.id, devices.userId))
-      .leftJoin(locations, eq(locations.id, deviceAssignments.locationId))
-      .where(eq(deviceAssignments.organizationId, organizationId))
-      .orderBy(asc(users.displayName), asc(devices.name));
+    const result = await this.database.pool.query<DeviceAssignmentListRow>(
+      `SELECT da.id AS "assignmentId",da.active,
+         da.operator_mode::text AS "operatorMode",
+         da.assigned_at AS "assignedAt",da.revoked_at AS "revokedAt",
+         d.id AS "deviceId",d.installation_id AS "installationId",
+         d.name AS "deviceName",d.platform::text,d.model,
+         d.app_version AS "appVersion",d.last_seen_at AS "lastSeenAt",
+         u.id AS "userId",u.email AS "userEmail",
+         u.display_name AS "userDisplayName",l.id AS "locationId",
+         l.name AS "locationName"
+       FROM device_assignments da
+       INNER JOIN devices d ON d.id=da.device_id
+       INNER JOIN users u ON u.id=d.user_id
+       LEFT JOIN locations l ON l.id=da.location_id
+       WHERE da.organization_id=$1
+       ORDER BY u.display_name,d.name`,
+      [organizationId],
+    );
+    return result.rows;
   }
 
   async assign(auth: AuthContext, deviceId: string, dto: AssignDeviceDto) {
@@ -138,24 +150,25 @@ export class DevicesService {
       }
     }
 
-    const [assignment] = await this.database.db
-      .insert(deviceAssignments)
-      .values({
+    const result = await this.database.pool.query<
+      { id: string } & QueryResultRow
+    >(
+      `INSERT INTO device_assignments
+       (device_id,organization_id,location_id,operator_mode,active)
+       VALUES ($1,$2,$3,$4::pos_operator_mode,true)
+       ON CONFLICT (device_id,organization_id) DO UPDATE SET
+         location_id=EXCLUDED.location_id,
+         operator_mode=EXCLUDED.operator_mode,
+         active=true,revoked_at=NULL,updated_at=NOW()
+       RETURNING id`,
+      [
         deviceId,
         organizationId,
-        locationId: dto.locationId ?? null,
-        active: true,
-      })
-      .onConflictDoUpdate({
-        target: [deviceAssignments.deviceId, deviceAssignments.organizationId],
-        set: {
-          locationId: dto.locationId ?? null,
-          active: true,
-          revokedAt: null,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+        dto.locationId ?? null,
+        dto.operatorMode ?? 'AUTO',
+      ],
+    );
+    const assignment = result.rows[0]!;
 
     await this.database.db.insert(auditEvents).values({
       organizationId,
@@ -166,30 +179,30 @@ export class DevicesService {
       payload: {
         deviceId,
         locationId: dto.locationId ?? null,
+        operatorMode: dto.operatorMode ?? 'AUTO',
       },
     });
 
-    return assignment;
+    return {
+      id: assignment.id,
+      deviceId,
+      organizationId,
+      locationId: dto.locationId ?? null,
+      operatorMode: dto.operatorMode ?? 'AUTO',
+      active: true,
+    };
   }
 
   async revokeAssignment(auth: AuthContext, deviceId: string) {
     const organizationId = assertOrganizationScope(auth);
-
-    const [assignment] = await this.database.db
-      .update(deviceAssignments)
-      .set({
-        active: false,
-        revokedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(deviceAssignments.deviceId, deviceId),
-          eq(deviceAssignments.organizationId, organizationId),
-          eq(deviceAssignments.active, true),
-        ),
-      )
-      .returning();
+    const result = await this.database.pool.query<
+      { id: string } & QueryResultRow
+    >(
+      `UPDATE device_assignments SET active=false,revoked_at=NOW(),updated_at=NOW()
+       WHERE device_id=$1 AND organization_id=$2 AND active=true RETURNING id`,
+      [deviceId, organizationId],
+    );
+    const assignment = result.rows[0];
 
     if (!assignment) {
       throw new NotFoundException({

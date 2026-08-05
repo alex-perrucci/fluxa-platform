@@ -1,225 +1,269 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/device/domain/device_assignment_models.dart';
 import '../di/providers.dart';
 import '../theme/fluxa_theme.dart';
 import '../widgets/fluxa_brand.dart';
+import 'operator_navigation_policy.dart';
+import 'operator_tutorial_gate.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
-  static const _printingDestinationIndex = 5;
-
-  static const destinations = [
-    NavigationDestination(
-      icon: Icon(Icons.point_of_sale_outlined),
-      selectedIcon: Icon(Icons.point_of_sale),
+  static const _allDestinations = <_PosDestination>[
+    _PosDestination(
+      branchIndex: 0,
+      section: PosSection.checkout,
+      icon: Icons.point_of_sale_outlined,
+      selectedIcon: Icons.point_of_sale,
       label: 'Cassa',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.table_restaurant_outlined),
-      selectedIcon: Icon(Icons.table_restaurant),
+    _PosDestination(
+      branchIndex: 1,
+      section: PosSection.tables,
+      icon: Icons.table_restaurant_outlined,
+      selectedIcon: Icons.table_restaurant,
       label: 'Tavoli',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.receipt_long_outlined),
-      selectedIcon: Icon(Icons.receipt_long),
+    _PosDestination(
+      branchIndex: 2,
+      section: PosSection.orders,
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long,
       label: 'Ordini',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.undo_outlined),
-      selectedIcon: Icon(Icons.undo),
+    _PosDestination(
+      branchIndex: 3,
+      section: PosSection.refunds,
+      icon: Icons.undo_outlined,
+      selectedIcon: Icons.undo,
       label: 'Rimborsi',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.soup_kitchen_outlined),
-      selectedIcon: Icon(Icons.soup_kitchen),
+    _PosDestination(
+      branchIndex: 4,
+      section: PosSection.kitchen,
+      icon: Icons.soup_kitchen_outlined,
+      selectedIcon: Icons.soup_kitchen,
       label: 'Cucina',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.print_outlined),
-      selectedIcon: Icon(Icons.print),
+    _PosDestination(
+      branchIndex: 5,
+      section: PosSection.printing,
+      icon: Icons.print_outlined,
+      selectedIcon: Icons.print,
       label: 'Stampa',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.account_balance_outlined),
-      selectedIcon: Icon(Icons.account_balance),
+    _PosDestination(
+      branchIndex: 6,
+      section: PosSection.fiscal,
+      icon: Icons.account_balance_outlined,
+      selectedIcon: Icons.account_balance,
       label: 'Fiscale',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.settings_outlined),
-      selectedIcon: Icon(Icons.settings),
-      label: 'Impostazioni',
+    _PosDestination(
+      branchIndex: 7,
+      section: PosSection.settings,
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
+      label: 'Diagnostica',
     ),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider).state;
+    final deviceMode = auth.deviceAssignment?.assignment.operatorMode;
+    final mode = PosOperatorMode.fromWire(deviceMode?.wireValue);
+    final allowed = PosNavigationPolicy.sections(
+      role: auth.session?.role,
+      mode: mode,
+    );
+    final destinations = _allDestinations
+        .where((item) => allowed.contains(item.section))
+        .toList(growable: false);
+    final visibleIndex = destinations.indexWhere(
+      (item) => item.branchIndex == navigationShell.currentIndex,
+    );
+    final selectedIndex = visibleIndex < 0 ? 0 : visibleIndex;
     final wide = MediaQuery.sizeOf(context).width >= 900;
-    final body = navigationShell;
 
-    return Scaffold(
-      appBar: wide
-          ? null
-          : AppBar(
-              title: const FluxaBrandLockup(compact: true),
-              actions: const [
-                Padding(
-                  padding: EdgeInsets.only(right: 16),
-                  child: Center(
-                    child: Text(
-                      'POS',
-                      style: TextStyle(
-                        color: FluxaPalette.goldDark,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+    return OperatorTutorialGate(
+      mode: mode,
+      child: Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.f1): _NavigateIntent(0),
+          SingleActivator(LogicalKeyboardKey.f2): _NavigateIntent(1),
+          SingleActivator(LogicalKeyboardKey.f3): _NavigateIntent(2),
+          SingleActivator(LogicalKeyboardKey.f4): _NavigateIntent(3),
+          SingleActivator(LogicalKeyboardKey.f5): _NavigateIntent(4),
+        },
+        child: Actions(
+          actions: {
+            _NavigateIntent: CallbackAction<_NavigateIntent>(
+              onInvoke: (intent) {
+                if (intent.visibleIndex < destinations.length) {
+                  _go(ref, destinations[intent.visibleIndex].branchIndex);
+                }
+                return null;
+              },
             ),
-      body: SafeArea(
-        top: wide,
-        child: wide
-            ? Row(
-                children: [
-                  Container(
-                    width: 246,
-                    decoration: const BoxDecoration(
-                      color: FluxaPalette.ink,
-                      border: Border(
-                        right: BorderSide(color: Color(0xFF2A2B30)),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(24, 28, 24, 20),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: FluxaBrandLockup(reversed: true),
-                          ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 24),
-                          child: Divider(color: Color(0xFF303136)),
-                        ),
-                        Expanded(
-                          child: NavigationRail(
-                            extended: true,
-                            minExtendedWidth: 246,
-                            selectedIndex: navigationShell.currentIndex,
-                            onDestinationSelected: (index) => _go(ref, index),
-                            destinations: destinations
-                                .map(
-                                  (item) => NavigationRailDestination(
-                                    icon: item.icon,
-                                    selectedIcon: item.selectedIcon,
-                                    label: Text(item.label),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(24, 16, 24, 24),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.circle,
-                                size: 9,
-                                color: Color(0xFF4CCB91),
+          },
+          child: Focus(
+            autofocus: true,
+            child: Scaffold(
+              appBar: wide
+                  ? null
+                  : AppBar(
+                      title: const FluxaBrandLockup(compact: true),
+                      actions: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 16),
+                          child: Center(
+                            child: Text(
+                              mode.wireValue,
+                              style: const TextStyle(
+                                color: FluxaPalette.goldDark,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.5,
                               ),
-                              SizedBox(width: 9),
-                              Expanded(
-                                child: Text(
-                                  'Sistema operativo',
-                                  style: TextStyle(
-                                    color: Colors.white60,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Container(
-                          height: 74,
-                          padding: const EdgeInsets.symmetric(horizontal: 26),
-                          decoration: const BoxDecoration(
-                            color: FluxaPalette.paper,
-                            border: Border(
-                              bottom: BorderSide(color: FluxaPalette.line),
                             ),
                           ),
-                          child: const Row(
-                            children: [
-                              Text(
-                                'Fluxa POS',
-                                style: TextStyle(
-                                  color: FluxaPalette.ink,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Spacer(),
-                              Icon(
-                                Icons.lock_outline,
-                                size: 18,
-                                color: FluxaPalette.goldDark,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Sessione protetta',
-                                style: TextStyle(
-                                  color: FluxaPalette.muted,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
                         ),
-                        Expanded(child: body),
                       ],
                     ),
-                  ),
-                ],
-              )
-            : body,
-      ),
-      bottomNavigationBar: wide
-          ? null
-          : NavigationBar(
-              selectedIndex: navigationShell.currentIndex,
-              onDestinationSelected: (index) => _go(ref, index),
-              destinations: destinations,
+              body: SafeArea(
+                top: wide,
+                child: wide
+                    ? Row(
+                        children: [
+                          _DesktopNavigation(
+                            destinations: destinations,
+                            selectedIndex: selectedIndex,
+                            onSelected: (index) =>
+                                _go(ref, destinations[index].branchIndex),
+                            mode: mode,
+                          ),
+                          Expanded(child: navigationShell),
+                        ],
+                      )
+                    : navigationShell,
+              ),
+              bottomNavigationBar: wide
+                  ? null
+                  : NavigationBar(
+                      selectedIndex: selectedIndex,
+                      onDestinationSelected: (index) =>
+                          _go(ref, destinations[index].branchIndex),
+                      destinations: destinations
+                          .map(
+                            (item) => NavigationDestination(
+                              icon: Icon(item.icon),
+                              selectedIcon: Icon(item.selectedIcon),
+                              label: item.label,
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
             ),
+          ),
+        ),
+      ),
     );
   }
 
-  void _go(WidgetRef ref, int index) {
+  void _go(WidgetRef ref, int branchIndex) {
     navigationShell.goBranch(
-      index,
-      initialLocation: index == navigationShell.currentIndex,
+      branchIndex,
+      initialLocation: branchIndex == navigationShell.currentIndex,
     );
-    if (index != _printingDestinationIndex) {
-      return;
+    if (branchIndex == 5) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await ref.read(printingControllerProvider).refresh();
+      });
     }
-    final controller = ref.read(printingControllerProvider);
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await controller.refresh();
-    });
   }
+}
+
+class _DesktopNavigation extends StatelessWidget {
+  const _DesktopNavigation({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+    required this.mode,
+  });
+
+  final List<_PosDestination> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final PosOperatorMode mode;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 246,
+    decoration: const BoxDecoration(
+      color: FluxaPalette.ink,
+      border: Border(right: BorderSide(color: Color(0xFF2A2B30))),
+    ),
+    child: Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 28, 24, 20),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FluxaBrandLockup(reversed: true),
+          ),
+        ),
+        Expanded(
+          child: NavigationRail(
+            extended: true,
+            minExtendedWidth: 246,
+            selectedIndex: selectedIndex,
+            onDestinationSelected: onSelected,
+            destinations: destinations
+                .map(
+                  (item) => NavigationRailDestination(
+                    icon: Icon(item.icon),
+                    selectedIcon: Icon(item.selectedIcon),
+                    label: Text(item.label),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Text(
+            '${mode.wireValue} · F1–F5 navigazione rapida',
+            style: const TextStyle(color: Colors.white60, fontSize: 12),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PosDestination {
+  const _PosDestination({
+    required this.branchIndex,
+    required this.section,
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+
+  final int branchIndex;
+  final PosSection section;
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+}
+
+class _NavigateIntent extends Intent {
+  const _NavigateIntent(this.visibleIndex);
+  final int visibleIndex;
 }

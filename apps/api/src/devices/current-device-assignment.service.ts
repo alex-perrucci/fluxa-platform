@@ -18,6 +18,7 @@ interface CurrentDeviceAssignmentRow extends QueryResultRow {
   assignmentId: string | null;
   assignmentLocationId: string | null;
   assignmentActive: boolean | null;
+  operatorMode: 'AUTO' | 'CASHIER' | 'KITCHEN' | 'MANAGER' | null;
   assignedAt: Date | null;
   revokedAt: Date | null;
   assignmentUpdatedAt: Date | null;
@@ -48,6 +49,7 @@ export class CurrentDeviceAssignmentService {
           da.id AS "assignmentId",
           da.location_id AS "assignmentLocationId",
           da.active AS "assignmentActive",
+          da.operator_mode::text AS "operatorMode",
           da.assigned_at AS "assignedAt",
           da.revoked_at AS "revokedAt",
           da.updated_at AS "assignmentUpdatedAt",
@@ -111,6 +113,7 @@ export class CurrentDeviceAssignmentService {
         organizationId,
         locationId: row.assignmentLocationId,
         active: row.assignmentActive,
+        operatorMode: row.operatorMode ?? 'AUTO',
         assignedAt: row.assignedAt,
         revokedAt: row.revokedAt,
         updatedAt: row.assignmentUpdatedAt,

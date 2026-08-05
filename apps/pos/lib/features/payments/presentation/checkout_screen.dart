@@ -419,7 +419,13 @@ class _CheckoutSummary extends StatelessWidget {
       amountCents: values.$1,
       tenderedCents: values.$2,
     );
-    if (success) await onOrderRefresh();
+    if (success) {
+      await onOrderRefresh();
+      if (controller.checkout?.isCompleted == true && context.mounted) {
+        orderController.discardCurrentView();
+        context.go('/home');
+      }
+    }
   }
 
   Future<void> _terminal(BuildContext context) async {

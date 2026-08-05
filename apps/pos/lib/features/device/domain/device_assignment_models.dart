@@ -20,6 +20,24 @@ enum DeviceOperationalStatus {
   }
 }
 
+enum DeviceOperatorMode {
+  auto('AUTO'),
+  cashier('CASHIER'),
+  kitchen('KITCHEN'),
+  manager('MANAGER');
+
+  const DeviceOperatorMode(this.wireValue);
+  final String wireValue;
+
+  static DeviceOperatorMode fromWire(Object? value) {
+    final wireValue = value?.toString() ?? 'AUTO';
+    for (final mode in values) {
+      if (mode.wireValue == wireValue) return mode;
+    }
+    return DeviceOperatorMode.auto;
+  }
+}
+
 class CurrentDeviceAssignmentDevice {
   const CurrentDeviceAssignmentDevice({
     required this.id,
@@ -60,6 +78,7 @@ class DeviceAssignmentRecord {
     required this.organizationId,
     required this.locationId,
     required this.active,
+    required this.operatorMode,
     required this.assignedAt,
     required this.revokedAt,
     required this.updatedAt,
@@ -71,6 +90,7 @@ class DeviceAssignmentRecord {
         organizationId: json['organizationId']! as String,
         locationId: json['locationId']?.toString(),
         active: json['active'] == true,
+        operatorMode: DeviceOperatorMode.fromWire(json['operatorMode']),
         assignedAt: DateTime.parse(json['assignedAt']! as String),
         revokedAt: json['revokedAt'] == null
             ? null
@@ -82,6 +102,7 @@ class DeviceAssignmentRecord {
   final String organizationId;
   final String? locationId;
   final bool active;
+  final DeviceOperatorMode operatorMode;
   final DateTime assignedAt;
   final DateTime? revokedAt;
   final DateTime updatedAt;
