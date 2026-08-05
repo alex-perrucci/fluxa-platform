@@ -422,8 +422,7 @@ class _CheckoutSummary extends StatelessWidget {
     if (success) {
       await onOrderRefresh();
       if (controller.checkout?.isCompleted == true && context.mounted) {
-        orderController.discardCurrentView();
-        context.go('/home');
+        onStartNewOrder();
       }
     }
   }
