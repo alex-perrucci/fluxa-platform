@@ -214,6 +214,7 @@ class _CatalogBrowser extends StatelessWidget {
         const SizedBox(height: 16),
         TextField(
           key: const Key('catalog-search-field'),
+          autofocus: true,
           onChanged: controller.setSearchQuery,
           decoration: const InputDecoration(
             prefixIcon: Icon(Icons.search),

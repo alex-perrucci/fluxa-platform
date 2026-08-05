@@ -13,6 +13,11 @@ const nav = [
     label: 'Piantina',
     icon: 'location' as const,
   },
+  {
+    href: '/merchant/pos-configuration',
+    label: 'Configurazione POS',
+    icon: 'activity' as const,
+  },
   { href: '/merchant/events', label: 'Eventi', icon: 'calendar' as const },
   {
     href: '/merchant/reservations',

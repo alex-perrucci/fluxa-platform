@@ -19,6 +19,7 @@ import '../../features/printing/presentation/printing_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/async_states.dart';
 import 'app_shell.dart';
+import 'operator_navigation_policy.dart';
 
 GoRouter buildAppRouter(AuthController authController) => GoRouter(
   initialLocation: '/bootstrap',
@@ -46,7 +47,12 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
         location == '/login' ||
         location == '/select-organization' ||
         location == '/operational-setup') {
-      return '/home';
+      return _operatorHome(authController);
+    }
+
+    final allowed = _allowedPaths(authController);
+    if (_isShellPath(location) && !allowed.contains(location)) {
+      return _operatorHome(authController);
     }
     return null;
   },
@@ -159,3 +165,49 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
     ),
   ),
 );
+
+Set<String> _allowedPaths(AuthController controller) {
+  final state = controller.state;
+  final mode = PosOperatorMode.fromWire(
+    state.deviceAssignment?.assignment.operatorMode.wireValue,
+  );
+  final sections = PosNavigationPolicy.sections(
+    role: state.session?.role,
+    mode: mode,
+  );
+  const paths = {
+    PosSection.checkout: '/home',
+    PosSection.tables: '/tables',
+    PosSection.orders: '/orders',
+    PosSection.refunds: '/refunds',
+    PosSection.kitchen: '/kitchen',
+    PosSection.printing: '/printing',
+    PosSection.fiscal: '/fiscal',
+    PosSection.settings: '/settings',
+  };
+  return sections.map((section) => paths[section]!).toSet();
+}
+
+String _operatorHome(AuthController controller) {
+  final allowed = _allowedPaths(controller);
+  const priority = [
+    '/home',
+    '/kitchen',
+    '/tables',
+    '/orders',
+    '/printing',
+    '/settings',
+  ];
+  return priority.firstWhere(allowed.contains, orElse: () => '/settings');
+}
+
+bool _isShellPath(String location) => const {
+  '/home',
+  '/tables',
+  '/orders',
+  '/refunds',
+  '/kitchen',
+  '/printing',
+  '/fiscal',
+  '/settings',
+}.contains(location);

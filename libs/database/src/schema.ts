@@ -48,6 +48,13 @@ export const devicePlatform = pgEnum('device_platform', [
 
 export const deviceStatus = pgEnum('device_status', ['ACTIVE', 'REVOKED']);
 
+export const posOperatorMode = pgEnum('pos_operator_mode', [
+  'AUTO',
+  'CASHIER',
+  'KITCHEN',
+  'MANAGER',
+]);
+
 export const merchantStatus = pgEnum('merchant_status', ['ACTIVE', 'INACTIVE']);
 
 export const locationStatus = pgEnum('location_status', ['ACTIVE', 'INACTIVE']);
@@ -460,6 +467,7 @@ export const deviceAssignments = pgTable(
     locationId: uuid('location_id').references(() => locations.id, {
       onDelete: 'set null',
     }),
+    operatorMode: posOperatorMode('operator_mode').notNull().default('AUTO'),
     active: boolean('active').notNull().default(true),
     assignedAt: timestamp('assigned_at', { withTimezone: true })
       .notNull()
