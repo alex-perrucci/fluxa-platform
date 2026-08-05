@@ -3,7 +3,7 @@
 part of 'offline_database.dart';
 
 abstract class _$OfflineDatabase extends GeneratedDatabase {
-  _$OfflineDatabase(QueryExecutor e) : super(e);
+  _$OfflineDatabase(super.e);
 
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => const [];
