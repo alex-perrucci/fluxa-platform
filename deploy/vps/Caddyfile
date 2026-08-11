@@ -35,3 +35,8 @@
 		format json
 	}
 }
+
+# Extra virtual hosts live in Caddy's persistent data volume so they survive
+# Fluxa deployment-bundle replacements of /opt/fluxa.
+# An empty glob is valid, so this is safe even before any drop-ins exist.
+import /data/sites-enabled/*
