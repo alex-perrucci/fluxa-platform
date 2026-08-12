@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/admin/presentation/admin_management_screen.dart';
-import '../../features/admin/presentation/admin_screen.dart';
 import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/organization_selection_screen.dart';
@@ -15,6 +13,7 @@ import '../../features/hospitality/presentation/tables_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/payments/presentation/checkout_screen.dart';
 import '../../features/payments/presentation/refunds_screen.dart';
+import '../../features/printing/presentation/printer_setup_screen.dart';
 import '../../features/printing/presentation/printing_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/async_states.dart';
@@ -71,10 +70,9 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
       path: '/operational-setup',
       builder: (context, state) => const OperationalBlockedScreen(),
     ),
-    GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
     GoRoute(
-      path: '/admin/manage',
-      builder: (context, state) => const AdminManagementScreen(),
+      path: '/printer-setup',
+      builder: (context, state) => const PrinterSetupScreen(),
     ),
     GoRoute(
       path: '/fiscalize/:orderId',

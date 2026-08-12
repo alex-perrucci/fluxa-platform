@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/di/providers.dart';
@@ -67,6 +68,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final session = state.session!;
     final assignment = state.deviceAssignment;
     final location = assignment?.location;
+    final canManagePrinters = {'OWNER', 'ADMIN', 'MANAGER'}.contains(session.role);
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -77,8 +79,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: 4),
         const Text(
-          'Configurazioni e credenziali restano nel Venue Control Center. '
-          'Qui sono mostrati solo segnali operativi privi di segreti.',
+          'Catalogo, prezzi, locale, cucina e routing sono configurati nel Venue Control Center. '
+          'Sul POS restano diagnostica e associazione fisica delle stampanti.',
         ),
         const SizedBox(height: 16),
         Card(
@@ -228,6 +230,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: const Icon(Icons.sync),
                   label: const Text('Sincronizza configurazione web'),
                 ),
+                if (canManagePrinters) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const Key('configure-printers'),
+                    onPressed: state.busy ? null : () => context.push('/printer-setup'),
+                    icon: const Icon(Icons.print_outlined),
+                    label: const Text('Configura stampanti'),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: state.busy ? null : authController.logout,
