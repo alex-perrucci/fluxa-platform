@@ -36,7 +36,7 @@ void main() {
     );
 
     expect(find.text('Stampa'), findsOneWidget);
-    expect(find.text('Agente di stampa Android'), findsOneWidget);
+    expect(find.text('Agente di stampa locale'), findsOneWidget);
     expect(find.text('Coda vuota'), findsOneWidget);
     expect(find.byKey(const Key('printing-agent-switch')), findsOneWidget);
     controller.dispose();

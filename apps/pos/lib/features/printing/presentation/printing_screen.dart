@@ -208,15 +208,15 @@ class _AgentCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Agente di stampa Android',
+                            'Agente di stampa locale',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           Text(
                             controller.agentSupported
                                 ? '${assigned.length} stampanti assegnate '
                                       'a questo dispositivo'
-                                : 'Apri questa sezione nell’app Android '
-                                      'per stampare via Wi-Fi o Bluetooth.',
+                                : 'La stampa locale è disponibile '
+                                      'nell’app Android o Windows.',
                           ),
                         ],
                       ),
@@ -280,7 +280,7 @@ class _AgentCard extends StatelessWidget {
                     child: const Text(
                       'Associa ogni stampante backend a una termica '
                       'Wi-Fi oppure a una stampante Bluetooth già '
-                      'abbinata ad Android.',
+                      'abbinata al dispositivo.',
                     ),
                   ),
                   TextButton.icon(
@@ -289,7 +289,7 @@ class _AgentCard extends StatelessWidget {
                         ? null
                         : controller.refreshLocalQueues,
                     icon: const Icon(Icons.bluetooth_searching),
-                    label: const Text('Rileva Bluetooth'),
+                    label: const Text('Rileva stampanti'),
                   ),
                   TextButton.icon(
                     key: const Key('printing-poll-now'),

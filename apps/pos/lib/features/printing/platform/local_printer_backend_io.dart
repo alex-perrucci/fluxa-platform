@@ -1,3 +1,4 @@
+// dart format off
 import 'dart:async';
 import 'dart:io';
 
@@ -5,8 +6,15 @@ import 'package:flutter/services.dart';
 
 import 'local_printer_backend_contract.dart';
 
-LocalPrinterBackend createPlatformLocalPrinterBackend() =>
-    const _AndroidLocalPrinterBackend();
+LocalPrinterBackend createPlatformLocalPrinterBackend() {
+  if (Platform.isAndroid) {
+    return const _AndroidLocalPrinterBackend();
+  }
+  if (Platform.isWindows) {
+    return const _WindowsLocalPrinterBackend();
+  }
+  return const _UnsupportedLocalPrinterBackend();
+}
 
 class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
   const _AndroidLocalPrinterBackend();
@@ -63,23 +71,8 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
         buildBluetoothPrinterTarget(address: entry.key, name: entry.value),
     };
 
-    for (final value in results[2]) {
-      if (value is! Map) {
-        continue;
-      }
-      final host = value['host']?.toString().trim() ?? '';
-      final port = int.tryParse(value['port']?.toString() ?? '');
-      if (host.isEmpty || port == null || port < 1 || port > 65535) {
-        continue;
-      }
-      targets.add(buildWifiPrinterTarget(host: host, port: port));
-    }
-
-    return targets.toList(growable: false)..sort(
-      (left, right) => localPrinterTargetLabel(
-        left,
-      ).compareTo(localPrinterTargetLabel(right)),
-    );
+    _mergeWifiResults(targets, results[2]);
+    return _sortedTargets(targets);
   }
 
   Future<bool> _ensureBluetoothPermissionSafely() async {
@@ -111,20 +104,135 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
     }
   }
 
-  void _mergeBluetoothResults(
-    Map<String, String> devicesByAddress,
-    List<Object?> values,
-  ) {
-    for (final value in values) {
-      if (value is! Map) {
-        continue;
-      }
-      final address = value['address']?.toString().trim() ?? '';
-      final name = value['name']?.toString().trim() ?? '';
-      if (address.isEmpty) {
-        continue;
-      }
-      devicesByAddress[address.toUpperCase()] = name.isEmpty ? address : name;
+  @override
+  Future<void> printText({
+    required String queueName,
+    required String text,
+    required int copies,
+    required bool supportsCut,
+  }) => _printViaChannel(
+    channel: _channel,
+    queueName: queueName,
+    text: text,
+    copies: copies,
+    supportsCut: supportsCut,
+  );
+}
+
+class _WindowsLocalPrinterBackend implements LocalPrinterBackend {
+  const _WindowsLocalPrinterBackend();
+
+  static const _channel = MethodChannel('it.fluxa.fluxa_pos/printing');
+  static const _pairedTimeout = Duration(seconds: 4);
+  static const _wifiConnectTimeout = Duration(milliseconds: 180);
+  static const _wifiPort = 9100;
+  static const _scanBatchSize = 32;
+
+  @override
+  bool get isSupported => Platform.isWindows;
+
+  @override
+  Future<List<String>> listQueues() async {
+    if (!Platform.isWindows) {
+      return const [];
+    }
+
+    final pairedFuture = _listPairedBluetoothPrinters();
+    final wifiFuture = _discoverWifiPrinters();
+    final results = await Future.wait<Object?>([pairedFuture, wifiFuture]);
+
+    final bluetoothByAddress = <String, String>{};
+    _mergeBluetoothResults(
+      bluetoothByAddress,
+      results[0] as List<Object?>,
+    );
+
+    final targets = <String>{
+      for (final entry in bluetoothByAddress.entries)
+        buildBluetoothPrinterTarget(address: entry.key, name: entry.value),
+      ...results[1] as List<String>,
+    };
+    return _sortedTargets(targets);
+  }
+
+  Future<List<Object?>> _listPairedBluetoothPrinters() async {
+    try {
+      return await _channel
+              .invokeListMethod<Object?>('listPairedBluetoothPrinters')
+              .timeout(_pairedTimeout) ??
+          const <Object?>[];
+    } on Object {
+      // Il Wi-Fi deve restare disponibile anche sui PC senza radio Bluetooth.
+      return const <Object?>[];
+    }
+  }
+
+  Future<List<String>> _discoverWifiPrinters() async {
+    List<NetworkInterface> interfaces;
+    try {
+      interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+        includeLinkLocal: false,
+      );
+    } on Object {
+      return const [];
+    }
+
+    final addresses = <String>[
+      for (final interface in interfaces)
+        for (final address in interface.addresses)
+          if (address.type == InternetAddressType.IPv4) address.address,
+    ];
+    if (addresses.isEmpty) {
+      return const [];
+    }
+
+    final localAddress = addresses.firstWhere(
+      _isPrivateIpv4,
+      orElse: () => addresses.first,
+    );
+    final octets = localAddress.split('.');
+    if (octets.length != 4 || octets.any((value) => int.tryParse(value) == null)) {
+      return const [];
+    }
+
+    final prefix = '${octets[0]}.${octets[1]}.${octets[2]}';
+    final localHosts = addresses.toSet();
+    final found = <String>{};
+
+    for (var start = 1; start <= 254; start += _scanBatchSize) {
+      final candidateEnd = start + _scanBatchSize - 1;
+      final end = candidateEnd > 254 ? 254 : candidateEnd;
+      final batch = await Future.wait<String?>([
+        for (var lastOctet = start; lastOctet <= end; lastOctet += 1)
+          _probeRawPrinter('$prefix.$lastOctet', localHosts),
+      ]);
+      found.addAll(batch.whereType<String>());
+    }
+
+    return found.toList(growable: false)..sort();
+  }
+
+  Future<String?> _probeRawPrinter(
+    String host,
+    Set<String> localHosts,
+  ) async {
+    if (localHosts.contains(host)) {
+      return null;
+    }
+    Socket? socket;
+    try {
+      socket = await Socket.connect(
+        host,
+        _wifiPort,
+        timeout: _wifiConnectTimeout,
+      );
+      return buildWifiPrinterTarget(host: host, port: _wifiPort);
+    } on Object {
+      return null;
+    } finally {
+      socket?.destroy();
     }
   }
 
@@ -134,36 +242,124 @@ class _AndroidLocalPrinterBackend implements LocalPrinterBackend {
     required String text,
     required int copies,
     required bool supportsCut,
-  }) async {
-    if (!Platform.isAndroid) {
-      throw UnsupportedError(
-        'La stampa locale è disponibile soltanto nell’app Android.',
-      );
-    }
-    if (copies < 1 || copies > 5) {
-      throw RangeError.range(copies, 1, 5, 'copies');
-    }
-    final parts = queueName.split('|');
-    final arguments = <String, Object?>{
-      'text': text,
-      'copies': copies,
-      'supportsCut': supportsCut,
-      'encoding': 'CP858',
-    };
-    if (parts.length >= 3 && parts.first == 'bluetooth') {
-      arguments['transport'] = 'BLUETOOTH_CLASSIC';
-      arguments['address'] = parts[1];
-    } else if (parts.length == 3 && parts.first == 'wifi') {
-      final port = int.tryParse(parts[2]);
-      if (parts[1].trim().isEmpty || port == null || port < 1 || port > 65535) {
-        throw const FormatException('Configurazione Wi-Fi non valida.');
-      }
-      arguments['transport'] = 'WIFI_TCP';
-      arguments['host'] = parts[1].trim();
-      arguments['port'] = port;
-    } else {
-      throw const FormatException('Connessione stampante non valida.');
-    }
-    await _channel.invokeMethod<void>('printText', arguments);
+  }) => _printViaChannel(
+    channel: _channel,
+    queueName: queueName,
+    text: text,
+    copies: copies,
+    supportsCut: supportsCut,
+  );
+}
+
+class _UnsupportedLocalPrinterBackend implements LocalPrinterBackend {
+  const _UnsupportedLocalPrinterBackend();
+
+  @override
+  bool get isSupported => false;
+
+  @override
+  Future<List<String>> listQueues() async => const [];
+
+  @override
+  Future<void> printText({
+    required String queueName,
+    required String text,
+    required int copies,
+    required bool supportsCut,
+  }) {
+    throw UnsupportedError(
+      'La stampa locale è disponibile soltanto su Android e Windows.',
+    );
   }
 }
+
+Future<void> _printViaChannel({
+  required MethodChannel channel,
+  required String queueName,
+  required String text,
+  required int copies,
+  required bool supportsCut,
+}) async {
+  if (copies < 1 || copies > 5) {
+    throw RangeError.range(copies, 1, 5, 'copies');
+  }
+
+  final parts = queueName.split('|');
+  final arguments = <String, Object?>{
+    'text': text,
+    'copies': copies,
+    'supportsCut': supportsCut,
+    'encoding': 'CP858',
+  };
+  if (parts.length >= 3 && parts.first == 'bluetooth') {
+    final address = parts[1].trim();
+    if (address.isEmpty) {
+      throw const FormatException('Indirizzo Bluetooth non valido.');
+    }
+    arguments['transport'] = 'BLUETOOTH_CLASSIC';
+    arguments['address'] = address;
+  } else if (parts.length == 3 && parts.first == 'wifi') {
+    final host = parts[1].trim();
+    final port = int.tryParse(parts[2]);
+    if (host.isEmpty || port == null || port < 1 || port > 65535) {
+      throw const FormatException('Configurazione Wi-Fi non valida.');
+    }
+    arguments['transport'] = 'WIFI_TCP';
+    arguments['host'] = host;
+    arguments['port'] = port;
+  } else {
+    throw const FormatException('Connessione stampante non valida.');
+  }
+  await channel.invokeMethod<void>('printText', arguments);
+}
+
+void _mergeBluetoothResults(
+  Map<String, String> devicesByAddress,
+  List<Object?> values,
+) {
+  for (final value in values) {
+    if (value is! Map) {
+      continue;
+    }
+    final address = value['address']?.toString().trim() ?? '';
+    final name = value['name']?.toString().trim() ?? '';
+    if (address.isEmpty) {
+      continue;
+    }
+    devicesByAddress[address.toUpperCase()] = name.isEmpty ? address : name;
+  }
+}
+
+void _mergeWifiResults(Set<String> targets, List<Object?> values) {
+  for (final value in values) {
+    if (value is! Map) {
+      continue;
+    }
+    final host = value['host']?.toString().trim() ?? '';
+    final port = int.tryParse(value['port']?.toString() ?? '');
+    if (host.isEmpty || port == null || port < 1 || port > 65535) {
+      continue;
+    }
+    targets.add(buildWifiPrinterTarget(host: host, port: port));
+  }
+}
+
+List<String> _sortedTargets(Set<String> targets) =>
+    targets.toList(growable: false)..sort(
+      (left, right) => localPrinterTargetLabel(
+        left,
+      ).compareTo(localPrinterTargetLabel(right)),
+    );
+
+bool _isPrivateIpv4(String address) {
+  final octets = address.split('.').map(int.tryParse).toList(growable: false);
+  if (octets.length != 4 || octets.any((value) => value == null)) {
+    return false;
+  }
+  final first = octets[0]!;
+  final second = octets[1]!;
+  return first == 10 ||
+      (first == 172 && second >= 16 && second <= 31) ||
+      (first == 192 && second == 168);
+}
+// dart format on

@@ -133,6 +133,33 @@ jobs:
           echo 'Disk usage after cleanup:'
           df -h
 
+  pos-windows:
+    name: Flutter POS Windows release
+    runs-on: windows-2022
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: apps/pos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.32.5
+          channel: stable
+          cache: true
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+      - name: Build Windows production release
+        run: >-
+          flutter build windows --release
+          -t lib/main_production.dart
+          --dart-define=FLUXA_ENV=production
+          --dart-define=API_BASE_URL=https://api.example.com/api/v1
+          --dart-define=BUILD_COMMIT=${{ github.sha }}
+          --dart-define=RELEASE_CHANNEL=ci
+
   release-e2e:
     name: Release E2E
     runs-on: ubuntu-latest
@@ -141,6 +168,7 @@ jobs:
       - backend
       - web
       - pos
+      - pos-windows
     services:
       postgres:
         image: postgres:17-alpine
