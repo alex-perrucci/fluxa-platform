@@ -9,6 +9,8 @@ const nav = [
   { href: '/merchant', label: 'Panoramica', icon: 'dashboard' as const },
   { href: '/merchant/location', label: 'Locale', icon: 'building' as const },
   { href: '/merchant/floor-plan', label: 'Piantina', icon: 'location' as const },
+  { href: '/merchant/catalog', label: 'Catalogo', icon: 'money' as const },
+  { href: '/merchant/kitchen-configuration', label: 'Cucina', icon: 'activity' as const },
   { href: '/merchant/pos-configuration', label: 'Configurazione POS', icon: 'activity' as const },
   { href: '/merchant/health', label: 'Health panel', icon: 'activity' as const },
   { href: '/merchant/events', label: 'Eventi', icon: 'calendar' as const },

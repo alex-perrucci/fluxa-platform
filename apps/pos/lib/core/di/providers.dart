@@ -4,8 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/admin/data/admin_api.dart';
-import '../../features/admin/presentation/admin_controller.dart';
 import '../../features/auth/data/auth_api.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/presentation/auth_controller.dart';
@@ -23,6 +21,7 @@ import '../../features/payments/data/payments_api.dart';
 import '../../features/payments/data/refunds_api.dart';
 import '../../features/payments/presentation/checkout_controller.dart';
 import '../../features/printing/data/local_printer_mapping_store.dart';
+import '../../features/printing/data/printer_setup_api.dart';
 import '../../features/printing/data/printing_api.dart';
 import '../../features/printing/platform/local_printer_backend.dart';
 import '../../features/printing/platform/profile_aware_local_printer_backend.dart';
@@ -64,9 +63,6 @@ final apiClientProvider = Provider<ApiClient>(
   ),
 );
 
-final adminApiProvider = Provider<AdminApi>(
-  (ref) => AdminApi(ref.watch(apiClientProvider).dio),
-);
 final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(ref.watch(apiClientProvider).dio),
 );
@@ -93,6 +89,9 @@ final hospitalityApiProvider = Provider<HospitalityApi>(
 );
 final printingApiProvider = Provider<PrintingApi>(
   (ref) => PrintingApi(ref.watch(apiClientProvider).dio),
+);
+final printerSetupApiProvider = Provider<PrinterSetupApi>(
+  (ref) => PrinterSetupApi(ref.watch(apiClientProvider).dio),
 );
 final localPrinterMappingStoreProvider = Provider<LocalPrinterMappingStore>(
   (ref) => LocalPrinterMappingStore(ref.watch(secureStoreProvider)),
@@ -127,10 +126,6 @@ final offlineSyncControllerProvider =
       unawaited(controller.start());
       return controller;
     });
-
-final adminControllerProvider = ChangeNotifierProvider<AdminController>(
-  (ref) => AdminController(ref.watch(adminApiProvider)),
-);
 
 final authControllerProvider = ChangeNotifierProvider<AuthController>(
   (ref) => AuthController(

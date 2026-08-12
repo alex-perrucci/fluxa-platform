@@ -9,8 +9,8 @@ void main() {
       'lib/features/hospitality/presentation/tables_screen.dart',
       'lib/features/payments/presentation/checkout_screen.dart',
       'lib/features/printing/presentation/printing_screen.dart',
+      'lib/features/printing/presentation/printer_setup_screen.dart',
       'lib/features/fiscal/presentation/fiscal_screen.dart',
-      'lib/features/admin/presentation/admin_screen.dart',
     ];
 
     for (final path in paths) {
