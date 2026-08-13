@@ -35,10 +35,14 @@ export function ControlCenterShell({
 }) {
   return (
     <div className="control-center">
-      <aside className="cc-sidebar">
+      <aside
+        className="cc-sidebar"
+        style={{ minWidth: 0, overflow: 'hidden' }}
+      >
         <Link
           className="cc-brand"
           href={mode === 'platform' ? '/platform-admin' : '/merchant'}
+          style={{ flex: '0 0 auto', minWidth: 0 }}
         >
           <span className="cc-brand-mark">
             <FluxaMark className="h-9 w-9" />
@@ -49,35 +53,50 @@ export function ControlCenterShell({
           </span>
         </Link>
 
-        {mode === 'merchant' &&
-        session.organization &&
-        organizations &&
-        organizations.length > 0 ? (
-          <OrganizationSwitcher
-            currentOrganizationId={session.organization.id}
-            organizations={organizations}
-          />
-        ) : (
-          <div className="platform-pill">
-            <Icon className="h-4 w-4" name="sparkles" />
-            Platform control
-          </div>
-        )}
+        <div style={{ flex: '0 0 auto', minWidth: 0 }}>
+          {mode === 'merchant' &&
+          session.organization &&
+          organizations &&
+          organizations.length > 0 ? (
+            <OrganizationSwitcher
+              currentOrganizationId={session.organization.id}
+              organizations={organizations}
+            />
+          ) : (
+            <div className="platform-pill">
+              <Icon className="h-4 w-4" name="sparkles" />
+              Platform control
+            </div>
+          )}
+        </div>
 
-        <nav
-          className="cc-nav"
-          style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}
+        <div
+          className="cc-nav-scroll"
+          style={{
+            flex: '1 1 auto',
+            minHeight: 0,
+            minWidth: 0,
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            scrollbarWidth: 'none',
+          }}
         >
-          <p>Control center</p>
-          {nav.map((item) => (
-            <Link href={item.href} key={item.href}>
-              <Icon name={item.icon} />
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
+          <nav className="cc-nav" style={{ minWidth: 0, scrollbarWidth: 'none' }}>
+            <p>Control center</p>
+            {nav.map((item) => (
+              <Link href={item.href} key={item.href}>
+                <Icon name={item.icon} />
+                <span className="min-w-0 truncate">{item.label}</span>
+              </Link>
+            ))}
+          </nav>
+        </div>
 
-        <div className="cc-sidebar-footer">
+        <div
+          className="cc-sidebar-footer"
+          style={{ flex: '0 0 auto', minWidth: 0 }}
+        >
           <div className="cc-avatar">
             {session.user.displayName
               .split(/\s+/)
