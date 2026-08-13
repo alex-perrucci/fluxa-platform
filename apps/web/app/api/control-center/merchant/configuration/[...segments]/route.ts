@@ -14,6 +14,7 @@ const readableRoots = new Set([
   'kitchen-station-routes',
   'printers',
   'print-routes',
+  'fiscal-profiles',
 ]);
 
 const writableRoots = new Set([
@@ -23,6 +24,7 @@ const writableRoots = new Set([
   'price-lists',
   'kitchen-stations',
   'print-routes',
+  'fiscal-profiles',
 ]);
 
 async function forward(
