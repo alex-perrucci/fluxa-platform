@@ -12,6 +12,7 @@ const nav = [
   { href: '/merchant/catalog', label: 'Catalogo', icon: 'money' as const },
   { href: '/merchant/kitchen-configuration', label: 'Cucina', icon: 'activity' as const },
   { href: '/merchant/pos-configuration', label: 'Configurazione POS', icon: 'activity' as const },
+  { href: '/merchant/fiscal-configuration', label: 'Configurazione fiscale', icon: 'building' as const },
   { href: '/merchant/health', label: 'Health panel', icon: 'activity' as const },
   { href: '/merchant/events', label: 'Eventi', icon: 'calendar' as const },
   { href: '/merchant/reservations', label: 'Prenotazioni', icon: 'ticket' as const },
