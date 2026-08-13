@@ -103,18 +103,9 @@ export function FiscalProfileConsole({
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!locationId) {
-      setProfile({ ...EMPTY_PROFILE });
-      setExists(false);
-      setLoading(false);
-      return;
-    }
+    if (!locationId) return;
 
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setMessage(null);
-
     void responseJson<FiscalProfile | null>(
       `/api/control-center/merchant/configuration/fiscal-profiles/${locationId}`,
     )
@@ -141,6 +132,17 @@ export function FiscalProfileConsole({
     };
   }, [locationId]);
 
+  function changeLocation(nextLocationId: string) {
+    setLoading(Boolean(nextLocationId));
+    setError(null);
+    setMessage(null);
+    if (!nextLocationId) {
+      setProfile({ ...EMPTY_PROFILE });
+      setExists(false);
+    }
+    setLocationId(nextLocationId);
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!locationId || !canManage) return;
@@ -162,14 +164,18 @@ export function FiscalProfileConsole({
             fiscalId: String(form.get('fiscalId') ?? '').trim(),
             enabled: form.get('enabled') === 'on',
             autoIssueOnPaid: form.get('autoIssueOnPaid') === 'on',
-            receiptEmail: String(form.get('receiptEmail') ?? '').trim() || undefined,
-            displayName: String(form.get('displayName') ?? '').trim() || undefined,
+            receiptEmail:
+              String(form.get('receiptEmail') ?? '').trim() || undefined,
+            displayName:
+              String(form.get('displayName') ?? '').trim() || undefined,
           }),
         },
       );
       setExists(true);
       setProfile(editable(saved));
-      setMessage('Profilo fiscale salvato. Il POS userà questa configurazione per la sede.');
+      setMessage(
+        'Profilo fiscale salvato. Il POS userà questa configurazione per la sede.',
+      );
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -205,7 +211,7 @@ export function FiscalProfileConsole({
         </div>
         <select
           disabled={loading || saving || locations.length === 0}
-          onChange={(event) => setLocationId(event.target.value)}
+          onChange={(event) => changeLocation(event.target.value)}
           value={locationId}
         >
           {locations.length === 0 ? (
@@ -226,7 +232,9 @@ export function FiscalProfileConsole({
       </p>
 
       {!locationId ? (
-        <p className="muted mt-5">Crea una sede prima di configurare il fiscale.</p>
+        <p className="muted mt-5">
+          Crea una sede prima di configurare il fiscale.
+        </p>
       ) : loading ? (
         <p className="muted mt-5">Caricamento profilo fiscale…</p>
       ) : (
@@ -244,11 +252,13 @@ export function FiscalProfileConsole({
               }
               value={profile.provider}
             >
-              {(Object.keys(providerLabels) as FiscalProvider[]).map((provider) => (
-                <option key={provider} value={provider}>
-                  {providerLabels[provider]}
-                </option>
-              ))}
+              {(Object.keys(providerLabels) as FiscalProvider[]).map(
+                (provider) => (
+                  <option key={provider} value={provider}>
+                    {providerLabels[provider]}
+                  </option>
+                ),
+              )}
             </select>
           </label>
 
@@ -366,9 +376,9 @@ export function FiscalProfileConsole({
 
           {openApiProduction ? (
             <div className="span-2 rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
-              OpenAPI è impostato in produzione. Prima di abilitare il profilo verifica
-              sul server il token di produzione e che l’esercente abbia completato
-              l’incarico necessario per la trasmissione.
+              OpenAPI è impostato in produzione. Prima di abilitare il profilo
+              verifica sul server il token di produzione e che l’esercente abbia
+              completato l’incarico necessario per la trasmissione.
             </div>
           ) : null}
 
@@ -378,11 +388,17 @@ export function FiscalProfileConsole({
               specifiche per la sede selezionata.
             </span>
             {canManage ? (
-              <button className="button-primary" disabled={saving} type="submit">
+              <button
+                className="button-primary"
+                disabled={saving}
+                type="submit"
+              >
                 {saving ? 'Salvataggio…' : 'Salva profilo fiscale'}
               </button>
             ) : (
-              <span className="muted">Solo Owner e Admin possono modificarlo.</span>
+              <span className="muted">
+                Solo Owner e Admin possono modificarlo.
+              </span>
             )}
           </div>
         </form>
