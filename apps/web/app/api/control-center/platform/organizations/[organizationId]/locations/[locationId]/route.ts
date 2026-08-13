@@ -1,5 +1,43 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { proxyAuthenticatedJson } from '@/lib/api/bff';
+
+function fiscalResource(request: NextRequest) {
+  return request.nextUrl.searchParams.get('resource') === 'openapi-fiscal-profile';
+}
+
+export async function GET(
+  request: NextRequest,
+  context: {
+    params: Promise<{ organizationId: string; locationId: string }>;
+  },
+) {
+  if (!fiscalResource(request)) {
+    return NextResponse.json({ message: 'Risorsa non supportata.' }, { status: 400 });
+  }
+  const { organizationId, locationId } = await context.params;
+  return proxyAuthenticatedJson(
+    `/platform/organizations/${organizationId}/locations/${locationId}/openapi-fiscal-profile`,
+  );
+}
+
+export async function PUT(
+  request: NextRequest,
+  context: {
+    params: Promise<{ organizationId: string; locationId: string }>;
+  },
+) {
+  if (!fiscalResource(request)) {
+    return NextResponse.json({ message: 'Risorsa non supportata.' }, { status: 400 });
+  }
+  const { organizationId, locationId } = await context.params;
+  return proxyAuthenticatedJson(
+    `/platform/organizations/${organizationId}/locations/${locationId}/openapi-fiscal-profile`,
+    {
+      method: 'PUT',
+      body: await request.text(),
+    },
+  );
+}
 
 export async function PATCH(
   request: NextRequest,
