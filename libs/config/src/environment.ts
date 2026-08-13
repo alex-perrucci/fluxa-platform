@@ -246,11 +246,11 @@ const environmentSchema = z
             );
           }
         } catch {
-  addIssue(
-    'OPENAPI_API_BASE_URL',
-    'must be a valid URL when configured',
-  );
-}
+          addIssue(
+            'OPENAPI_API_BASE_URL',
+            'must be a valid URL when configured',
+          );
+        }
       }
     }
 
