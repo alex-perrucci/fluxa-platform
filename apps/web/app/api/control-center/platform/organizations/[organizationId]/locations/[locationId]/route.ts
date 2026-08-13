@@ -30,11 +30,21 @@ export async function PUT(
     return NextResponse.json({ message: 'Risorsa non supportata.' }, { status: 400 });
   }
   const { organizationId, locationId } = await context.params;
+  const payload = (await request.json()) as Record<string, unknown>;
+  const companyName =
+    typeof payload.companyName === 'string' && payload.companyName.trim()
+      ? payload.companyName
+      : payload.displayName;
+  const companyEmail =
+    typeof payload.companyEmail === 'string' && payload.companyEmail.trim()
+      ? payload.companyEmail
+      : payload.receiptEmail;
+
   return proxyAuthenticatedJson(
     `/platform/organizations/${organizationId}/locations/${locationId}/openapi-fiscal-profile`,
     {
       method: 'PUT',
-      body: await request.text(),
+      body: JSON.stringify({ ...payload, companyName, companyEmail }),
     },
   );
 }
