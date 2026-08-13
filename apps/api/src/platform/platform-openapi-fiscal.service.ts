@@ -83,7 +83,8 @@ export class PlatformOpenApiFiscalService {
     if (location.lifecycleStatus === 'ARCHIVED') {
       throw new BadRequestException({
         code: 'LOCATION_ARCHIVED',
-        message: 'Non puoi configurare il provider fiscale su una location archiviata.',
+        message:
+          'Non puoi configurare il provider fiscale su una location archiviata.',
       });
     }
 
@@ -125,7 +126,10 @@ export class PlatformOpenApiFiscalService {
       });
     }
 
-    const remote = await this.getRemoteConfiguration(dto.environment, dto.fiscalId);
+    const remote = await this.getRemoteConfiguration(
+      dto.environment,
+      dto.fiscalId,
+    );
     if (!remote) {
       throw new BadGatewayException({
         code: 'OPENAPI_CONFIGURATION_NOT_VERIFIED',
@@ -158,7 +162,7 @@ export class PlatformOpenApiFiscalService {
       remoteCreated: !remoteBefore,
       providerReady: Boolean(
         providerConfiguration.receipts &&
-          (dto.environment === 'SANDBOX' || providerConfiguration.taxCode),
+        (dto.environment === 'SANDBOX' || providerConfiguration.taxCode),
       ),
     });
 
@@ -342,7 +346,9 @@ export class PlatformOpenApiFiscalService {
         message: 'OpenAPI bearer token non configurato sul server.',
       });
     }
-    const configuredBase = this.config.get<string>('OPENAPI_API_BASE_URL')?.trim();
+    const configuredBase = this.config
+      .get<string>('OPENAPI_API_BASE_URL')
+      ?.trim();
     const base = (
       configuredBase ||
       (environment === 'SANDBOX'
@@ -405,7 +411,13 @@ export class PlatformOpenApiFiscalService {
          $1,$2,$3,'platform.fiscal.openapi_profile.upserted',
          'fiscal_profile',$4,$5::jsonb
        )`,
-      [randomUUID(), organizationId, auth.userId, profileId, JSON.stringify(payload)],
+      [
+        randomUUID(),
+        organizationId,
+        auth.userId,
+        profileId,
+        JSON.stringify(payload),
+      ],
     );
   }
 }
