@@ -16,6 +16,7 @@ const required = [
   'BOOKING_WEB_BASE_URL',
   'STRIPE_ENABLED',
   'ACUBE_ENABLED',
+  'OPENAPI_ENABLED',
   'ACCESS_TOKEN_SECRET',
   'REFRESH_TOKEN_SECRET',
   'SESSION_IP_HASH_SECRET',
@@ -180,6 +181,24 @@ export function validateProduction(values, posApiUrl = '') {
     problems.push('ACUBE_ENABLED must be true or false');
   }
 
+  if (values.OPENAPI_ENABLED === 'true') {
+    const bearer = values.OPENAPI_BEARER_TOKEN ?? '';
+    if (bearer.length < 16 || placeholder.test(bearer)) {
+      problems.push(
+        'OPENAPI_BEARER_TOKEN must be a non-placeholder production token of at least 16 characters',
+      );
+    }
+    if (values.OPENAPI_API_BASE_URL) {
+      requireHttpsUrl(
+        problems,
+        'OPENAPI_API_BASE_URL',
+        values.OPENAPI_API_BASE_URL,
+      );
+    }
+  } else if (values.OPENAPI_ENABLED !== 'false') {
+    problems.push('OPENAPI_ENABLED must be true or false');
+  }
+
   if (posApiUrl) requireHttpsUrl(problems, 'POS API URL', posApiUrl);
   return problems;
 }
@@ -204,6 +223,9 @@ function selfTest() {
     ACUBE_BEARER_TOKEN: 'd'.repeat(64),
     ACUBE_API_BASE_URL: 'https://api.acubeapi.com',
     ACUBE_AUTH_BASE_URL: 'https://common.api.acubeapi.com',
+    OPENAPI_ENABLED: 'true',
+    OPENAPI_BEARER_TOKEN: 'o'.repeat(64),
+    OPENAPI_API_BASE_URL: '',
     SWAGGER_ENABLED: 'false',
     ACCESS_TOKEN_SECRET: 'a'.repeat(64),
     REFRESH_TOKEN_SECRET: 'b'.repeat(64),
@@ -228,6 +250,9 @@ function selfTest() {
     ACUBE_BEARER_TOKEN: '',
     ACUBE_API_BASE_URL: '',
     ACUBE_AUTH_BASE_URL: '',
+    OPENAPI_ENABLED: 'false',
+    OPENAPI_BEARER_TOKEN: '',
+    OPENAPI_API_BASE_URL: '',
   };
   assert.deepEqual(validateProduction(privateDocker), []);
   assert.ok(
@@ -246,6 +271,12 @@ function selfTest() {
       ...managed,
       STRIPE_SECRET_KEY: 'sk_test_not_allowed',
     }).some((problem) => problem.includes('STRIPE_SECRET_KEY')),
+  );
+  assert.ok(
+    validateProduction({
+      ...managed,
+      OPENAPI_BEARER_TOKEN: '<OPENAPI_PRODUCTION_TOKEN>',
+    }).some((problem) => problem.includes('OPENAPI_BEARER_TOKEN')),
   );
   console.log('Production configuration verifier self-test passed.');
 }

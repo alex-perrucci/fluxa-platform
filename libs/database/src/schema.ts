@@ -173,6 +173,7 @@ export const printAttemptOutcome = pgEnum('print_attempt_outcome', [
 export const fiscalProvider = pgEnum('fiscal_provider', [
   'MOCK',
   'ACUBE_SMART_RECEIPTS',
+  'OPENAPI_SMART_RECEIPTS',
 ]);
 
 export const fiscalEnvironment = pgEnum('fiscal_environment', [

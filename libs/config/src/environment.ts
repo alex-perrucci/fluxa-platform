@@ -35,6 +35,9 @@ const environmentSchema = z
     ACUBE_PASSWORD: z.string().default(''),
     ACUBE_API_BASE_URL: z.string().default(''),
     ACUBE_AUTH_BASE_URL: z.string().default(''),
+    OPENAPI_ENABLED: booleanString('false'),
+    OPENAPI_BEARER_TOKEN: z.string().default(''),
+    OPENAPI_API_BASE_URL: z.string().default(''),
     TRUST_PROXY: booleanString('false'),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
@@ -218,6 +221,35 @@ const environmentSchema = z
           }
         } catch {
           addIssue(name, 'must be a valid URL');
+        }
+      }
+    }
+
+    if (environment.OPENAPI_ENABLED) {
+      if (
+        environment.OPENAPI_BEARER_TOKEN.length < 16 ||
+        placeholder.test(environment.OPENAPI_BEARER_TOKEN)
+      ) {
+        addIssue(
+          'OPENAPI_BEARER_TOKEN',
+          'must be a non-placeholder OpenAPI production token of at least 16 characters',
+        );
+      }
+
+      if (environment.OPENAPI_API_BASE_URL) {
+        try {
+          const url = new URL(environment.OPENAPI_API_BASE_URL);
+          if (url.protocol !== 'https:' || localHost.test(url.hostname)) {
+            addIssue(
+              'OPENAPI_API_BASE_URL',
+              'must be a non-local HTTPS URL when configured',
+            );
+          }
+        } catch {
+          addIssue(
+            'OPENAPI_API_BASE_URL',
+            'must be a valid URL when configured',
+          );
         }
       }
     }

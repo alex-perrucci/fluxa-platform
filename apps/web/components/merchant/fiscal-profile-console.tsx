@@ -37,6 +37,8 @@ interface Props {
   initialLocationId: string | null;
   initialLocations: FiscalProfileLocation[];
   initialProfile: FiscalProfile | null;
+  apiBasePath?: string;
+  lockedProvider?: FiscalProvider;
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -76,12 +78,18 @@ export function FiscalProfileConsole({
   initialLocationId,
   initialLocations,
   initialProfile,
+  apiBasePath = '/api/control-center/merchant/configuration/fiscal-profiles',
+  lockedProvider,
 }: Props) {
   const [locationId, setLocationId] = useState(initialLocationId ?? '');
   const [profile, setProfile] = useState(initialProfile);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  function profileUrl(nextLocationId: string) {
+    return `${apiBasePath}/${encodeURIComponent(nextLocationId)}`;
+  }
 
   async function loadProfile(nextLocationId: string) {
     setLocationId(nextLocationId);
@@ -97,9 +105,7 @@ export function FiscalProfileConsole({
     setProfile(null);
     try {
       setProfile(
-        await requestJson<FiscalProfile | null>(
-          `/api/control-center/merchant/configuration/fiscal-profiles/${encodeURIComponent(nextLocationId)}`,
-        ),
+        await requestJson<FiscalProfile | null>(profileUrl(nextLocationId)),
       );
     } catch (loadError) {
       setError(
@@ -126,22 +132,19 @@ export function FiscalProfileConsole({
     setMessage(null);
 
     try {
-      const saved = await requestJson<FiscalProfile>(
-        `/api/control-center/merchant/configuration/fiscal-profiles/${encodeURIComponent(locationId)}`,
-        {
-          method: 'PUT',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            provider: String(form.get('provider') ?? 'MOCK'),
-            environment: String(form.get('environment') ?? 'SANDBOX'),
-            fiscalId: String(form.get('fiscalId') ?? '').trim(),
-            enabled: form.get('enabled') === 'on',
-            autoIssueOnPaid: form.get('autoIssueOnPaid') === 'on',
-            receiptEmail: String(form.get('receiptEmail') ?? '').trim() || undefined,
-            displayName: String(form.get('displayName') ?? '').trim() || undefined,
-          }),
-        },
-      );
+      const saved = await requestJson<FiscalProfile>(profileUrl(locationId), {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          provider: lockedProvider ?? String(form.get('provider') ?? 'MOCK'),
+          environment: String(form.get('environment') ?? 'SANDBOX'),
+          fiscalId: String(form.get('fiscalId') ?? '').trim(),
+          enabled: form.get('enabled') === 'on',
+          autoIssueOnPaid: form.get('autoIssueOnPaid') === 'on',
+          receiptEmail: String(form.get('receiptEmail') ?? '').trim() || undefined,
+          displayName: String(form.get('displayName') ?? '').trim() || undefined,
+        }),
+      });
       setProfile(saved);
       setMessage('Profilo fiscale aggiornato.');
     } catch (saveError) {
@@ -156,7 +159,7 @@ export function FiscalProfileConsole({
   }
 
   const formKey = `${locationId}:${profile?.version ?? 'new'}`;
-  const provider = profile?.provider ?? 'MOCK';
+  const provider = lockedProvider ?? profile?.provider ?? 'MOCK';
 
   return (
     <div>
@@ -196,19 +199,27 @@ export function FiscalProfileConsole({
         <form className="form-grid mt-5" key={formKey} onSubmit={saveProfile}>
           <label className="field">
             <span>Provider</span>
-            <select defaultValue={provider} disabled={!canManage || pending} name="provider">
-              {(
-                [
-                  'MOCK',
-                  'ACUBE_SMART_RECEIPTS',
-                  'OPENAPI_SMART_RECEIPTS',
-                ] as FiscalProvider[]
-              ).map((item) => (
-                <option key={item} value={item}>
-                  {providerLabel(item)}
-                </option>
-              ))}
-            </select>
+            {lockedProvider ? (
+              <input disabled value={providerLabel(lockedProvider)} />
+            ) : (
+              <select
+                defaultValue={provider}
+                disabled={!canManage || pending}
+                name="provider"
+              >
+                {(
+                  [
+                    'MOCK',
+                    'ACUBE_SMART_RECEIPTS',
+                    'OPENAPI_SMART_RECEIPTS',
+                  ] as FiscalProvider[]
+                ).map((item) => (
+                  <option key={item} value={item}>
+                    {providerLabel(item)}
+                  </option>
+                ))}
+              </select>
+            )}
           </label>
           <label className="field">
             <span>Ambiente</span>
