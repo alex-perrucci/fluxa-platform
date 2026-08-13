@@ -1,4 +1,8 @@
-export const FISCAL_PROVIDERS = ['MOCK', 'ACUBE_SMART_RECEIPTS'] as const;
+export const FISCAL_PROVIDERS = [
+  'MOCK',
+  'ACUBE_SMART_RECEIPTS',
+  'OPENAPI_SMART_RECEIPTS',
+] as const;
 export const FISCAL_ENVIRONMENTS = ['SANDBOX', 'PRODUCTION'] as const;
 export const FISCAL_DOCUMENT_TYPES = ['SALE', 'VOID'] as const;
 export const FISCAL_DOCUMENT_STATUSES = [
