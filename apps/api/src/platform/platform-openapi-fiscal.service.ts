@@ -105,15 +105,24 @@ export class PlatformOpenApiFiscalService {
       dto.environment,
       dto.fiscalId,
     );
+    const remoteBeforeStatus = remoteBefore
+      ? this.publicRemoteConfiguration(remoteBefore)
+      : null;
+
     if (remoteBefore) {
-      await this.openApiRequest(
-        dto.environment,
-        `/IT-configurations/${encodeURIComponent(dto.fiscalId)}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ receipts: true }),
-        },
-      );
+      if (
+        dto.environment === 'SANDBOX' ||
+        Boolean(remoteBeforeStatus?.taxCode)
+      ) {
+        await this.openApiRequest(
+          dto.environment,
+          `/IT-configurations/${encodeURIComponent(dto.fiscalId)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ receipts: true }),
+          },
+        );
+      }
     } else {
       await this.openApiRequest(dto.environment, '/IT-configurations', {
         method: 'POST',
@@ -121,7 +130,7 @@ export class PlatformOpenApiFiscalService {
           fiscal_id: dto.fiscalId,
           name: dto.companyName.trim(),
           email: dto.companyEmail.trim().toLowerCase(),
-          receipts: true,
+          receipts: dto.environment === 'SANDBOX',
         }),
       });
     }
@@ -324,7 +333,7 @@ export class PlatformOpenApiFiscalService {
     return {
       reachable: true,
       configured: true,
-      receipts: remote.receipts !== false,
+      receipts: remote.receipts === true,
       fiscalId: stringField(remote.fiscal_id),
       name: stringField(remote.name) || null,
       email: stringField(remote.email) || null,
