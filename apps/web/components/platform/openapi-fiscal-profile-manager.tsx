@@ -113,10 +113,25 @@ export function OpenApiFiscalProfileManager({
   }
 
   useEffect(() => {
-    if (initialLocationId) void load(initialLocationId);
-    // Load once for the initial tenant location. Further changes are explicit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialLocationId]);
+    if (!initialLocationId) return;
+    let active = true;
+    const url = `/api/control-center/platform/organizations/${organizationId}/locations/${encodeURIComponent(initialLocationId)}?resource=openapi-fiscal-profile`;
+    void requestJson<ProfileResponse>(url)
+      .then((result) => {
+        if (active) setData(result);
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Impossibile caricare la configurazione OpenAPI.',
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialLocationId, organizationId]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -134,8 +149,10 @@ export function OpenApiFiscalProfileManager({
           fiscalId: String(form.get('fiscalId') ?? '').trim(),
           companyName: String(form.get('companyName') ?? '').trim(),
           companyEmail: String(form.get('companyEmail') ?? '').trim(),
-          displayName: String(form.get('displayName') ?? '').trim() || undefined,
-          receiptEmail: String(form.get('receiptEmail') ?? '').trim() || undefined,
+          displayName:
+            String(form.get('displayName') ?? '').trim() || undefined,
+          receiptEmail:
+            String(form.get('receiptEmail') ?? '').trim() || undefined,
           autoIssueOnPaid: form.get('autoIssueOnPaid') === 'on',
           enabled: form.get('enabled') === 'on',
         }),
@@ -181,7 +198,8 @@ export function OpenApiFiscalProfileManager({
         <div>
           <strong>OpenAPI Smart Receipts per tenant</strong>
           <p className="muted">
-            Crea o verifica la configurazione OpenAPI della singola location e collega il profilo fiscale Fluxa.
+            Crea o verifica la configurazione OpenAPI della singola location e
+            collega il profilo fiscale Fluxa.
           </p>
         </div>
         <select
@@ -212,7 +230,9 @@ export function OpenApiFiscalProfileManager({
                     : 'Non ancora verificata su OpenAPI'}
                 </small>
               </div>
-              <StatusBadge status={provider?.configured ? 'ACTIVE' : 'INACTIVE'} />
+              <StatusBadge
+                status={provider?.configured ? 'ACTIVE' : 'INACTIVE'}
+              />
             </div>
             <div className="data-row">
               <div>
@@ -224,7 +244,9 @@ export function OpenApiFiscalProfileManager({
                 </small>
               </div>
               <StatusBadge
-                status={provider?.receipts && provider?.taxCode ? 'ACTIVE' : 'INACTIVE'}
+                status={
+                  provider?.receipts && provider?.taxCode ? 'ACTIVE' : 'INACTIVE'
+                }
               />
             </div>
             <div className="data-row">
@@ -290,7 +312,9 @@ export function OpenApiFiscalProfileManager({
             <label className="field">
               <span>Nome visualizzato in Fluxa</span>
               <input
-                defaultValue={profile?.displayName ?? selectedLocation?.name ?? ''}
+                defaultValue={
+                  profile?.displayName ?? selectedLocation?.name ?? ''
+                }
                 disabled={pending}
                 maxLength={120}
                 name="displayName"
@@ -329,15 +353,23 @@ export function OpenApiFiscalProfileManager({
                 Abilita OpenAPI per questa location
               </span>
               <small className="muted">
-                In produzione il backend rifiuta l&apos;attivazione finché OpenAPI non risulta pronto per gli scontrini.
+                In produzione il backend rifiuta l&apos;attivazione finché OpenAPI
+                non risulta pronto per gli scontrini.
               </small>
             </label>
             <div className="wizard-actions span-2">
               <span className="muted">
-                Le credenziali del provider Fluxa restano esclusivamente lato server.
+                Le credenziali del provider Fluxa restano esclusivamente lato
+                server.
               </span>
-              <button className="button-primary" disabled={pending} type="submit">
-                {provider?.configured ? 'Verifica e aggiorna OpenAPI' : 'Configura OpenAPI'}
+              <button
+                className="button-primary"
+                disabled={pending}
+                type="submit"
+              >
+                {provider?.configured
+                  ? 'Verifica e aggiorna OpenAPI'
+                  : 'Configura OpenAPI'}
               </button>
             </div>
           </form>
