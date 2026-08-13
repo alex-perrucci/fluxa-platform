@@ -30,7 +30,7 @@ export class UpdateCategoryDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^#[0-9A-F]{6}$/i)
+  @Matches(/^(?:#[0-9A-F]{6})?$/i)
   colorHex?: string;
 
   @IsOptional()

@@ -64,7 +64,10 @@ export function ControlCenterShell({
           </div>
         )}
 
-        <nav className="cc-nav">
+        <nav
+          className="cc-nav"
+          style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}
+        >
           <p>Control center</p>
           {nav.map((item) => (
             <Link href={item.href} key={item.href}>
