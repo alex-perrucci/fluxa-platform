@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Put,
+} from '@nestjs/common';
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { PlatformAdminOnly } from '../auth/decorators/platform-admin.decorator';
@@ -8,7 +15,9 @@ import { PlatformOpenApiFiscalService } from './platform-openapi-fiscal.service'
 
 @TenantOptional()
 @PlatformAdminOnly()
-@Controller('platform/organizations/:organizationId/locations/:locationId/openapi-fiscal-profile')
+@Controller(
+  'platform/organizations/:organizationId/locations/:locationId/openapi-fiscal-profile',
+)
 export class PlatformOpenApiFiscalController {
   constructor(private readonly openApiFiscal: PlatformOpenApiFiscalService) {}
 
