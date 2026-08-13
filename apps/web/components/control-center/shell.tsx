@@ -64,15 +64,17 @@ export function ControlCenterShell({
           </div>
         )}
 
-        <nav className="cc-nav">
-          <p>Control center</p>
-          {nav.map((item) => (
-            <Link href={item.href} key={item.href}>
-              <Icon name={item.icon} />
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <nav className="cc-nav">
+            <p>Control center</p>
+            {nav.map((item) => (
+              <Link href={item.href} key={item.href}>
+                <Icon name={item.icon} />
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </nav>
+        </div>
 
         <div className="cc-sidebar-footer">
           <div className="cc-avatar">
