@@ -9,7 +9,10 @@ import {
   Matches,
   MaxLength,
 } from 'class-validator';
-import { FISCAL_ENVIRONMENTS, type FiscalEnvironment } from '../../fiscal/fiscal.constants';
+import {
+  FISCAL_ENVIRONMENTS,
+  type FiscalEnvironment,
+} from '../../fiscal/fiscal.constants';
 
 export class PlatformOpenApiFiscalProfileDto {
   @IsEnum(FISCAL_ENVIRONMENTS)
@@ -42,19 +45,4 @@ export class PlatformOpenApiFiscalProfileDto {
   @IsString()
   @Length(1, 120)
   displayName?: string;
-
-  @IsOptional()
-  @Transform(({ value }) => String(value).trim().toUpperCase())
-  @Matches(/^[A-Z0-9]{11,16}$/)
-  taxCode?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(4, 200)
-  receiptsPassword?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  receiptsPin?: string;
 }
