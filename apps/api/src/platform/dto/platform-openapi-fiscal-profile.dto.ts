@@ -22,6 +22,14 @@ export class PlatformOpenApiFiscalProfileDto {
   @Matches(/^\d{11}$/)
   fiscalId!: string;
 
+  @IsString()
+  @Length(2, 220)
+  companyName!: string;
+
+  @IsEmail()
+  @MaxLength(320)
+  companyEmail!: string;
+
   @IsBoolean()
   enabled!: boolean;
 
