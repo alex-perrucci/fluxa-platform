@@ -7,6 +7,7 @@ import {
   MultiLocationManager,
   type PlatformManagedLocation,
 } from '@/components/platform/multi-location-manager';
+import { OpenApiFiscalProfileManager } from '@/components/platform/openapi-fiscal-profile-manager';
 import { PlatformTableLayoutEditor } from '@/components/platform/table-layout-editor';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import type {
@@ -113,6 +114,26 @@ export default async function OrganizationDetailPage({
           <MultiLocationManager
             initialLocations={managedLocations}
             merchants={detail.merchants}
+            organizationId={organizationId}
+          />
+        </div>
+      </section>
+
+      <section className="glass-panel panel-padding mt-5">
+        <SectionHeading
+          eyebrow="Fiscalità OpenAPI"
+          title="Profilo fiscale per tenant e location"
+        />
+        <p className="muted">
+          Provisiona la configurazione aziendale OpenAPI dal control panel e
+          collega il profilo fiscale Fluxa alla singola location. In produzione
+          l&apos;attivazione resta fail-closed finché il provider non risulta
+          pronto per gli scontrini.
+        </p>
+        <div className="mt-5">
+          <OpenApiFiscalProfileManager
+            initialLocationId={firstActiveLocation?.id ?? null}
+            locations={managedLocations}
             organizationId={organizationId}
           />
         </div>
