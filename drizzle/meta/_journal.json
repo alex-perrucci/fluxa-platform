@@ -20,6 +20,7 @@
     { "idx": 15, "version": "7", "when": 1785790440000, "tag": "0015_event_table_group_history", "breakpoints": true },
     { "idx": 16, "version": "7", "when": 1785797100000, "tag": "0016_payment_refunds", "breakpoints": true },
     { "idx": 17, "version": "7", "when": 1785798300000, "tag": "0017_refund_fiscal_voids", "breakpoints": true },
-    { "idx": 18, "version": "7", "when": 1785802680000, "tag": "0018_pos_operator_mode", "breakpoints": true }
+    { "idx": 18, "version": "7", "when": 1785802680000, "tag": "0018_pos_operator_mode", "breakpoints": true },
+    { "idx": 19, "version": "7", "when": 1786633980000, "tag": "0019_openapi_smart_receipts", "breakpoints": true }
   ]
 }

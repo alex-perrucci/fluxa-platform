@@ -1,0 +1,2 @@
+ALTER TYPE "public"."fiscal_provider"
+  ADD VALUE IF NOT EXISTS 'OPENAPI_SMART_RECEIPTS';

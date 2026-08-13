@@ -12,9 +12,10 @@ interface DocumentRow extends QueryResultRow {
   organizationId: string;
   type: 'SALE' | 'VOID';
   status: string;
-  provider: 'MOCK' | 'ACUBE_SMART_RECEIPTS';
+  provider: 'MOCK' | 'ACUBE_SMART_RECEIPTS' | 'OPENAPI_SMART_RECEIPTS';
   environment: 'SANDBOX' | 'PRODUCTION';
   payload: Record<string, unknown>;
+  externalId: string | null;
   attempts: number;
   maxAttempts: number;
 }
@@ -36,6 +37,7 @@ export class FiscalExecutionService {
         provider: document.provider,
         environment: document.environment,
         payload: document.payload,
+        externalId: document.externalId,
       });
       await this.succeed(document, result);
       return {
@@ -52,8 +54,12 @@ export class FiscalExecutionService {
               true,
               'FISCAL_UNKNOWN_ERROR',
             );
+      const maxAttempts =
+        document.provider === 'OPENAPI_SMART_RECEIPTS'
+          ? Math.max(document.maxAttempts, 10)
+          : document.maxAttempts;
       const retryable =
-        providerError.retryable && document.attempts < document.maxAttempts;
+        providerError.retryable && document.attempts < maxAttempts;
       await this.fail(document, providerError, retryable);
       if (retryable) throw providerError;
       return { documentId, status: 'REJECTED', errorCode: providerError.code };
@@ -63,7 +69,9 @@ export class FiscalExecutionService {
   private async claim(documentId: string): Promise<DocumentRow | null> {
     return this.withTransaction(async (client) => {
       const result = await client.query<DocumentRow>(
-        `SELECT id, organization_id AS "organizationId", type, status, provider, environment, payload, attempts, max_attempts AS "maxAttempts" FROM fiscal_documents WHERE id=$1 FOR UPDATE`,
+        `SELECT id, organization_id AS "organizationId", type, status, provider, environment, payload,
+          external_id AS "externalId", attempts, max_attempts AS "maxAttempts"
+         FROM fiscal_documents WHERE id=$1 FOR UPDATE`,
         [documentId],
       );
       const document = result.rows[0];
@@ -140,7 +148,10 @@ export class FiscalExecutionService {
         5 * 2 ** Math.min(document.attempts - 1, 6),
       );
       await client.query(
-        `UPDATE fiscal_documents SET status=$2::fiscal_document_status, error_code=$3, error_message=$4, provider_response=$5::jsonb, next_attempt_at=NOW()+($6::text || ' seconds')::interval, version=version+1, updated_at=NOW() WHERE id=$1`,
+        `UPDATE fiscal_documents SET status=$2::fiscal_document_status, error_code=$3, error_message=$4,
+          provider_response=$5::jsonb, next_attempt_at=NOW()+($6::text || ' seconds')::interval,
+          external_id=COALESCE($7, external_id), external_status=COALESCE($8, external_status),
+          version=version+1, updated_at=NOW() WHERE id=$1`,
         [
           document.id,
           status,
@@ -148,6 +159,8 @@ export class FiscalExecutionService {
           error.message.slice(0, 1000),
           JSON.stringify(error.response ?? {}),
           delaySeconds,
+          error.externalId ?? null,
+          error.externalStatus ?? null,
         ],
       );
       await client.query(
@@ -165,7 +178,14 @@ export class FiscalExecutionService {
         client,
         document,
         retryable ? 'fiscal.document.retry' : 'fiscal.document.rejected',
-        { errorCode: error.code, errorMessage: error.message },
+        {
+          errorCode: error.code,
+          errorMessage: error.message,
+          ...(error.externalId ? { externalId: error.externalId } : {}),
+          ...(error.externalStatus
+            ? { externalStatus: error.externalStatus }
+            : {}),
+        },
       );
     });
   }
@@ -202,6 +222,7 @@ export class FiscalExecutionService {
       ),
     ]);
   }
+
   private async withTransaction<T>(
     fn: (client: PoolClient) => Promise<T>,
   ): Promise<T> {
