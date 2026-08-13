@@ -13,7 +13,7 @@ export class FiscalQueueService {
       { documentId },
       {
         jobId: `fiscal-${documentId}`,
-        attempts: 5,
+        attempts: 10,
         backoff: { type: 'exponential', delay: 5_000 },
         removeOnComplete: true,
         removeOnFail: true,
