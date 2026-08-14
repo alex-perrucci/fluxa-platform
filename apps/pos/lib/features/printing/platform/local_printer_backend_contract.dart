@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 abstract interface class LocalPrinterBackend {
   bool get isSupported;
 
@@ -8,6 +10,12 @@ abstract interface class LocalPrinterBackend {
     required String text,
     required int copies,
     required bool supportsCut,
+  });
+
+  Future<void> printRaw({
+    required String queueName,
+    required Uint8List bytes,
+    required int copies,
   });
 }
 
