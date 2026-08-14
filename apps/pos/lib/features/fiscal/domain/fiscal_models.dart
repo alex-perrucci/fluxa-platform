@@ -1,6 +1,7 @@
 enum FiscalProvider {
   mock('MOCK', 'Mock'),
-  acubeSmartReceipts('ACUBE_SMART_RECEIPTS', 'A-Cube Smart Receipts');
+  acubeSmartReceipts('ACUBE_SMART_RECEIPTS', 'A-Cube Smart Receipts'),
+  openapiSmartReceipts('OPENAPI_SMART_RECEIPTS', 'OpenAPI Smart Receipts');
 
   const FiscalProvider(this.wireValue, this.label);
   final String wireValue;

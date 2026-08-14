@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 abstract interface class SecureKeyValueStore {
@@ -11,16 +13,31 @@ class FlutterSecureKeyValueStore implements SecureKeyValueStore {
     : _storage = FlutterSecureStorage(aOptions: AndroidOptions());
 
   final FlutterSecureStorage _storage;
+  Future<void> _tail = Future<void>.value();
+
+  Future<T> _serialized<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    _tail = _tail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
 
   @override
-  Future<void> delete(String key) => _storage.delete(key: key);
+  Future<void> delete(String key) =>
+      _serialized(() => _storage.delete(key: key));
 
   @override
-  Future<String?> read(String key) => _storage.read(key: key);
+  Future<String?> read(String key) =>
+      _serialized(() => _storage.read(key: key));
 
   @override
   Future<void> write(String key, String value) =>
-      _storage.write(key: key, value: value);
+      _serialized(() => _storage.write(key: key, value: value));
 }
 
 class MemorySecureKeyValueStore implements SecureKeyValueStore {

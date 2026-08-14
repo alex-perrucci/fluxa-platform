@@ -214,7 +214,7 @@ class FiscalController extends ChangeNotifier {
       _selectedDocument = document;
       _noticeMessage = document.status == FiscalDocumentStatus.issued
           ? 'Documento fiscale emesso.'
-          : 'Documento fiscale accodato ad A-Cube.';
+          : 'Documento fiscale accodato al provider.';
       _syncPolling();
       return true;
     } on BackendError catch (error) {
@@ -296,6 +296,12 @@ class FiscalController extends ChangeNotifier {
     String? receiptEmail,
     String? displayName,
   }) async {
+    if (_profile?.provider == FiscalProvider.openapiSmartReceipts) {
+      _errorMessage =
+          'Il profilo OpenAPI è gestito dal Platform Control Center.';
+      _notify();
+      return false;
+    }
     final normalizedFiscalId = fiscalId.trim();
     if (_busy) return false;
     if (!RegExp(r'^\d{11}$').hasMatch(normalizedFiscalId)) {
