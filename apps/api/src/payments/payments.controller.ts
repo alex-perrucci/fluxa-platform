@@ -9,6 +9,7 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { FiscalAutoIssueService } from '../fiscal/fiscal-auto-issue.service';
 import { CapturePaymentDto } from './dto/capture-payment.dto';
 import { CreateRefundDto } from './dto/create-refund.dto';
 import { FailPaymentDto } from './dto/fail-payment.dto';
@@ -21,6 +22,7 @@ export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly refundsService: RefundsService,
+    private readonly fiscalAutoIssue: FiscalAutoIssueService,
   ) {}
 
   @Get(':paymentId')
@@ -61,12 +63,23 @@ export class PaymentsController {
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')
   @Post(':paymentId/capture')
-  capture(
+  async capture(
     @CurrentAuth() auth: AuthContext,
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @Body() dto: CapturePaymentDto,
   ) {
-    return this.paymentsService.capturePayment(auth, paymentId, dto);
+    const result = await this.paymentsService.capturePayment(
+      auth,
+      paymentId,
+      dto,
+    );
+    if (result.checkout.status === 'COMPLETED') {
+      await this.fiscalAutoIssue.issueAfterPaidOrder(
+        auth,
+        result.checkout.orderId,
+      );
+    }
+    return result;
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')
