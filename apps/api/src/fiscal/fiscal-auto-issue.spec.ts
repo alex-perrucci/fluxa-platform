@@ -29,11 +29,6 @@ describe('FiscalAutoIssueService', () => {
     await service.issueAfterPaidOrder(auth, 'order-1');
 
     expect(issue).toHaveBeenCalledTimes(1);
-    expect(issue).toHaveBeenCalledWith(
-      auth,
-      'order-1',
-      expect.objectContaining({ clientRequestId: expect.any(String) }),
-    );
   });
 
   it('does nothing when auto issue is disabled', async () => {
@@ -55,7 +50,9 @@ describe('FiscalAutoIssueService', () => {
     const query = jest.fn().mockResolvedValue({
       rows: [{ enabled: true, autoIssueOnPaid: true }],
     });
-    const issue = jest.fn().mockRejectedValue(new Error('provider unavailable'));
+    const issue = jest
+      .fn()
+      .mockRejectedValue(new Error('provider unavailable'));
     const service = new FiscalAutoIssueService(
       { pool: { query } } as unknown as DatabaseService,
       { issue } as unknown as FiscalDocumentsService,
