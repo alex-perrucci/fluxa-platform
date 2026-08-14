@@ -81,6 +81,28 @@ void main() {
     expect(document.canVoid, isTrue);
   });
 
+  test('parses OpenAPI fiscal profiles returned by the backend', () {
+    final profile = FiscalProfile.fromJson({
+      'id': 'profile-openapi',
+      'organizationId': 'org-1',
+      'locationId': 'location-1',
+      'provider': 'OPENAPI_SMART_RECEIPTS',
+      'environment': 'SANDBOX',
+      'fiscalId': '12345678901',
+      'enabled': true,
+      'autoIssueOnPaid': true,
+      'receiptEmail': 'receipts@example.com',
+      'displayName': 'Demo OpenAPI',
+      'version': 1,
+      'createdAt': '2026-08-14T10:00:00Z',
+      'updatedAt': '2026-08-14T10:00:00Z',
+    });
+
+    expect(profile.provider, FiscalProvider.openapiSmartReceipts);
+    expect(profile.provider.label, 'OpenAPI Smart Receipts');
+    expect(profile.autoIssueOnPaid, isTrue);
+  });
+
   test('formats money and masks fiscal id', () {
     final profile = FiscalProfile.fromJson({
       'id': 'profile-1',
