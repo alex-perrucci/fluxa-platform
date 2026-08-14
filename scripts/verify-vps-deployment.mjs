@@ -118,6 +118,8 @@ for (const marker of [
   'install_docker',
   'check_dns',
   'configure_firewall',
+  'OPENAPI_ENABLED=false',
+  'OPENAPI_SANDBOX_BEARER_TOKEN=',
   'fluxa_tools_compose run --rm migrate',
   'fluxa_tools_compose run --rm bootstrap-admin',
   'install_backup_timer',
@@ -140,6 +142,9 @@ for (const marker of [
   'TRUST_PROXY=true',
   'STRIPE_ENABLED=false',
   'ACUBE_ENABLED=false',
+  'OPENAPI_ENABLED=false',
+  'OPENAPI_BEARER_TOKEN=',
+  'OPENAPI_SANDBOX_BEARER_TOKEN=',
 ]) {
   assert.ok(
     environment.includes(marker),
