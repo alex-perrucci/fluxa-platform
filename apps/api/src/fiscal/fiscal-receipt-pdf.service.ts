@@ -123,16 +123,18 @@ export class FiscalReceiptPdfService {
   }
 
   private token(environment: string): string {
-    return (
+    const value =
       environment === 'SANDBOX'
         ? process.env.OPENAPI_SANDBOX_BEARER_TOKEN
-        : process.env.OPENAPI_BEARER_TOKEN
-    )?.trim() ?? '';
+        : process.env.OPENAPI_BEARER_TOKEN;
+    return value?.trim() ?? '';
   }
 
   private filename(documentNumber: string | null, externalId: string): string {
     const source = documentNumber?.trim() || externalId;
-    const safe = source.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    const safe = source
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
     return `scontrino-fiscale-${safe || 'openapi'}.pdf`;
   }
 }
