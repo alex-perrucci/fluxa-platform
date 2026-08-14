@@ -278,6 +278,87 @@ class OrderController extends ChangeNotifier {
     }
   }
 
+  Future<bool> addManualItem({
+    required int amountCents,
+    String? description,
+    String? note,
+  }) async {
+    final currentLocationId = _locationId;
+    if (currentLocationId == null) {
+      _errorMessage = 'Location operativa non disponibile.';
+      notifyListeners();
+      return false;
+    }
+    if (amountCents <= 0) {
+      _errorMessage = 'Inserisci un importo maggiore di zero.';
+      notifyListeners();
+      return false;
+    }
+    if (_busy) {
+      return false;
+    }
+    if (!hasCurrentOrder) {
+      _draft = OrderDraft(
+        clientOrderId: UuidV4.generate(),
+        serviceMode: OrderServiceMode.counter,
+      );
+    } else if (!canAddItems) {
+      _errorMessage = 'L’ordine corrente non può essere modificato.';
+      notifyListeners();
+      return false;
+    }
+
+    _setBusy();
+    try {
+      var order = _activeOrder;
+      final currentDraft = _draft;
+      if (order == null) {
+        if (currentDraft == null) {
+          throw const BackendError(message: 'Bozza ordine non disponibile.');
+        }
+        order = await _gateway.createOrder(
+          clientOrderId: currentDraft.clientOrderId,
+          locationId: currentLocationId,
+          serviceMode: currentDraft.serviceMode,
+          customerNote: currentDraft.customerNote,
+        );
+        if (!_matchesLocation(order)) {
+          throw const BackendError(
+            message: 'L’ordine creato appartiene a una location diversa.',
+          );
+        }
+        _activeOrder = order;
+        _draft = null;
+      }
+      final normalizedDescription = _normalizeNote(description);
+      final updated = await _gateway.addManualItem(
+        orderId: order.header.id,
+        mutationId: UuidV4.generate(),
+        clientItemId: UuidV4.generate(),
+        expectedVersion: order.header.version,
+        amountCents: amountCents,
+        description: normalizedDescription,
+        note: _normalizeNote(note),
+      );
+      _activeOrder = updated;
+      _noticeMessage =
+          '${normalizedDescription ?? 'Vendita libera'} aggiunta all’ordine.';
+      await _refreshOrdersSilently();
+      return true;
+    } on BackendError catch (error) {
+      await _handleMutationError(error);
+      return false;
+    } on FormatException {
+      _errorMessage = 'Il backend ha restituito un ordine non valido.';
+      return false;
+    } catch (_) {
+      _errorMessage = 'Impossibile aggiungere l’importo libero all’ordine.';
+      return false;
+    } finally {
+      _finishBusy();
+    }
+  }
+
   Future<bool> updateItem({
     required OrderItem item,
     required int quantityAmount,
