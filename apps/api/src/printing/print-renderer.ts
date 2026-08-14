@@ -187,7 +187,8 @@ export function renderOrderReceipt(input: OrderReceiptPrintInput): string {
 }
 
 export function renderPaymentReceipt(input: PaymentReceiptPrintInput): string {
-  const merchantName = input.merchant.tradeName?.trim() || input.merchant.legalName;
+  const merchantName =
+    input.merchant.tradeName?.trim() || input.merchant.legalName;
   const locationLine = [
     `${input.location.postalCode} ${input.location.city}`.trim(),
     input.location.province ? `(${input.location.province})` : '',
@@ -196,7 +197,8 @@ export function renderPaymentReceipt(input: PaymentReceiptPrintInput): string {
     .join(' ');
   const lines = [
     `*** ${merchantName.toUpperCase()} ***`,
-    input.merchant.tradeName && input.merchant.tradeName !== input.merchant.legalName
+    input.merchant.tradeName &&
+    input.merchant.tradeName !== input.merchant.legalName
       ? input.merchant.legalName
       : '',
     input.location.name,
@@ -214,14 +216,21 @@ export function renderPaymentReceipt(input: PaymentReceiptPrintInput): string {
   ].filter((line) => line.length > 0);
 
   for (const item of input.items) {
-    const name = item.variantName ? `${item.name} - ${item.variantName}` : item.name;
-    const quantity = formatScaledQuantity(item.quantityAmount, item.quantityScale);
+    const name = item.variantName
+      ? `${item.name} - ${item.variantName}`
+      : item.name;
+    const quantity = formatScaledQuantity(
+      item.quantityAmount,
+      item.quantityScale,
+    );
     lines.push(name);
     lines.push(
       `${quantity} x ${money(item.unitPriceCents, input.currency)}  ${money(item.grossTotalCents, input.currency)}`,
     );
     if (item.allocatedDiscountCents > 0) {
-      lines.push(`  Sconto -${money(item.allocatedDiscountCents, input.currency)}`);
+      lines.push(
+        `  Sconto -${money(item.allocatedDiscountCents, input.currency)}`,
+      );
     }
     lines.push(
       `  ${vatLabel(item.vatRateBasisPoints, item.vatNatureCode)}  ${money(item.finalGrossCents, input.currency)}`,
@@ -243,8 +252,12 @@ export function renderPaymentReceipt(input: PaymentReceiptPrintInput): string {
     'PAGAMENTO',
   );
 
-  for (const payment of input.payments.filter((entry) => entry.status === 'CAPTURED')) {
-    lines.push(`${paymentLabel(payment.method)} ${money(payment.amountCents, input.currency)}`);
+  for (const payment of input.payments.filter(
+    (entry) => entry.status === 'CAPTURED',
+  )) {
+    lines.push(
+      `${paymentLabel(payment.method)} ${money(payment.amountCents, input.currency)}`,
+    );
     if (payment.method === 'CASH' && payment.tenderedCents != null) {
       lines.push(`  Ricevuto ${money(payment.tenderedCents, input.currency)}`);
       if (payment.changeCents > 0) {
@@ -252,7 +265,10 @@ export function renderPaymentReceipt(input: PaymentReceiptPrintInput): string {
       }
     }
   }
-  if (input.changeCents > 0 && !input.payments.some((payment) => payment.changeCents > 0)) {
+  if (
+    input.changeCents > 0 &&
+    !input.payments.some((payment) => payment.changeCents > 0)
+  ) {
     lines.push(`RESTO ${money(input.changeCents, input.currency)}`);
   }
 
