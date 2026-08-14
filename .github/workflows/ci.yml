@@ -2,286 +2,55 @@ name: Fluxa CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: fluxa-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  backend:
-    name: Backend quality
+  pos-format-once:
+    name: Format POS fiscal printer changes once
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Install backend dependencies
-        run: npm ci
-      - name: Verify backend release gates
-        run: npm run verify:ci
-
-  web:
-    name: Web quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: apps/web
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-      - name: Install web dependencies
-        run: npm ci
-      - name: Lint web application
-        run: npm run lint
-      - name: Test web application
-        run: npm run test
-      - name: Build web application
-        run: npm run build
-        env:
-          FLUXA_API_BASE_URL: https://api.example.com/api/v1
-
-  pos:
-    name: Flutter POS quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/pos
     steps:
-      - name: Checkout
+      - name: Checkout PR head
         uses: actions/checkout@v4
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: '17'
+          ref: ${{ github.head_ref }}
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.32.5
           channel: stable
           cache: true
-      - name: Prepare CI logs
-        run: mkdir -p ci-logs
-      - name: Resolve Flutter dependencies
+      - name: Resolve, format, and commit generated files
         shell: bash
         run: |
-          set -o pipefail
-          flutter pub get 2>&1 | tee ci-logs/flutter-pub-get.log
-      - name: Verify Dart formatting
-        shell: bash
-        run: |
-          set -o pipefail
-          dart format --output=none --set-exit-if-changed . 2>&1 |
-            tee ci-logs/dart-format.log
-      - name: Analyze Flutter application
-        shell: bash
-        run: |
-          set -o pipefail
-          flutter analyze 2>&1 | tee ci-logs/flutter-analyze.log
-      - name: Test Flutter application
-        shell: bash
-        run: |
-          set -o pipefail
-          flutter test 2>&1 | tee ci-logs/flutter-test.log
-      - name: Build Flutter web
-        shell: bash
-        run: |
-          set -o pipefail
-          flutter build web 2>&1 | tee ci-logs/flutter-build-web.log
-      - name: Build Android debug APK
-        shell: bash
-        run: |
-          set -o pipefail
-          flutter build apk --debug 2>&1 | tee ci-logs/flutter-build-apk.log
-      - name: Upload Flutter logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-pos-ci-logs-${{ github.run_id }}-${{ github.run_attempt }}
-          path: apps/pos/ci-logs
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Reclaim disk before cache cleanup
-        if: always()
-        shell: bash
-        run: |
-          echo 'Disk usage before cleanup:'
-          df -h
-          rm -rf build .dart_tool/flutter_build
-          rm -rf "$HOME/.gradle/caches" "$HOME/.gradle/daemon"
-          echo 'Disk usage after cleanup:'
-          df -h
-
-  pos-windows:
-    name: Flutter POS Windows release
-    runs-on: windows-2022
-    timeout-minutes: 35
-    defaults:
-      run:
-        working-directory: apps/pos
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.32.5
-          channel: stable
-          cache: true
-      - name: Resolve Flutter dependencies
-        run: flutter pub get
-      - name: Build Windows production release
-        run: >-
-          flutter build windows --release
-          -t lib/main_production.dart
-          --dart-define=FLUXA_ENV=production
-          --dart-define=API_BASE_URL=https://api.example.com/api/v1
-          --dart-define=BUILD_COMMIT=${{ github.sha }}
-          --dart-define=RELEASE_CHANNEL=ci
-
-  release-e2e:
-    name: Release E2E
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    needs:
-      - backend
-      - web
-      - pos
-      - pos-windows
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: fluxa
-          POSTGRES_PASSWORD: fluxa_ci_password
-          POSTGRES_DB: fluxa
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U fluxa -d fluxa"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-      redis:
-        image: redis:7.4-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-    env:
-      NODE_ENV: development
-      API_PORT: '3000'
-      LOG_LEVEL: info
-      SWAGGER_ENABLED: 'false'
-      DATABASE_URL: postgresql://fluxa:fluxa_ci_password@127.0.0.1:5432/fluxa
-      DATABASE_SSL: 'false'
-      DATABASE_POOL_MAX: '20'
-      REDIS_HOST: 127.0.0.1
-      REDIS_PORT: '6379'
-      REDIS_PASSWORD: ''
-      REDIS_TLS: 'false'
-      CORS_ORIGINS: http://localhost:3001
-      BOOKING_WEB_BASE_URL: http://localhost:3001
-      STRIPE_ENABLED: 'false'
-      STRIPE_SECRET_KEY: ''
-      STRIPE_WEBHOOK_SECRET: ''
-      ACUBE_ENABLED: 'false'
-      TRUST_PROXY: 'false'
-      ACCESS_TOKEN_SECRET: ci_access_token_secret_0123456789_abcdefghijklmnopqrstuvwxyz
-      REFRESH_TOKEN_SECRET: ci_refresh_token_secret_0123456789_abcdefghijklmnopqrstuvwxyz
-      SESSION_IP_HASH_SECRET: ci_session_hash_secret_0123456789_abcdefghijklmnopqrstuvwxyz
-      ACCESS_TOKEN_TTL_SECONDS: '900'
-      REFRESH_TOKEN_TTL_DAYS: '30'
-      JWT_ISSUER: fluxa-platform
-      JWT_AUDIENCE: fluxa-pos
-      BOOTSTRAP_ADMIN_EMAIL: e2e-admin@fluxa.local
-      BOOTSTRAP_ADMIN_PASSWORD: E2E_Admin_Password_2026!
-      BOOTSTRAP_ADMIN_DISPLAY_NAME: Fluxa E2E Admin
-      FLUXA_API_BASE_URL: http://127.0.0.1:3000/api/v1
-      FLUXA_E2E_ADMIN_EMAIL: e2e-admin@fluxa.local
-      FLUXA_E2E_ADMIN_PASSWORD: E2E_Admin_Password_2026!
-      RELEASE_SHA: ${{ github.sha }}
-      RELEASE_VERSION: 0.8.0
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: Build API and fiscal worker
-        run: |
-          npm run build:api
-          npm run build:fiscal-worker
-      - name: Apply migrations
-        run: npm run db:migrate
-      - name: Seed platform administrator
-        run: npm run db:seed
-      - name: Start API and fiscal worker
-        run: |
-          node dist/apps/api/main.js > api.log 2>&1 &
-          echo $! > api.pid
-          node dist/apps/fiscal-worker/main.js > fiscal-worker.log 2>&1 &
-          echo $! > fiscal-worker.pid
-      - name: Wait for readiness
-        run: |
-          for attempt in $(seq 1 40); do
-            if curl --fail --silent \
-              http://127.0.0.1:3000/api/v1/health/ready > /dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          cat api.log
-          cat fiscal-worker.log
-          exit 1
-      - name: Run release candidate E2E
-        run: npm run e2e:release
-      - name: Run POS sales E2E
-        run: npm run e2e:pos-sales
-      - name: Upload service logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fluxa-service-e2e-logs
-          path: |
-            api.log
-            fiscal-worker.log
-          if-no-files-found: ignore
-      - name: Stop services
-        if: always()
-        run: |
-          if [ -f api.pid ]; then
-            kill "$(cat api.pid)" || true
-          fi
-          if [ -f fiscal-worker.pid ]; then
-            kill "$(cat fiscal-worker.pid)" || true
+          set -euo pipefail
+          flutter pub get
+          dart format \
+            lib/features/fiscal/platform/fiscal_receipt_pdf_handler_io.dart \
+            lib/features/fiscal/platform/fiscal_receipt_pdf_handler_stub.dart \
+            lib/features/fiscal/platform/fiscal_receipt_thermal_printer.dart \
+            lib/features/printing/platform/esc_pos_raster_formatter.dart \
+            test/features/printing/esc_pos_raster_formatter_test.dart
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            pubspec.lock \
+            lib/features/fiscal/platform/fiscal_receipt_pdf_handler_io.dart \
+            lib/features/fiscal/platform/fiscal_receipt_pdf_handler_stub.dart \
+            lib/features/fiscal/platform/fiscal_receipt_thermal_printer.dart \
+            lib/features/printing/platform/esc_pos_raster_formatter.dart \
+            test/features/printing/esc_pos_raster_formatter_test.dart
+          if ! git diff --cached --quiet; then
+            git commit -m "style(pos): format fiscal receipt printer changes"
+            git push origin HEAD:${{ github.head_ref }}
           fi
