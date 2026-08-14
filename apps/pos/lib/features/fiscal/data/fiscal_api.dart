@@ -150,7 +150,8 @@ class FiscalApi implements FiscalGateway {
         throw const BackendError(message: 'PDF fiscale vuoto.');
       }
       final disposition = response.headers.value('content-disposition');
-      final filename = _filenameFromDisposition(disposition) ??
+      final filename =
+          _filenameFromDisposition(disposition) ??
           'scontrino-fiscale-$documentId.pdf';
       return FiscalReceiptPdfData(
         bytes: Uint8List.fromList(bytes),
@@ -219,8 +220,10 @@ class FiscalApi implements FiscalGateway {
 
   String? _filenameFromDisposition(String? value) {
     if (value == null || value.isEmpty) return null;
-    final match = RegExp(r'filename="?([^";]+)"?', caseSensitive: false)
-        .firstMatch(value);
+    final match = RegExp(
+      r'filename="?([^";]+)"?',
+      caseSensitive: false,
+    ).firstMatch(value);
     return match?.group(1)?.trim();
   }
 
