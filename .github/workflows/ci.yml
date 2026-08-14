@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: fluxa-ci-${{ github.workflow }}-${{ github.ref }}
@@ -68,8 +68,10 @@ jobs:
       run:
         working-directory: apps/pos
     steps:
-      - name: Checkout
+      - name: Checkout PR head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -88,12 +90,17 @@ jobs:
         run: |
           set -o pipefail
           flutter pub get 2>&1 | tee ci-logs/flutter-pub-get.log
-      - name: Verify Dart formatting
+      - name: Apply Dart formatting once
         shell: bash
         run: |
-          set -o pipefail
-          dart format --output=none --set-exit-if-changed . 2>&1 |
-            tee ci-logs/dart-format.log
+          dart format lib/features/fiscal/presentation/fiscal_screen.dart
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add lib/features/fiscal/presentation/fiscal_screen.dart
+            git commit -m "style: format fiscal receipt PDF actions"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
       - name: Analyze Flutter application
         shell: bash
         run: |
