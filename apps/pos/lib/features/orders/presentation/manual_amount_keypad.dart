@@ -11,17 +11,12 @@ Future<void> showManualAmountKeypad(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
-  builder: (context) => _ManualAmountKeypad(
-    controller: controller,
-    currency: currency,
-  ),
+  builder: (context) =>
+      _ManualAmountKeypad(controller: controller, currency: currency),
 );
 
 class _ManualAmountKeypad extends StatefulWidget {
-  const _ManualAmountKeypad({
-    required this.controller,
-    required this.currency,
-  });
+  const _ManualAmountKeypad({required this.controller, required this.currency});
 
   final OrderController controller;
   final String currency;
@@ -66,7 +61,9 @@ class _ManualAmountKeypadState extends State<_ManualAmountKeypad> {
                   ),
                   IconButton(
                     tooltip: 'Chiudi',
-                    onPressed: _submitting ? null : () => Navigator.pop(context),
+                    onPressed: _submitting
+                        ? null
+                        : () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -78,7 +75,10 @@ class _ManualAmountKeypadState extends State<_ManualAmountKeypad> {
               ),
               const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 16,
+                ),
                 decoration: BoxDecoration(
                   border: Border.all(color: theme.colorScheme.outlineVariant),
                   borderRadius: BorderRadius.circular(16),
