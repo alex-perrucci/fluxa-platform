@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "fiscal_receipt_printing_channel_win32.h"
 #include "flutter/generated_plugin_registrant.h"
 #include "printing_channel_win32.h"
 
@@ -27,6 +28,8 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   RegisterPrintingChannel(flutter_controller_->engine()->messenger());
+  RegisterFiscalReceiptPrintingChannel(
+      flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

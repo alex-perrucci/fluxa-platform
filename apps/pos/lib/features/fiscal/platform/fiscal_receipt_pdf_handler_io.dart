@@ -3,6 +3,15 @@ import 'dart:typed_data';
 
 bool get fiscalReceiptPdfActionsSupported => Platform.isWindows;
 
+typedef FiscalReceiptPrinter =
+    Future<String> Function(Uint8List bytes, String filename);
+
+FiscalReceiptPrinter? _configuredReceiptPrinter;
+
+void configureFiscalReceiptPrinter(FiscalReceiptPrinter? printer) {
+  _configuredReceiptPrinter = printer;
+}
+
 Future<String> openFiscalReceiptPdf(Uint8List bytes, String filename) async {
   _ensureWindows();
   final file = await _writeTemp(bytes, filename);
@@ -32,21 +41,13 @@ Future<String> saveFiscalReceiptPdf(Uint8List bytes, String filename) async {
 
 Future<String> printFiscalReceiptPdf(Uint8List bytes, String filename) async {
   _ensureWindows();
-  final file = await _writeTemp(bytes, filename);
-  final escapedPath = file.path.replaceAll("'", "''");
-  final result = await Process.run('powershell.exe', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    "Start-Process -FilePath '$escapedPath' -Verb Print",
-  ]);
-  if (result.exitCode != 0) {
-    throw FileSystemException(
-      'Windows non è riuscito a stampare il PDF fiscale.',
-      file.path,
+  final printer = _configuredReceiptPrinter;
+  if (printer == null) {
+    throw const FileSystemException(
+      'Stampante scontrini Fluxa non ancora inizializzata.',
     );
   }
-  return file.path;
+  return printer(bytes, filename);
 }
 
 Future<File> _writeTemp(Uint8List bytes, String filename) async {
