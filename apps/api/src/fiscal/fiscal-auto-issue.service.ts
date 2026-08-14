@@ -21,28 +21,28 @@ export class FiscalAutoIssueService {
   ) {}
 
   async issueAfterPaidOrder(auth: AuthContext, orderId: string): Promise<void> {
-    const organizationId = assertOrganizationScope(auth);
-    const result = await this.database.pool.query<AutoIssueProfileRow>(
-      `
-        SELECT
-          fp.enabled,
-          fp.auto_issue_on_paid AS "autoIssueOnPaid"
-        FROM orders o
-        INNER JOIN fiscal_profiles fp
-          ON fp.organization_id = o.organization_id
-         AND fp.location_id = o.location_id
-        WHERE o.id = $1
-          AND o.organization_id = $2
-          AND o.status = 'PAID'
-        LIMIT 1
-      `,
-      [orderId, organizationId],
-    );
-    const profile = result.rows[0];
-
-    if (!profile?.enabled || !profile.autoIssueOnPaid) return;
-
     try {
+      const organizationId = assertOrganizationScope(auth);
+      const result = await this.database.pool.query<AutoIssueProfileRow>(
+        `
+          SELECT
+            fp.enabled,
+            fp.auto_issue_on_paid AS "autoIssueOnPaid"
+          FROM orders o
+          INNER JOIN fiscal_profiles fp
+            ON fp.organization_id = o.organization_id
+           AND fp.location_id = o.location_id
+          WHERE o.id = $1
+            AND o.organization_id = $2
+            AND o.status = 'PAID'
+          LIMIT 1
+        `,
+        [orderId, organizationId],
+      );
+      const profile = result.rows[0];
+
+      if (!profile?.enabled || !profile.autoIssueOnPaid) return;
+
       await this.fiscalDocuments.issue(auth, orderId, {
         clientRequestId: randomUUID(),
       });
@@ -51,7 +51,9 @@ export class FiscalAutoIssueService {
       // payment into a client-visible failure that could cause the operator to
       // retry the charge. The paid order remains available for manual fiscalization.
       const message = error instanceof Error ? error.message : 'unknown error';
-      this.logger.error(`Automatic fiscalization failed for order ${orderId}: ${message}`);
+      this.logger.error(
+        `Automatic fiscalization failed for order ${orderId}: ${message}`,
+      );
     }
   }
 }
