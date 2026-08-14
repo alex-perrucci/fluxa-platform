@@ -45,7 +45,7 @@ compose_base() {
 
 fluxa_compose() {
   local profile_args=()
-  if [[ "${ACUBE_ENABLED:-false}" == "true" ]]; then
+  if [[ "${ACUBE_ENABLED:-false}" == "true" || "${OPENAPI_ENABLED:-false}" == "true" ]]; then
     profile_args+=(--profile fiscal)
   fi
   compose_base "${profile_args[@]}" "$@"
