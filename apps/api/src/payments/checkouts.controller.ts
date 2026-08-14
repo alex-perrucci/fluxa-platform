@@ -10,6 +10,7 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { FiscalAutoIssueService } from '../fiscal/fiscal-auto-issue.service';
 import { CancelCheckoutDto } from './dto/cancel-checkout.dto';
 import { CheckoutListQueryDto } from './dto/checkout-list-query.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -18,7 +19,10 @@ import { PaymentsService } from './payments.service';
 
 @Controller('checkouts')
 export class CheckoutsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly fiscalAutoIssue: FiscalAutoIssueService,
+  ) {}
 
   @Get()
   list(@CurrentAuth() auth: AuthContext, @Query() query: CheckoutListQueryDto) {
@@ -41,12 +45,23 @@ export class CheckoutsController {
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')
   @Post(':checkoutId/payments')
-  createPayment(
+  async createPayment(
     @CurrentAuth() auth: AuthContext,
     @Param('checkoutId', ParseUUIDPipe) checkoutId: string,
     @Body() dto: CreatePaymentDto,
   ) {
-    return this.paymentsService.createPayment(auth, checkoutId, dto);
+    const result = await this.paymentsService.createPayment(
+      auth,
+      checkoutId,
+      dto,
+    );
+    if (result.checkout.status === 'COMPLETED') {
+      await this.fiscalAutoIssue.issueAfterPaidOrder(
+        auth,
+        result.checkout.orderId,
+      );
+    }
+    return result;
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')
