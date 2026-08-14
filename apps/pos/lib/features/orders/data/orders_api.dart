@@ -31,6 +31,16 @@ abstract interface class OrdersGateway {
     String? note,
   });
 
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  });
+
   Future<OrderDetail> updateItem({
     required String orderId,
     required String itemId,
@@ -142,6 +152,34 @@ class OrdersApi implements OrdersGateway {
           'productId': productId,
           'variantId': ?variantId,
           'quantityAmount': quantityAmount,
+          'note': ?note,
+        },
+      );
+      return OrderDetail.fromJson(_requireData(response.data));
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
+  @override
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, Object?>>(
+        'orders/$orderId/manual-items',
+        data: {
+          'mutationId': mutationId,
+          'clientItemId': clientItemId,
+          'expectedVersion': expectedVersion,
+          'amountCents': amountCents,
+          'description': ?description,
           'note': ?note,
         },
       );
