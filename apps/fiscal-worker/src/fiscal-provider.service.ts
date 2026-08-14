@@ -275,11 +275,11 @@ export class FiscalProviderService {
   }
 
   private openApiToken(environment: 'SANDBOX' | 'PRODUCTION'): string {
-    return (
+    const token =
       environment === 'SANDBOX'
         ? process.env.OPENAPI_SANDBOX_BEARER_TOKEN
-        : process.env.OPENAPI_BEARER_TOKEN
-    )?.trim() ?? '';
+        : process.env.OPENAPI_BEARER_TOKEN;
+    return token?.trim() ?? '';
   }
 
   private async openApiRequest(
