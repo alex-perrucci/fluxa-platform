@@ -59,13 +59,21 @@ class TokenRefreshCoordinator {
       await _sessionStore.saveTokens(tokens);
       return tokens;
     } on DioException catch (error) {
-      await _expire();
-      throw BackendError.fromDioException(error);
-    } on BackendError {
-      await _expire();
+      final backendError = BackendError.fromDioException(error);
+      if (_isTerminalAuthFailure(error.response?.statusCode)) {
+        await _expire();
+      }
+      throw backendError;
+    } on BackendError catch (error) {
+      if (_isTerminalAuthFailure(error.statusCode)) {
+        await _expire();
+      }
       rethrow;
     }
   }
+
+  bool _isTerminalAuthFailure(int? statusCode) =>
+      statusCode == 401 || statusCode == 403;
 
   Future<void> _expire() async {
     await _sessionStore.clearSession();

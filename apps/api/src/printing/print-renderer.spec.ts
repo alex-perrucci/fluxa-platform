@@ -30,7 +30,7 @@ describe('print renderer', () => {
     expect(output.includes('NOTA: Senza sale')).toBe(true);
   });
 
-  it('marks order receipts as non fiscal', () => {
+  it('renders order summaries without the obsolete fiscal-invalid disclaimer', () => {
     const output = renderOrderReceipt({
       orderNumber: 'ORD-1',
       businessDate: '2026-07-20',
@@ -41,6 +41,7 @@ describe('print renderer', () => {
       totalCents: 1000,
       taxTotalCents: 91,
     });
-    expect(output.includes('NON VALIDO AI FINI FISCALI')).toBe(true);
+    expect(output.includes('RIEPILOGO ORDINE')).toBe(true);
+    expect(output.includes('NON VALIDO AI FINI FISCALI')).toBe(false);
   });
 });

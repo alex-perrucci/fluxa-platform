@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../device/domain/device_assignment_models.dart';
+import '../../orders/presentation/manual_amount_keypad.dart';
 import '../../orders/presentation/order_composer.dart';
 import '../../orders/presentation/order_controller.dart';
 import '../domain/catalog_models.dart';
@@ -211,7 +212,23 @@ class _CatalogBrowser extends StatelessWidget {
           loading: controller.isLoading,
           onRefresh: controller.refresh,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            key: const Key('catalog-manual-amount-button'),
+            onPressed: orderController.busy
+                ? null
+                : () => showManualAmountKeypad(
+                    context,
+                    controller: orderController,
+                    currency: snapshot.currency,
+                  ),
+            icon: const Icon(Icons.dialpad),
+            label: const Text('Importo libero'),
+          ),
+        ),
+        const SizedBox(height: 12),
         TextField(
           key: const Key('catalog-search-field'),
           autofocus: true,
@@ -237,7 +254,7 @@ class _CatalogBrowser extends StatelessWidget {
                       ? 'Catalogo vuoto'
                       : 'Nessun prodotto trovato',
                   message: controller.searchQuery.trim().isEmpty
-                      ? 'Non risultano prodotti attivi per questa location.'
+                      ? 'Non risultano prodotti attivi per questa location. Usa “Importo libero” per una vendita rapida.'
                       : 'Prova con un altro nome, codice, SKU o barcode.',
                 )
               : _ProductGrid(

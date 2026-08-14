@@ -60,7 +60,47 @@ abstract interface class OrdersGateway {
   });
 }
 
-class OrdersApi implements OrdersGateway {
+abstract interface class ManualOrdersGateway {
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  });
+}
+
+extension ManualOrderOperations on OrdersGateway {
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  }) {
+    final gateway = this;
+    if (gateway is! ManualOrdersGateway) {
+      throw UnsupportedError(
+        'Il gateway ordini configurato non supporta le vendite a importo libero.',
+      );
+    }
+    return gateway.addManualItem(
+      orderId: orderId,
+      mutationId: mutationId,
+      clientItemId: clientItemId,
+      expectedVersion: expectedVersion,
+      amountCents: amountCents,
+      description: description,
+      note: note,
+    );
+  }
+}
+
+class OrdersApi implements OrdersGateway, ManualOrdersGateway {
   OrdersApi(this._dio);
 
   final Dio _dio;
@@ -142,6 +182,34 @@ class OrdersApi implements OrdersGateway {
           'productId': productId,
           'variantId': ?variantId,
           'quantityAmount': quantityAmount,
+          'note': ?note,
+        },
+      );
+      return OrderDetail.fromJson(_requireData(response.data));
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
+  @override
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, Object?>>(
+        'orders/$orderId/manual-items',
+        data: {
+          'mutationId': mutationId,
+          'clientItemId': clientItemId,
+          'expectedVersion': expectedVersion,
+          'amountCents': amountCents,
+          'description': ?description,
           'note': ?note,
         },
       );

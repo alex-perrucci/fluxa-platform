@@ -70,17 +70,59 @@ interface CheckoutHeaderRow extends QueryResultRow {
   id: string;
   organizationId: string;
   locationId: string;
+  orderId: string;
   orderNumber: string;
+  businessDate: string;
   currency: string;
+  subtotalCents: number;
+  discountCents: number;
   totalCents: number;
+  taxTotalCents: number;
   paidCents: number;
   changeCents: number;
+  completedAt: Date | null;
+  merchantLegalName: string;
+  merchantTradeName: string | null;
+  merchantVatNumber: string;
+  merchantTaxCode: string | null;
+  locationName: string;
+  addressLine1: string;
+  addressLine2: string | null;
+  postalCode: string;
+  city: string;
+  province: string | null;
+  countryCode: string;
+  timezone: string;
 }
 
 interface PaymentRow extends QueryResultRow {
   method: string;
   amountCents: number;
+  tenderedCents: number | null;
+  changeCents: number;
   status: string;
+}
+
+interface ReceiptItemRow extends QueryResultRow {
+  quantityAmount: number;
+  quantityScale: number;
+  name: string;
+  variantName: string | null;
+  note: string | null;
+  unitPriceCents: number;
+  grossTotalCents: number;
+  allocatedDiscountCents: number;
+  finalGrossCents: number;
+  vatRateBasisPoints: number;
+  vatNatureCode: string | null;
+}
+
+interface VatSummaryRow extends QueryResultRow {
+  vatRateBasisPoints: number;
+  vatNatureCode: string | null;
+  grossCents: number;
+  netCents: number;
+  taxCents: number;
 }
 
 interface InsertedJobRow extends QueryResultRow {
@@ -288,13 +330,42 @@ export class PrintProducerService {
     const ids = await this.withTransaction(async (client) => {
       const headerResult = await client.query<CheckoutHeaderRow>(
         `
-          SELECT cs.id,cs.organization_id AS "organizationId",
-            cs.location_id AS "locationId",o.number AS "orderNumber",
-            cs.currency,cs.order_total_cents AS "totalCents",
-            cs.paid_cents AS "paidCents",cs.change_cents AS "changeCents"
+          SELECT
+            cs.id,
+            cs.organization_id AS "organizationId",
+            cs.location_id AS "locationId",
+            cs.order_id AS "orderId",
+            o.number AS "orderNumber",
+            o.business_date AS "businessDate",
+            cs.currency,
+            o.subtotal_cents AS "subtotalCents",
+            o.discount_cents AS "discountCents",
+            cs.order_total_cents AS "totalCents",
+            o.tax_total_cents AS "taxTotalCents",
+            cs.paid_cents AS "paidCents",
+            cs.change_cents AS "changeCents",
+            cs.completed_at AS "completedAt",
+            m.legal_name AS "merchantLegalName",
+            m.trade_name AS "merchantTradeName",
+            m.vat_number AS "merchantVatNumber",
+            m.tax_code AS "merchantTaxCode",
+            l.name AS "locationName",
+            l.address_line_1 AS "addressLine1",
+            l.address_line_2 AS "addressLine2",
+            l.postal_code AS "postalCode",
+            l.city,
+            l.province,
+            l.country_code AS "countryCode",
+            l.timezone
           FROM checkout_sessions cs
-          JOIN orders o ON o.id=cs.order_id
-          WHERE cs.id=$1 AND cs.organization_id=$2 LIMIT 1
+          JOIN orders o
+            ON o.id=cs.order_id AND o.organization_id=cs.organization_id
+          JOIN locations l
+            ON l.id=cs.location_id AND l.organization_id=cs.organization_id
+          JOIN merchants m
+            ON m.id=l.merchant_id AND m.organization_id=cs.organization_id
+          WHERE cs.id=$1 AND cs.organization_id=$2
+          LIMIT 1
         `,
         [checkoutId, organizationId],
       );
@@ -306,19 +377,87 @@ export class PrintProducerService {
         });
       }
       await this.access.assertLocation(auth, header.locationId);
-      const paymentResult = await client.query<PaymentRow>(
-        `SELECT method,amount_cents AS "amountCents",status
-         FROM payment_transactions WHERE organization_id=$1
-           AND checkout_session_id=$2 ORDER BY created_at,id`,
-        [organizationId, checkoutId],
-      );
+
+      const [paymentResult, itemResult, vatSummaryResult] = await Promise.all([
+        client.query<PaymentRow>(
+          `
+            SELECT
+              method,
+              amount_cents AS "amountCents",
+              tendered_cents AS "tenderedCents",
+              change_cents AS "changeCents",
+              status
+            FROM payment_transactions
+            WHERE organization_id=$1 AND checkout_session_id=$2
+            ORDER BY created_at,id
+          `,
+          [organizationId, checkoutId],
+        ),
+        client.query<ReceiptItemRow>(
+          `
+            SELECT
+              quantity_amount AS "quantityAmount",
+              quantity_scale AS "quantityScale",
+              product_name_snapshot AS name,
+              variant_name_snapshot AS "variantName",
+              note,
+              unit_price_cents AS "unitPriceCents",
+              gross_total_cents AS "grossTotalCents",
+              allocated_discount_cents AS "allocatedDiscountCents",
+              final_gross_cents AS "finalGrossCents",
+              vat_rate_basis_points_snapshot AS "vatRateBasisPoints",
+              vat_nature_code_snapshot AS "vatNatureCode"
+            FROM order_items
+            WHERE organization_id=$1 AND order_id=$2
+            ORDER BY sort_order,created_at,id
+          `,
+          [organizationId, header.orderId],
+        ),
+        client.query<VatSummaryRow>(
+          `
+            SELECT
+              vat_rate_basis_points AS "vatRateBasisPoints",
+              vat_nature_code AS "vatNatureCode",
+              gross_cents AS "grossCents",
+              net_cents AS "netCents",
+              tax_cents AS "taxCents"
+            FROM order_vat_summaries
+            WHERE organization_id=$1 AND order_id=$2
+            ORDER BY vat_rate_basis_points DESC,vat_nature_code NULLS FIRST
+          `,
+          [organizationId, header.orderId],
+        ),
+      ]);
+
       const renderedText = renderPaymentReceipt({
+        merchant: {
+          legalName: header.merchantLegalName,
+          tradeName: header.merchantTradeName,
+          vatNumber: header.merchantVatNumber,
+          taxCode: header.merchantTaxCode,
+        },
+        location: {
+          name: header.locationName,
+          addressLine1: header.addressLine1,
+          addressLine2: header.addressLine2,
+          postalCode: header.postalCode,
+          city: header.city,
+          province: header.province,
+          countryCode: header.countryCode,
+          timezone: header.timezone,
+        },
         orderNumber: header.orderNumber,
-        checkoutId,
+        businessDate: header.businessDate,
+        completedAt: header.completedAt,
         currency: header.currency,
+        subtotalCents: header.subtotalCents,
+        discountCents: header.discountCents,
         totalCents: header.totalCents,
+        taxTotalCents: header.taxTotalCents,
         paidCents: header.paidCents,
         changeCents: header.changeCents,
+        items: itemResult.rows,
+        vatSummaries: vatSummaryResult.rows,
         payments: paymentResult.rows,
       });
       return this.enqueueRouted(client, {
@@ -330,7 +469,12 @@ export class PrintProducerService {
         sourceEntityId: checkoutId,
         dedupeSeed: `PAYMENT_RECEIPT:${checkoutId}:${dto.clientRequestId}`,
         renderedText,
-        payload: { checkout: header, payments: paymentResult.rows },
+        payload: {
+          checkout: header,
+          items: itemResult.rows,
+          vatSummaries: vatSummaryResult.rows,
+          payments: paymentResult.rows,
+        },
         requestedByUserId: auth.userId,
         requestedByDeviceId: auth.deviceId,
         clientRequestId: dto.clientRequestId,
