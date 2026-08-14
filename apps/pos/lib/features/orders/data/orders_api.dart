@@ -31,16 +31,6 @@ abstract interface class OrdersGateway {
     String? note,
   });
 
-  Future<OrderDetail> addManualItem({
-    required String orderId,
-    required String mutationId,
-    required String clientItemId,
-    required int expectedVersion,
-    required int amountCents,
-    String? description,
-    String? note,
-  });
-
   Future<OrderDetail> updateItem({
     required String orderId,
     required String itemId,
@@ -70,7 +60,47 @@ abstract interface class OrdersGateway {
   });
 }
 
-class OrdersApi implements OrdersGateway {
+abstract interface class ManualOrdersGateway {
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  });
+}
+
+extension ManualOrderOperations on OrdersGateway {
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  }) {
+    final gateway = this;
+    if (gateway is! ManualOrdersGateway) {
+      throw UnsupportedError(
+        'Il gateway ordini configurato non supporta le vendite a importo libero.',
+      );
+    }
+    return gateway.addManualItem(
+      orderId: orderId,
+      mutationId: mutationId,
+      clientItemId: clientItemId,
+      expectedVersion: expectedVersion,
+      amountCents: amountCents,
+      description: description,
+      note: note,
+    );
+  }
+}
+
+class OrdersApi implements OrdersGateway, ManualOrdersGateway {
   OrdersApi(this._dio);
 
   final Dio _dio;
