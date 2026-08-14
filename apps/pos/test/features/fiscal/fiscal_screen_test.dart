@@ -39,15 +39,53 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('keeps OpenAPI configuration managed by the platform', (
+    tester,
+  ) async {
+    final controller = FiscalController(
+      _FiscalGateway(provider: FiscalProvider.openapiSmartReceipts),
+      _OrdersGateway(),
+    );
+    addTearDown(controller.dispose);
+    await controller.bindLocation('location-1');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FiscalView(
+            controller: controller,
+            locationName: 'Bar Latino',
+            role: 'OWNER',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('OpenAPI Smart Receipts · Sandbox'), findsOneWidget);
+    expect(
+      find.text('Configurazione OpenAPI gestita dal Platform Control Center.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('configure-acube-sandbox-button')),
+      findsNothing,
+    );
+  });
 }
 
 class _FiscalGateway implements FiscalGateway {
+  _FiscalGateway({this.provider = FiscalProvider.acubeSmartReceipts});
+
+  final FiscalProvider provider;
+
   @override
   Future<FiscalProfile?> getProfile(String locationId) async => FiscalProfile(
     id: 'p1',
     organizationId: 'o1',
     locationId: locationId,
-    provider: FiscalProvider.acubeSmartReceipts,
+    provider: provider,
     environment: FiscalEnvironment.sandbox,
     fiscalId: '12345678901',
     enabled: true,
