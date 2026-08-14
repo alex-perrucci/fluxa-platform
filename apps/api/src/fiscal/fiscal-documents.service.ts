@@ -27,7 +27,7 @@ import { FiscalQueueService } from './fiscal-queue.service';
 
 interface ProfileRow extends QueryResultRow {
   id: string;
-  provider: 'MOCK' | 'ACUBE_SMART_RECEIPTS';
+  provider: 'MOCK' | 'ACUBE_SMART_RECEIPTS' | 'OPENAPI_SMART_RECEIPTS';
   environment: 'SANDBOX' | 'PRODUCTION';
   fiscalId: string;
   enabled: boolean;
@@ -256,29 +256,26 @@ export class FiscalDocumentsService {
           message: 'Ordine non trovato.',
         });
       await this.access.assertLocation(auth, order.locationId);
-      const [profileResult, itemResult, vatResult, paymentResult] =
-        await Promise.all([
-          client.query<ProfileRow>(
-            `SELECT id, provider, environment, fiscal_id AS "fiscalId", enabled, receipt_email AS "receiptEmail" FROM fiscal_profiles WHERE organization_id=$1 AND location_id=$2 LIMIT 1`,
-            [organizationId, order.locationId],
-          ),
-          client.query<ItemRow>(
-            `SELECT id, product_name_snapshot AS "productName", variant_name_snapshot AS "variantName",
+      const profileResult = await client.query<ProfileRow>(
+        `SELECT id, provider, environment, fiscal_id AS "fiscalId", enabled, receipt_email AS "receiptEmail" FROM fiscal_profiles WHERE organization_id=$1 AND location_id=$2 LIMIT 1`,
+        [organizationId, order.locationId],
+      );
+      const itemResult = await client.query<ItemRow>(
+        `SELECT id, product_name_snapshot AS "productName", variant_name_snapshot AS "variantName",
           quantity_amount AS "quantityAmount", quantity_scale AS "quantityScale", unit_price_cents AS "unitPriceCents",
           gross_total_cents AS "grossTotalCents", allocated_discount_cents AS "discountCents",
           final_gross_cents AS "finalGrossCents", vat_rate_basis_points_snapshot AS "vatRateBasisPoints",
           vat_nature_code_snapshot AS "vatNatureCode" FROM order_items WHERE order_id=$1 ORDER BY sort_order, created_at`,
-            [orderId],
-          ),
-          client.query<VatRow>(
-            `SELECT vat_key AS "vatKey", vat_rate_basis_points AS "vatRateBasisPoints", vat_nature_code AS "vatNatureCode", gross_cents AS "grossCents", net_cents AS "netCents", tax_cents AS "taxCents" FROM order_vat_summaries WHERE order_id=$1 ORDER BY vat_rate_basis_points`,
-            [orderId],
-          ),
-          client.query<PaymentRow>(
-            `SELECT method, amount_cents AS "amountCents" FROM payment_transactions WHERE organization_id=$1 AND order_id=$2 AND status='CAPTURED' ORDER BY created_at`,
-            [organizationId, orderId],
-          ),
-        ]);
+        [orderId],
+      );
+      const vatResult = await client.query<VatRow>(
+        `SELECT vat_key AS "vatKey", vat_rate_basis_points AS "vatRateBasisPoints", vat_nature_code AS "vatNatureCode", gross_cents AS "grossCents", net_cents AS "netCents", tax_cents AS "taxCents" FROM order_vat_summaries WHERE order_id=$1 ORDER BY vat_rate_basis_points`,
+        [orderId],
+      );
+      const paymentResult = await client.query<PaymentRow>(
+        `SELECT method, amount_cents AS "amountCents" FROM payment_transactions WHERE organization_id=$1 AND order_id=$2 AND status='CAPTURED' ORDER BY created_at`,
+        [organizationId, orderId],
+      );
       const profile = profileResult.rows[0];
       if (!profile || !profile.enabled)
         throw new ConflictException({
@@ -632,7 +629,7 @@ export class FiscalDocumentsService {
       [randomUUID(), auth.deviceId, mutationId, operation, hash, version, id],
     );
   }
-  private auditAndOutbox(
+  private async auditAndOutbox(
     client: PoolClient,
     organizationId: string,
     userId: string,
@@ -640,28 +637,26 @@ export class FiscalDocumentsService {
     topic: string,
     payload: Record<string, unknown>,
   ) {
-    return Promise.all([
-      client.query(
-        `INSERT INTO audit_events (id, organization_id, actor_user_id, action, entity_type, entity_id, payload) VALUES ($1,$2,$3,$4,'fiscal_document',$5,$6::jsonb)`,
-        [
-          randomUUID(),
-          organizationId,
-          userId,
-          topic,
-          documentId,
-          JSON.stringify(payload),
-        ],
-      ),
-      client.query(
-        `INSERT INTO outbox_events (id, topic, aggregate_type, aggregate_id, payload) VALUES ($1,$2,'fiscal_document',$3,$4::jsonb)`,
-        [
-          randomUUID(),
-          topic,
-          documentId,
-          JSON.stringify({ organizationId, documentId, ...payload }),
-        ],
-      ),
-    ]);
+    await client.query(
+      `INSERT INTO audit_events (id, organization_id, actor_user_id, action, entity_type, entity_id, payload) VALUES ($1,$2,$3,$4,'fiscal_document',$5,$6::jsonb)`,
+      [
+        randomUUID(),
+        organizationId,
+        userId,
+        topic,
+        documentId,
+        JSON.stringify(payload),
+      ],
+    );
+    await client.query(
+      `INSERT INTO outbox_events (id, topic, aggregate_type, aggregate_id, payload) VALUES ($1,$2,'fiscal_document',$3,$4::jsonb)`,
+      [
+        randomUUID(),
+        topic,
+        documentId,
+        JSON.stringify({ organizationId, documentId, ...payload }),
+      ],
+    );
   }
   private async withTransaction<T>(
     fn: (client: PoolClient) => Promise<T>,
