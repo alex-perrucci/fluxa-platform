@@ -97,10 +97,7 @@ class FiscalReceiptThermalPrinter {
 
   Future<void> _sendRaw(String queueName, Uint8List payload) async {
     final parts = queueName.split('|');
-    final arguments = <String, Object?>{
-      'bytes': payload,
-      'copies': 1,
-    };
+    final arguments = <String, Object?>{'bytes': payload, 'copies': 1};
 
     if (parts.length >= 3 && parts.first == 'bluetooth') {
       final address = parts[1].trim();

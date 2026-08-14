@@ -3,10 +3,8 @@ import 'dart:typed_data';
 
 bool get fiscalReceiptPdfActionsSupported => Platform.isWindows;
 
-typedef FiscalReceiptPrinter = Future<String> Function(
-  Uint8List bytes,
-  String filename,
-);
+typedef FiscalReceiptPrinter =
+    Future<String> Function(Uint8List bytes, String filename);
 
 FiscalReceiptPrinter? _configuredReceiptPrinter;
 

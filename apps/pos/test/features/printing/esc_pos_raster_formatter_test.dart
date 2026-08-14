@@ -31,9 +31,7 @@ void main() {
   test('rejects incomplete RGBA buffers', () {
     expect(
       () => buildEscPosRasterDocument(
-        pages: [
-          EscPosRasterPage(width: 2, height: 2, rgba: Uint8List(4)),
-        ],
+        pages: [EscPosRasterPage(width: 2, height: 2, rgba: Uint8List(4))],
         paperWidthMm: 80,
         supportsCut: false,
       ),

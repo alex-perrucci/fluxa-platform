@@ -19,7 +19,9 @@ Uint8List buildEscPosRasterDocument({
   required bool supportsCut,
 }) {
   if (pages.isEmpty) {
-    throw const FormatException('Il PDF fiscale non contiene pagine stampabili.');
+    throw const FormatException(
+      'Il PDF fiscale non contiene pagine stampabili.',
+    );
   }
 
   final targetWidthDots = _targetWidthDots(paperWidthMm);
