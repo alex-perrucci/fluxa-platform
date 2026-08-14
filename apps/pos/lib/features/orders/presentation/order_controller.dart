@@ -301,6 +301,7 @@ class OrderController extends ChangeNotifier {
       _draft = OrderDraft(
         clientOrderId: UuidV4.generate(),
         serviceMode: OrderServiceMode.counter,
+        customerNote: null,
       );
     } else if (!canAddItems) {
       _errorMessage = 'L’ordine corrente non può essere modificato.';
