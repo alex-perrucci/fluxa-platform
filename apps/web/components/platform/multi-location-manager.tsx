@@ -76,7 +76,8 @@ export function MultiLocationManager({
     setPending(true);
     setError(null);
     setMessage(null);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const copyEnabled = Boolean(sourceLocationId);
     const payload = {
       merchantId: String(form.get('merchantId') ?? ''),
@@ -121,7 +122,7 @@ export function MultiLocationManager({
         throw new Error(body.message ?? 'Location non creata.');
       }
       await refresh();
-      event.currentTarget.reset();
+      formElement.reset();
       setKind('PERMANENT');
       setSourceLocationId('');
       setShowCreate(false);

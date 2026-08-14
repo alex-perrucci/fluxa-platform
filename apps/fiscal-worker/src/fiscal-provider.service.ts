@@ -274,17 +274,29 @@ export class FiscalProviderService {
     );
   }
 
+  private openApiToken(environment: 'SANDBOX' | 'PRODUCTION'): string {
+    const token =
+      environment === 'SANDBOX'
+        ? process.env.OPENAPI_SANDBOX_BEARER_TOKEN
+        : process.env.OPENAPI_BEARER_TOKEN;
+    return token?.trim() ?? '';
+  }
+
   private async openApiRequest(
     environment: 'SANDBOX' | 'PRODUCTION',
     path: string,
     init: RequestInit,
   ): Promise<Record<string, unknown>> {
-    const token = process.env.OPENAPI_BEARER_TOKEN?.trim();
+    const token = this.openApiToken(environment);
     if (!token) {
       throw new FiscalProviderError(
-        'OpenAPI bearer token not configured.',
+        environment === 'SANDBOX'
+          ? 'OpenAPI Sandbox bearer token not configured.'
+          : 'OpenAPI Production bearer token not configured.',
         false,
-        'OPENAPI_CREDENTIALS_MISSING',
+        environment === 'SANDBOX'
+          ? 'OPENAPI_SANDBOX_CREDENTIALS_MISSING'
+          : 'OPENAPI_PRODUCTION_CREDENTIALS_MISSING',
       );
     }
     const configuredBase = process.env.OPENAPI_API_BASE_URL?.trim();

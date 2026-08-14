@@ -181,11 +181,26 @@ export function validateProduction(values, posApiUrl = '') {
     problems.push('ACUBE_ENABLED must be true or false');
   }
 
+  const sandboxBearer = values.OPENAPI_SANDBOX_BEARER_TOKEN ?? '';
+  if (
+    sandboxBearer &&
+    (sandboxBearer.length < 16 || placeholder.test(sandboxBearer))
+  ) {
+    problems.push(
+      'OPENAPI_SANDBOX_BEARER_TOKEN must be a non-placeholder sandbox token of at least 16 characters when configured',
+    );
+  }
+
   if (values.OPENAPI_ENABLED === 'true') {
     const bearer = values.OPENAPI_BEARER_TOKEN ?? '';
     if (bearer.length < 16 || placeholder.test(bearer)) {
       problems.push(
         'OPENAPI_BEARER_TOKEN must be a non-placeholder production token of at least 16 characters',
+      );
+    }
+    if (sandboxBearer && bearer && sandboxBearer === bearer) {
+      problems.push(
+        'OPENAPI_SANDBOX_BEARER_TOKEN must be different from OPENAPI_BEARER_TOKEN',
       );
     }
     if (values.OPENAPI_API_BASE_URL) {
@@ -225,6 +240,7 @@ function selfTest() {
     ACUBE_AUTH_BASE_URL: 'https://common.api.acubeapi.com',
     OPENAPI_ENABLED: 'true',
     OPENAPI_BEARER_TOKEN: 'o'.repeat(64),
+    OPENAPI_SANDBOX_BEARER_TOKEN: 'x'.repeat(64),
     OPENAPI_API_BASE_URL: '',
     SWAGGER_ENABLED: 'false',
     ACCESS_TOKEN_SECRET: 'a'.repeat(64),
@@ -252,6 +268,7 @@ function selfTest() {
     ACUBE_AUTH_BASE_URL: '',
     OPENAPI_ENABLED: 'false',
     OPENAPI_BEARER_TOKEN: '',
+    OPENAPI_SANDBOX_BEARER_TOKEN: '',
     OPENAPI_API_BASE_URL: '',
   };
   assert.deepEqual(validateProduction(privateDocker), []);
@@ -277,6 +294,12 @@ function selfTest() {
       ...managed,
       OPENAPI_BEARER_TOKEN: '<OPENAPI_PRODUCTION_TOKEN>',
     }).some((problem) => problem.includes('OPENAPI_BEARER_TOKEN')),
+  );
+  assert.ok(
+    validateProduction({
+      ...managed,
+      OPENAPI_SANDBOX_BEARER_TOKEN: managed.OPENAPI_BEARER_TOKEN,
+    }).some((problem) => problem.includes('must be different')),
   );
   console.log('Production configuration verifier self-test passed.');
 }

@@ -178,12 +178,26 @@ export class PlatformOpenApiFiscalService {
     return { location, profile, providerConfiguration };
   }
 
+  private openApiToken(environment: 'SANDBOX' | 'PRODUCTION') {
+    const key =
+      environment === 'SANDBOX'
+        ? 'OPENAPI_SANDBOX_BEARER_TOKEN'
+        : 'OPENAPI_BEARER_TOKEN';
+    return this.config.get<string>(key)?.trim() ?? '';
+  }
+
   private assertProviderAvailable(environment: 'SANDBOX' | 'PRODUCTION') {
-    const token = this.config.get<string>('OPENAPI_BEARER_TOKEN')?.trim();
+    const token = this.openApiToken(environment);
     if (!token) {
       throw new ServiceUnavailableException({
-        code: 'OPENAPI_CREDENTIALS_MISSING',
-        message: 'OpenAPI bearer token non configurato sul server.',
+        code:
+          environment === 'SANDBOX'
+            ? 'OPENAPI_SANDBOX_CREDENTIALS_MISSING'
+            : 'OPENAPI_PRODUCTION_CREDENTIALS_MISSING',
+        message:
+          environment === 'SANDBOX'
+            ? 'OpenAPI Sandbox bearer token non configurato sul server.'
+            : 'OpenAPI Production bearer token non configurato sul server.',
       });
     }
     if (
@@ -286,7 +300,7 @@ export class PlatformOpenApiFiscalService {
     environment: 'SANDBOX' | 'PRODUCTION',
     fiscalId: string,
   ) {
-    const token = this.config.get<string>('OPENAPI_BEARER_TOKEN')?.trim();
+    const token = this.openApiToken(environment);
     if (!token) {
       return {
         reachable: false,
@@ -296,7 +310,10 @@ export class PlatformOpenApiFiscalService {
         name: null,
         email: null,
         taxCode: null,
-        reason: 'OPENAPI_TOKEN_NOT_CONFIGURED',
+        reason:
+          environment === 'SANDBOX'
+            ? 'OPENAPI_SANDBOX_TOKEN_NOT_CONFIGURED'
+            : 'OPENAPI_PRODUCTION_TOKEN_NOT_CONFIGURED',
       };
     }
     const remote = await this.getRemoteConfiguration(environment, fiscalId);
@@ -348,11 +365,17 @@ export class PlatformOpenApiFiscalService {
     init: RequestInit,
     allowNotFound = false,
   ): Promise<OpenApiHttpResult> {
-    const token = this.config.get<string>('OPENAPI_BEARER_TOKEN')?.trim();
+    const token = this.openApiToken(environment);
     if (!token) {
       throw new ServiceUnavailableException({
-        code: 'OPENAPI_CREDENTIALS_MISSING',
-        message: 'OpenAPI bearer token non configurato sul server.',
+        code:
+          environment === 'SANDBOX'
+            ? 'OPENAPI_SANDBOX_CREDENTIALS_MISSING'
+            : 'OPENAPI_PRODUCTION_CREDENTIALS_MISSING',
+        message:
+          environment === 'SANDBOX'
+            ? 'OpenAPI Sandbox bearer token non configurato sul server.'
+            : 'OpenAPI Production bearer token non configurato sul server.',
       });
     }
     const configuredBase = this.config

@@ -17,6 +17,9 @@ const productionEnvironment = {
   ACUBE_BEARER_TOKEN: 'd'.repeat(64),
   ACUBE_API_BASE_URL: 'https://api.acubeapi.com',
   ACUBE_AUTH_BASE_URL: 'https://common.api.acubeapi.com',
+  OPENAPI_ENABLED: 'true',
+  OPENAPI_BEARER_TOKEN: 'o'.repeat(64),
+  OPENAPI_SANDBOX_BEARER_TOKEN: 'x'.repeat(64),
   TRUST_PROXY: 'true',
   LOG_LEVEL: 'info',
   SWAGGER_ENABLED: 'false',
@@ -47,6 +50,7 @@ describe('validateEnvironment', () => {
     expect(environment.NODE_ENV).toBe('production');
     expect(environment.DATABASE_SSL).toBe(true);
     expect(environment.REDIS_TLS).toBe(true);
+    expect(environment.OPENAPI_SANDBOX_BEARER_TOKEN).toBe('x'.repeat(64));
   });
 
   it('accepts a private Docker network without internal TLS', () => {
@@ -88,6 +92,16 @@ describe('validateEnvironment', () => {
   ])('rejects production when %s', (_label, patch) => {
     expect(() =>
       validateEnvironment({ ...productionEnvironment, ...patch }),
+    ).toThrow('Invalid environment configuration');
+  });
+
+  it('rejects reusing the production OpenAPI token for sandbox', () => {
+    expect(() =>
+      validateEnvironment({
+        ...productionEnvironment,
+        OPENAPI_SANDBOX_BEARER_TOKEN:
+          productionEnvironment.OPENAPI_BEARER_TOKEN,
+      }),
     ).toThrow('Invalid environment configuration');
   });
 
