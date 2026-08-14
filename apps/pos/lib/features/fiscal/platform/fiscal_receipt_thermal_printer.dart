@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
@@ -7,7 +5,6 @@ import 'package:printing/printing.dart';
 import '../../../core/network/backend_error.dart';
 import '../../printing/domain/printing_models.dart';
 import '../../printing/platform/esc_pos_raster_formatter.dart';
-import '../../printing/platform/local_printer_backend_contract.dart';
 import '../../printing/presentation/printing_controller.dart';
 
 class FiscalReceiptThermalPrinter {
