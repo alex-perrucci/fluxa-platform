@@ -29,17 +29,19 @@ function json(data: Record<string, unknown>) {
 
 describe('OpenAPI Smart Receipts provider', () => {
   beforeEach(() => {
-    process.env.OPENAPI_BEARER_TOKEN = 'test-value';
+    process.env.OPENAPI_BEARER_TOKEN = 'production-token-value';
+    process.env.OPENAPI_SANDBOX_BEARER_TOKEN = 'sandbox-token-value';
     delete process.env.OPENAPI_API_BASE_URL;
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
     delete process.env.OPENAPI_BEARER_TOKEN;
+    delete process.env.OPENAPI_SANDBOX_BEARER_TOKEN;
     delete process.env.OPENAPI_API_BASE_URL;
   });
 
-  it('maps the sale payload and strips unsupported fields', async () => {
+  it('maps the sale payload and uses the sandbox endpoint and token', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
       .mockImplementation(() =>
@@ -61,6 +63,9 @@ describe('OpenAPI Smart Receipts provider', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       'https://test.invoice.openapi.com/IT-receipts',
     );
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      'Bearer sandbox-token-value',
+    );
     expect(body.email).toBeUndefined();
     expect(body.cash_payment_amount).toBe(12);
     expect(body.items).toEqual([
@@ -73,8 +78,8 @@ describe('OpenAPI Smart Receipts provider', () => {
     ]);
   });
 
-  it('persists enough metadata to poll a pending receipt', async () => {
-    jest
+  it('persists enough metadata to poll a pending production receipt', async () => {
+    const fetchMock = jest
       .spyOn(globalThis, 'fetch')
       .mockImplementation(() =>
         json({ success: true, data: { id: 'r-pending', status: 'submitted' } }),
@@ -95,6 +100,11 @@ describe('OpenAPI Smart Receipts provider', () => {
       externalId: 'r-pending',
       externalStatus: 'submitted',
     });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      'Bearer production-token-value',
+    );
   });
 
   it('uses GET when a remote id is already known', async () => {
@@ -118,5 +128,23 @@ describe('OpenAPI Smart Receipts provider', () => {
       'https://invoice.openapi.com/IT-receipts/r-known',
     );
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe('GET');
+  });
+
+  it('fails closed when the sandbox token is missing', async () => {
+    delete process.env.OPENAPI_SANDBOX_BEARER_TOKEN;
+    const service = new FiscalProviderService();
+
+    await expect(
+      service.execute({
+        documentId: 'local-4',
+        type: 'SALE',
+        provider: 'OPENAPI_SMART_RECEIPTS',
+        environment: 'SANDBOX',
+        payload,
+      }),
+    ).rejects.toMatchObject<Partial<FiscalProviderError>>({
+      retryable: false,
+      code: 'OPENAPI_SANDBOX_CREDENTIALS_MISSING',
+    });
   });
 });
