@@ -50,9 +50,9 @@ const environmentSchema = z
     ACCESS_TOKEN_TTL_SECONDS: z.coerce
       .number()
       .int()
-      .min(300)
-      .max(3600)
-      .default(900),
+      .min(86_400)
+      .max(604_800)
+      .default(86_400),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
     JWT_ISSUER: z.string().min(3).default('fluxa-platform'),
     JWT_AUDIENCE: z.string().min(3).default('fluxa-pos'),
