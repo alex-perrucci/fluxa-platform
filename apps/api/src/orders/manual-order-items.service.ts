@@ -72,11 +72,7 @@ export class ManualOrderItemsService {
     private readonly orders: OrdersService,
   ) {}
 
-  async add(
-    auth: AuthContext,
-    orderId: string,
-    dto: AddManualOrderItemDto,
-  ) {
+  async add(auth: AuthContext, orderId: string, dto: AddManualOrderItemDto) {
     const organizationId = assertOrganizationScope(auth);
     const orderLookup = await this.database.pool.query<OrderRow>(
       `
@@ -157,7 +153,8 @@ export class ManualOrderItemsService {
         ) {
           throw new ConflictException({
             code: 'IDEMPOTENCY_KEY_REUSED',
-            message: 'La mutationId è già stata usata con una richiesta differente.',
+            message:
+              'La mutationId è già stata usata con una richiesta differente.',
           });
         }
         return;
@@ -213,7 +210,10 @@ export class ManualOrderItemsService {
         });
       }
 
-      const categoryId = await this.ensureManualCategory(client, organizationId);
+      const categoryId = await this.ensureManualCategory(
+        client,
+        organizationId,
+      );
       const priceListId = await this.ensureManualPriceList(
         client,
         organizationId,
@@ -225,8 +225,13 @@ export class ManualOrderItemsService {
         categoryId,
         vat.id,
       );
-      const vatAmounts = calculateVatFromGross(dto.amountCents, vat.rateBasisPoints);
-      const sortResult = await client.query<{ nextSort: number } & QueryResultRow>(
+      const vatAmounts = calculateVatFromGross(
+        dto.amountCents,
+        vat.rateBasisPoints,
+      );
+      const sortResult = await client.query<
+        { nextSort: number } & QueryResultRow
+      >(
         `SELECT COALESCE(MAX(sort_order),-1)+1 AS "nextSort" FROM order_items WHERE order_id=$1`,
         [orderId],
       );
@@ -331,7 +336,7 @@ export class ManualOrderItemsService {
       `,
       [randomUUID(), organizationId, MANUAL_CODE, MANUAL_CATEGORY_NAME],
     );
-    return result.rows[0]!.id;
+    return result.rows[0].id;
   }
 
   private async ensureManualPriceList(
@@ -355,7 +360,7 @@ export class ManualOrderItemsService {
         currency,
       ],
     );
-    return result.rows[0]!.id;
+    return result.rows[0].id;
   }
 
   private async ensureManualProduct(
@@ -387,10 +392,13 @@ export class ManualOrderItemsService {
         MANUAL_PRODUCT_NAME,
       ],
     );
-    return result.rows[0]!.id;
+    return result.rows[0].id;
   }
 
-  private async recalculate(client: PoolClient, order: OrderRow): Promise<number> {
+  private async recalculate(
+    client: PoolClient,
+    order: OrderRow,
+  ): Promise<number> {
     const [itemResult, adjustmentResult] = await Promise.all([
       client.query<CalculationItemRow>(
         `
