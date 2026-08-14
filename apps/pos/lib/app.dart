@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/di/providers.dart';
-import 'features/auth/presentation/auth_controller.dart';
 import 'core/theme/fluxa_theme.dart';
+import 'features/auth/presentation/auth_controller.dart';
+import 'features/fiscal/platform/fiscal_receipt_pdf_handler.dart';
+import 'features/fiscal/platform/fiscal_receipt_thermal_printer.dart';
 
 class FluxaApp extends ConsumerStatefulWidget {
   const FluxaApp({super.key});
@@ -13,6 +15,8 @@ class FluxaApp extends ConsumerStatefulWidget {
 }
 
 class _FluxaAppState extends ConsumerState<FluxaApp> {
+  static const _fiscalReceiptPrinter = FiscalReceiptThermalPrinter();
+
   var _bootstrapped = false;
   String? _scheduledPrintingContext;
 
@@ -55,11 +59,18 @@ class _FluxaAppState extends ConsumerState<FluxaApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final controller = ref.read(printingControllerProvider);
       if (location == null || session == null) {
+        configureFiscalReceiptPrinter(null);
         controller.clearContext();
       } else {
         await controller.bindContext(
           locationId: location.id,
           deviceId: session.device.id,
+        );
+        configureFiscalReceiptPrinter(
+          (bytes, filename) => _fiscalReceiptPrinter.print(
+            printing: controller,
+            pdfBytes: bytes,
+          ),
         );
       }
     });
