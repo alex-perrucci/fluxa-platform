@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
 import '../../../core/network/backend_error.dart';
@@ -10,12 +11,13 @@ import '../../printing/platform/local_printer_backend_contract.dart';
 import '../../printing/presentation/printing_controller.dart';
 
 class FiscalReceiptThermalPrinter {
-  FiscalReceiptThermalPrinter(this._backend);
+  const FiscalReceiptThermalPrinter();
 
+  static const _channel = MethodChannel(
+    'it.fluxa.fluxa_pos/fiscal_receipt_printing',
+  );
   static const _rasterDpi = 203.0;
   static const _maxPages = 8;
-
-  final LocalPrinterBackend _backend;
 
   Future<String> print({
     required PrintingController printing,
@@ -24,11 +26,6 @@ class FiscalReceiptThermalPrinter {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) {
       throw const BackendError(
         message: 'La stampa fiscale diretta è disponibile sul POS Windows.',
-      );
-    }
-    if (!_backend.isSupported) {
-      throw const BackendError(
-        message: 'Backend stampante locale non disponibile.',
       );
     }
 
@@ -87,11 +84,7 @@ class FiscalReceiptThermalPrinter {
     );
 
     try {
-      await _backend.printRaw(
-        queueName: queueName,
-        bytes: payload,
-        copies: 1,
-      );
+      await _sendRaw(queueName, payload);
     } catch (_) {
       throw BackendError(
         message:
@@ -100,5 +93,35 @@ class FiscalReceiptThermalPrinter {
     }
 
     return printer.name;
+  }
+
+  Future<void> _sendRaw(String queueName, Uint8List payload) async {
+    final parts = queueName.split('|');
+    final arguments = <String, Object?>{
+      'bytes': payload,
+      'copies': 1,
+    };
+
+    if (parts.length >= 3 && parts.first == 'bluetooth') {
+      final address = parts[1].trim();
+      if (address.isEmpty) {
+        throw const FormatException('Indirizzo Bluetooth non valido.');
+      }
+      arguments['transport'] = 'BLUETOOTH_CLASSIC';
+      arguments['address'] = address;
+    } else if (parts.length == 3 && parts.first == 'wifi') {
+      final host = parts[1].trim();
+      final port = int.tryParse(parts[2]);
+      if (host.isEmpty || port == null || port < 1 || port > 65535) {
+        throw const FormatException('Configurazione Wi-Fi non valida.');
+      }
+      arguments['transport'] = 'WIFI_TCP';
+      arguments['host'] = host;
+      arguments['port'] = port;
+    } else {
+      throw const FormatException('Connessione stampante non valida.');
+    }
+
+    await _channel.invokeMethod<void>('printRaw', arguments);
   }
 }
