@@ -91,12 +91,9 @@ jobs:
       - name: Verify Dart formatting
         shell: bash
         run: |
-          dart format .
-          git diff -- lib/features/fiscal/presentation/fiscal_screen.dart |
-            tee ci-logs/dart-format-diff.log
-          if ! git diff --quiet; then
-            exit 1
-          fi
+          set -o pipefail
+          dart format --output=none --set-exit-if-changed . 2>&1 |
+            tee ci-logs/dart-format.log
       - name: Analyze Flutter application
         shell: bash
         run: |
