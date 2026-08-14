@@ -1,3 +1,4 @@
+import { HttpException } from '@nestjs/common';
 import type { AuthContext } from '../auth/auth.types';
 import type { FiscalDocumentsService } from './fiscal-documents.service';
 import { FiscalReceiptPdfService } from './fiscal-receipt-pdf.service';
@@ -13,6 +14,21 @@ function document(overrides: Record<string, unknown> = {}) {
     documentNumber: 'OPENAPI2026/1',
     ...overrides,
   };
+}
+
+async function expectHttpCode(promise: Promise<unknown>, code: string) {
+  try {
+    await promise;
+  } catch (error) {
+    if (!(error instanceof HttpException)) throw error;
+    const response = error.getResponse();
+    if (!response || typeof response !== 'object') {
+      throw new Error('Expected structured HTTP exception response.');
+    }
+    expect((response as { code?: string }).code).toBe(code);
+    return;
+  }
+  throw new Error(`Expected HTTP exception ${code}.`);
 }
 
 describe('FiscalReceiptPdfService', () => {
@@ -50,7 +66,9 @@ describe('FiscalReceiptPdfService', () => {
     expect(result.filename).toBe('scontrino-fiscale-OPENAPI2026-1.pdf');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe('https://test.invoice.openapi.com/IT-receipts/receipt-123');
+    expect(url).toBe(
+      'https://test.invoice.openapi.com/IT-receipts/receipt-123',
+    );
     expect((init?.headers as Record<string, string>).Authorization).toBe(
       'Bearer sandbox-token',
     );
@@ -62,29 +80,32 @@ describe('FiscalReceiptPdfService', () => {
   it('refuses a PDF for a document that is not ready', async () => {
     get.mockResolvedValue(document({ status: 'PROCESSING' }));
 
-    await expect(service.download(auth, 'document-2')).rejects.toMatchObject({
-      response: expect.objectContaining({ code: 'FISCAL_RECEIPT_PDF_NOT_READY' }),
-    });
+    await expectHttpCode(
+      service.download(auth, 'document-2'),
+      'FISCAL_RECEIPT_PDF_NOT_READY',
+    );
   });
 
   it('refuses providers that do not expose the OpenAPI receipt PDF', async () => {
     get.mockResolvedValue(document({ provider: 'ACUBE_SMART_RECEIPTS' }));
 
-    await expect(service.download(auth, 'document-3')).rejects.toMatchObject({
-      response: expect.objectContaining({
-        code: 'FISCAL_RECEIPT_PDF_PROVIDER_UNSUPPORTED',
-      }),
-    });
+    await expectHttpCode(
+      service.download(auth, 'document-3'),
+      'FISCAL_RECEIPT_PDF_PROVIDER_UNSUPPORTED',
+    );
   });
 
   it('rejects a non-PDF provider response', async () => {
     get.mockResolvedValue(document());
-    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ error: 'not a pdf' }), { status: 200 }),
-    );
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: 'not a pdf' }), { status: 200 }),
+      );
 
-    await expect(service.download(auth, 'document-4')).rejects.toMatchObject({
-      response: expect.objectContaining({ code: 'FISCAL_RECEIPT_PDF_INVALID' }),
-    });
+    await expectHttpCode(
+      service.download(auth, 'document-4'),
+      'FISCAL_RECEIPT_PDF_INVALID',
+    );
   });
 });
