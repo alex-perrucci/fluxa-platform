@@ -295,8 +295,16 @@ class _FiscalProfileCard extends StatelessWidget {
             if (profile!.displayName != null) Text(profile!.displayName!),
             if (profile!.receiptEmail != null)
               Text('Invio ricevute: ${profile!.receiptEmail}'),
+            if (profile!.provider == FiscalProvider.openapiSmartReceipts) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Configurazione OpenAPI gestita dal Platform Control Center.',
+              ),
+            ],
           ],
-          if (canConfigure) ...[
+          if (canConfigure &&
+              (profile == null ||
+                  profile!.provider == FiscalProvider.acubeSmartReceipts)) ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
               key: const Key('configure-acube-sandbox-button'),
@@ -530,7 +538,7 @@ class _FiscalDocumentDetail extends StatelessWidget {
       if (document.documentDate != null)
         Text('Data documento: ${document.documentDate}'),
       if (document.externalId != null)
-        Text('ID A-Cube: ${document.externalId}'),
+        Text('ID provider: ${document.externalId}'),
       if (document.errorMessage != null) ...[
         const SizedBox(height: 8),
         Text(
