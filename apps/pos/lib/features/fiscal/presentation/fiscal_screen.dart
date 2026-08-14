@@ -1,10 +1,15 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/di/providers.dart';
+import '../../../core/network/backend_error.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../orders/domain/order_models.dart';
+import '../data/fiscal_api.dart';
 import '../domain/fiscal_models.dart';
+import '../platform/fiscal_receipt_pdf_handler.dart';
 import 'fiscal_controller.dart';
 
 class FiscalScreen extends ConsumerStatefulWidget {
@@ -21,6 +26,7 @@ class _FiscalScreenState extends ConsumerState<FiscalScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final controller = ref.watch(fiscalControllerProvider);
+    final fiscalApi = ref.watch(fiscalApiProvider);
     final location = auth.state.deviceAssignment?.location;
     final role = auth.state.session?.role;
     if (!{
@@ -53,6 +59,7 @@ class _FiscalScreenState extends ConsumerState<FiscalScreen> {
       controller: controller,
       locationName: location.name,
       role: role,
+      downloadReceiptPdf: fiscalApi.downloadReceiptPdf,
     );
   }
 
@@ -79,12 +86,15 @@ class FiscalView extends StatelessWidget {
     required this.controller,
     required this.locationName,
     required this.role,
+    this.downloadReceiptPdf,
     super.key,
   });
 
   final FiscalController controller;
   final String locationName;
   final String? role;
+  final Future<FiscalReceiptPdfData> Function(String documentId)?
+  downloadReceiptPdf;
 
   bool get _canIssue => {'OWNER', 'ADMIN', 'MANAGER', 'CASHIER'}.contains(role);
   bool get _canRetry => {'OWNER', 'ADMIN', 'MANAGER'}.contains(role);
@@ -141,6 +151,7 @@ class FiscalView extends StatelessWidget {
             controller: controller,
             canRetry: _canRetry,
             canVoid: _canVoid,
+            downloadReceiptPdf: downloadReceiptPdf,
             onRetry: (document) => _retry(context, document),
             onVoid: (document) => _void(context, document),
           ),
@@ -424,12 +435,15 @@ class _DocumentsCard extends StatelessWidget {
     required this.canVoid,
     required this.onRetry,
     required this.onVoid,
+    this.downloadReceiptPdf,
   });
   final FiscalController controller;
   final bool canRetry;
   final bool canVoid;
   final ValueChanged<FiscalDocument> onRetry;
   final ValueChanged<FiscalDocument> onVoid;
+  final Future<FiscalReceiptPdfData> Function(String documentId)?
+  downloadReceiptPdf;
 
   @override
   Widget build(BuildContext context) {
@@ -475,6 +489,7 @@ class _DocumentsCard extends StatelessWidget {
                 canRetry: canRetry,
                 canVoid: canVoid,
                 busy: controller.busy,
+                downloadReceiptPdf: downloadReceiptPdf,
                 onRetry: () => onRetry(selected),
                 onVoid: () => onVoid(selected),
                 onClose: controller.clearSelection,
@@ -496,6 +511,7 @@ class _FiscalDocumentDetail extends StatelessWidget {
     required this.onRetry,
     required this.onVoid,
     required this.onClose,
+    this.downloadReceiptPdf,
   });
   final FiscalDocument document;
   final bool canRetry;
@@ -504,6 +520,16 @@ class _FiscalDocumentDetail extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onVoid;
   final VoidCallback onClose;
+  final Future<FiscalReceiptPdfData> Function(String documentId)?
+  downloadReceiptPdf;
+
+  bool get _officialPdfAvailable =>
+      downloadReceiptPdf != null &&
+      fiscalReceiptPdfActionsSupported &&
+      document.provider == FiscalProvider.openapiSmartReceipts &&
+      document.externalId != null &&
+      (document.status == FiscalDocumentStatus.issued ||
+          document.status == FiscalDocumentStatus.voided);
 
   @override
   Widget build(BuildContext context) => Column(
@@ -544,6 +570,58 @@ class _FiscalDocumentDetail extends StatelessWidget {
         Text(
           '${document.errorCode ?? 'ERRORE'}: ${document.errorMessage}',
           style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ],
+      if (_officialPdfAvailable) ...[
+        const SizedBox(height: 14),
+        Text(
+          'Scontrino fiscale ufficiale',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        const Text('PDF originale recuperato da OpenAPI.'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.tonalIcon(
+              key: const Key('fiscal-open-pdf-button'),
+              onPressed: busy
+                  ? null
+                  : () => _runPdfAction(
+                      context,
+                      openFiscalReceiptPdf,
+                      'PDF fiscale aperto.',
+                    ),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('Apri PDF'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('fiscal-save-pdf-button'),
+              onPressed: busy
+                  ? null
+                  : () => _runPdfAction(
+                      context,
+                      saveFiscalReceiptPdf,
+                      'PDF fiscale salvato in Download.',
+                    ),
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Salva PDF'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('fiscal-print-pdf-button'),
+              onPressed: busy
+                  ? null
+                  : () => _runPdfAction(
+                      context,
+                      printFiscalReceiptPdf,
+                      'PDF fiscale inviato alla stampa Windows.',
+                    ),
+              icon: const Icon(Icons.print_outlined),
+              label: const Text('Stampa PDF'),
+            ),
+          ],
         ),
       ],
       if (document.items.isNotEmpty) ...[
@@ -601,6 +679,38 @@ class _FiscalDocumentDetail extends StatelessWidget {
       ),
     ],
   );
+
+  Future<void> _runPdfAction(
+    BuildContext context,
+    Future<String> Function(Uint8List bytes, String filename) action,
+    String successMessage,
+  ) async {
+    final download = downloadReceiptPdf;
+    if (download == null) return;
+    try {
+      final pdf = await download(document.id);
+      await action(pdf.bytes, pdf.filename);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(successMessage)));
+      }
+    } on BackendError catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Operazione sul PDF fiscale non riuscita.'),
+          ),
+        );
+      }
+    }
+  }
 }
 
 class _MessageCard extends StatelessWidget {

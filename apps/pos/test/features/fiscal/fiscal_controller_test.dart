@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/core/network/backend_error.dart';
 import 'package:fluxa_pos/features/fiscal/data/fiscal_api.dart';
@@ -86,6 +88,13 @@ class _FiscalGateway implements FiscalGateway {
       _document(status: FiscalDocumentStatus.rejected, version: 3);
 
   @override
+  Future<FiscalReceiptPdfData> downloadReceiptPdf(String documentId) async =>
+      FiscalReceiptPdfData(
+        bytes: Uint8List.fromList('%PDF-1.7'.codeUnits),
+        filename: 'scontrino.pdf',
+      );
+
+  @override
   Future<FiscalDocument> issue({
     required String orderId,
     required String clientRequestId,
@@ -141,8 +150,10 @@ class _OrdersGateway implements OrdersGateway {
     total: 1,
     items: [_order()],
   );
+
   @override
   Future<OrderDetail> getOrder(String orderId) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> createOrder({
     required String clientOrderId,
@@ -150,6 +161,7 @@ class _OrdersGateway implements OrdersGateway {
     required OrderServiceMode serviceMode,
     String? customerNote,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> addItem({
     required String orderId,
@@ -161,6 +173,7 @@ class _OrdersGateway implements OrdersGateway {
     required int quantityAmount,
     String? note,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> updateItem({
     required String orderId,
@@ -170,6 +183,7 @@ class _OrdersGateway implements OrdersGateway {
     int? quantityAmount,
     String? note,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> deleteItem({
     required String orderId,
@@ -177,12 +191,14 @@ class _OrdersGateway implements OrdersGateway {
     required String mutationId,
     required int expectedVersion,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> hold({
     required String orderId,
     required String mutationId,
     required int expectedVersion,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> resume({
     required String orderId,

@@ -6,7 +6,10 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -18,12 +21,14 @@ import {
 } from './dto/fiscal-mutation.dto';
 import { IssueFiscalDocumentDto } from './dto/issue-fiscal-document.dto';
 import { FiscalDocumentsService } from './fiscal-documents.service';
+import { FiscalReceiptPdfService } from './fiscal-receipt-pdf.service';
 import { RefundFiscalVoidService } from './refund-fiscal-void.service';
 
 @Controller()
 export class FiscalDocumentsController {
   constructor(
     private readonly documents: FiscalDocumentsService,
+    private readonly receiptPdf: FiscalReceiptPdfService,
     private readonly refundVoids: RefundFiscalVoidService,
   ) {}
 
@@ -57,6 +62,31 @@ export class FiscalDocumentsController {
     @Param('documentId', ParseUUIDPipe) documentId: string,
   ) {
     return this.documents.get(auth, documentId);
+  }
+
+  @Roles(
+    'OWNER',
+    'ADMIN',
+    'MANAGER',
+    'CASHIER',
+    'ACCOUNTANT',
+    'SUPPORT_READONLY',
+  )
+  @Get('fiscal-documents/:documentId/receipt.pdf')
+  async pdf(
+    @CurrentAuth() auth: AuthContext,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const receipt = await this.receiptPdf.download(auth, documentId);
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader(
+      'Content-Disposition',
+      `inline; filename="${receipt.filename}"`,
+    );
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    return new StreamableFile(receipt.bytes);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')

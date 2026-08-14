@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/features/fiscal/data/fiscal_api.dart';
@@ -96,6 +98,7 @@ class _FiscalGateway implements FiscalGateway {
     createdAt: DateTime.utc(2026),
     updatedAt: DateTime.utc(2026),
   );
+
   @override
   Future<FiscalDocumentPage> listDocuments({
     required String locationId,
@@ -105,6 +108,7 @@ class _FiscalGateway implements FiscalGateway {
     int pageSize = 100,
   }) async =>
       FiscalDocumentPage(page: 1, pageSize: 100, total: 0, items: const []);
+
   @override
   Future<FiscalProfile> upsertProfile({
     required String locationId,
@@ -116,21 +120,32 @@ class _FiscalGateway implements FiscalGateway {
     String? receiptEmail,
     String? displayName,
   }) => throw UnimplementedError();
+
   @override
   Future<FiscalDocument> getDocument(String documentId) =>
       throw UnimplementedError();
+
+  @override
+  Future<FiscalReceiptPdfData> downloadReceiptPdf(String documentId) async =>
+      FiscalReceiptPdfData(
+        bytes: Uint8List.fromList('%PDF-1.7'.codeUnits),
+        filename: 'scontrino.pdf',
+      );
+
   @override
   Future<FiscalDocument> issue({
     required String orderId,
     required String clientRequestId,
     String? lotteryCode,
   }) => throw UnimplementedError();
+
   @override
   Future<FiscalDocument> retry({
     required String documentId,
     required String mutationId,
     required int expectedVersion,
   }) => throw UnimplementedError();
+
   @override
   Future<FiscalDocument> voidDocument({
     required String documentId,
@@ -179,8 +194,10 @@ class _OrdersGateway implements OrdersGateway {
       ),
     ],
   );
+
   @override
   Future<OrderDetail> getOrder(String orderId) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> createOrder({
     required String clientOrderId,
@@ -188,6 +205,7 @@ class _OrdersGateway implements OrdersGateway {
     required OrderServiceMode serviceMode,
     String? customerNote,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> addItem({
     required String orderId,
@@ -199,6 +217,7 @@ class _OrdersGateway implements OrdersGateway {
     required int quantityAmount,
     String? note,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> updateItem({
     required String orderId,
@@ -208,6 +227,7 @@ class _OrdersGateway implements OrdersGateway {
     int? quantityAmount,
     String? note,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> deleteItem({
     required String orderId,
@@ -215,12 +235,14 @@ class _OrdersGateway implements OrdersGateway {
     required String mutationId,
     required int expectedVersion,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> hold({
     required String orderId,
     required String mutationId,
     required int expectedVersion,
   }) => throw UnimplementedError();
+
   @override
   Future<OrderDetail> resume({
     required String orderId,
