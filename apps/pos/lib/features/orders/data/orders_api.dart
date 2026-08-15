@@ -31,6 +31,16 @@ abstract interface class OrdersGateway {
     String? note,
   });
 
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  });
+
   Future<OrderDetail> updateItem({
     required String orderId,
     required String itemId,
@@ -60,47 +70,7 @@ abstract interface class OrdersGateway {
   });
 }
 
-abstract interface class ManualOrdersGateway {
-  Future<OrderDetail> addManualItem({
-    required String orderId,
-    required String mutationId,
-    required String clientItemId,
-    required int expectedVersion,
-    required int amountCents,
-    String? description,
-    String? note,
-  });
-}
-
-extension ManualOrderOperations on OrdersGateway {
-  Future<OrderDetail> addManualItem({
-    required String orderId,
-    required String mutationId,
-    required String clientItemId,
-    required int expectedVersion,
-    required int amountCents,
-    String? description,
-    String? note,
-  }) {
-    final gateway = this;
-    if (gateway is! ManualOrdersGateway) {
-      throw UnsupportedError(
-        'Il gateway ordini configurato non supporta le vendite a importo libero.',
-      );
-    }
-    return gateway.addManualItem(
-      orderId: orderId,
-      mutationId: mutationId,
-      clientItemId: clientItemId,
-      expectedVersion: expectedVersion,
-      amountCents: amountCents,
-      description: description,
-      note: note,
-    );
-  }
-}
-
-class OrdersApi implements OrdersGateway, ManualOrdersGateway {
+class OrdersApi implements OrdersGateway {
   OrdersApi(this._dio);
 
   final Dio _dio;
@@ -122,6 +92,7 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
           'pageSize': pageSize,
         },
       );
+
       return OrderListPage.fromJson(_requireData(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
@@ -131,7 +102,10 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
   @override
   Future<OrderDetail> getOrder(String orderId) async {
     try {
-      final response = await _dio.get<Map<String, Object?>>('orders/$orderId');
+      final response = await _dio.get<Map<String, Object?>>(
+        'orders/$orderId',
+      );
+
       return OrderDetail.fromJson(_requireData(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
@@ -155,6 +129,7 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
           'customerNote': ?customerNote,
         },
       );
+
       return OrderDetail.fromJson(_requireData(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
@@ -185,6 +160,7 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
           'note': ?note,
         },
       );
+
       return OrderDetail.fromJson(_requireData(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
@@ -213,6 +189,7 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
           'note': ?note,
         },
       );
+
       return OrderDetail.fromJson(_requireData(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
@@ -238,6 +215,7 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
           'note': ?note,
         },
       );
+
       return OrderDetail.fromJson(_requireData(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
@@ -254,8 +232,12 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
     try {
       final response = await _dio.delete<Map<String, Object?>>(
         'orders/$orderId/items/$itemId',
-        data: {'mutationId': mutationId, 'expectedVersion': expectedVersion},
+        data: {
+          'mutationId': mutationId,
+          'expectedVersion': expectedVersion,
+        },
       );
+
       return OrderDetail.fromJson(_requireData(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
@@ -267,22 +249,26 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
     required String orderId,
     required String mutationId,
     required int expectedVersion,
-  }) async => _transition(
-    path: 'orders/$orderId/hold',
-    mutationId: mutationId,
-    expectedVersion: expectedVersion,
-  );
+  }) async {
+    return _transition(
+      path: 'orders/$orderId/hold',
+      mutationId: mutationId,
+      expectedVersion: expectedVersion,
+    );
+  }
 
   @override
   Future<OrderDetail> resume({
     required String orderId,
     required String mutationId,
     required int expectedVersion,
-  }) async => _transition(
-    path: 'orders/$orderId/resume',
-    mutationId: mutationId,
-    expectedVersion: expectedVersion,
-  );
+  }) async {
+    return _transition(
+      path: 'orders/$orderId/resume',
+      mutationId: mutationId,
+      expectedVersion: expectedVersion,
+    );
+  }
 
   Future<OrderDetail> _transition({
     required String path,
@@ -292,8 +278,12 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
     try {
       final response = await _dio.post<Map<String, Object?>>(
         path,
-        data: {'mutationId': mutationId, 'expectedVersion': expectedVersion},
+        data: {
+          'mutationId': mutationId,
+          'expectedVersion': expectedVersion,
+        },
       );
+
       return OrderDetail.fromJson(_requireData(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
@@ -306,6 +296,7 @@ class OrdersApi implements OrdersGateway, ManualOrdersGateway {
         message: 'Il backend ha restituito un ordine vuoto.',
       );
     }
+
     return data;
   }
 }
