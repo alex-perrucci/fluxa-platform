@@ -102,9 +102,7 @@ class OrdersApi implements OrdersGateway {
   @override
   Future<OrderDetail> getOrder(String orderId) async {
     try {
-      final response = await _dio.get<Map<String, Object?>>(
-        'orders/$orderId',
-      );
+      final response = await _dio.get<Map<String, Object?>>('orders/$orderId');
 
       return OrderDetail.fromJson(_requireData(response.data));
     } on DioException catch (error) {
