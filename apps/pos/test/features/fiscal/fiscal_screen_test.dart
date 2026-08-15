@@ -219,6 +219,17 @@ class _OrdersGateway implements OrdersGateway {
   }) => throw UnimplementedError();
 
   @override
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  }) => throw UnimplementedError();
+
+  @override
   Future<OrderDetail> updateItem({
     required String orderId,
     required String itemId,

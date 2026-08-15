@@ -94,6 +94,17 @@ class _FakeOrdersGateway implements OrdersGateway {
   }
 
   @override
+  Future<OrderDetail> addManualItem({
+    required String orderId,
+    required String mutationId,
+    required String clientItemId,
+    required int expectedVersion,
+    required int amountCents,
+    String? description,
+    String? note,
+  }) async => current;
+
+  @override
   Future<OrderDetail> createOrder({
     required String clientOrderId,
     required String locationId,

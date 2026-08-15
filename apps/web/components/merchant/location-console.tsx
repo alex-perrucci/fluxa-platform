@@ -177,15 +177,17 @@ export function LocationConsole({
   async function createArea(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!location) return;
+    const formElement = event.currentTarget;
+    const targetLocationId = location.id;
     setPending(true);
     setError(null);
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     try {
       const response = await fetch('/api/control-center/merchant/areas', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          locationId: location.id,
+          locationId: targetLocationId,
           code: String(form.get('code') ?? ''),
           name: String(form.get('name') ?? ''),
           sortOrder: areas.length,
@@ -193,8 +195,8 @@ export function LocationConsole({
       });
       const body = await responseBody(response);
       if (!response.ok) throw new Error(body.message ?? 'Sala non creata.');
-      event.currentTarget.reset();
-      await refreshLayout();
+      formElement.reset();
+      await refreshLayout(targetLocationId);
       setMessage('Sala creata.');
     } catch (createError) {
       setError(
@@ -208,15 +210,17 @@ export function LocationConsole({
   async function createTable(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!location) return;
+    const formElement = event.currentTarget;
+    const targetLocationId = location.id;
     setPending(true);
     setError(null);
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     try {
       const response = await fetch('/api/control-center/merchant/tables', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          locationId: location.id,
+          locationId: targetLocationId,
           areaId: String(form.get('areaId') ?? ''),
           code: String(form.get('code') ?? ''),
           name: String(form.get('name') ?? ''),
@@ -226,8 +230,8 @@ export function LocationConsole({
       });
       const body = await responseBody(response);
       if (!response.ok) throw new Error(body.message ?? 'Tavolo non creato.');
-      event.currentTarget.reset();
-      await refreshLayout();
+      formElement.reset();
+      await refreshLayout(targetLocationId);
       setMessage('Tavolo creato.');
     } catch (createError) {
       setError(
@@ -449,7 +453,11 @@ export function LocationConsole({
               <span className="muted">Organizza gli spazi operativi</span>
             </div>
             {location.canManageTables ? (
-              <form className="form-grid mt-5" onSubmit={createArea}>
+              <form
+                className="form-grid mt-5"
+                key={`${location.id}-new-area`}
+                onSubmit={createArea}
+              >
                 <label className="field">
                   <span>Codice nuova sala</span>
                   <input name="code" placeholder="SALA1" required />
@@ -530,7 +538,11 @@ export function LocationConsole({
               </span>
             </div>
             {location.canManageTables && areas.length ? (
-              <form className="form-grid mt-5" onSubmit={createTable}>
+              <form
+                className="form-grid mt-5"
+                key={`${location.id}-new-table`}
+                onSubmit={createTable}
+              >
                 <label className="field">
                   <span>Sala</span>
                   <select name="areaId" required>
