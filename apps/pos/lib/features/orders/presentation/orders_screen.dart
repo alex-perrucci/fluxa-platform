@@ -753,7 +753,6 @@ class _TotalRow extends StatelessWidget {
   final String label;
   final String value;
   final bool emphasized;
-  final bool emphasized = false;
 
   @override
   Widget build(BuildContext context) {
