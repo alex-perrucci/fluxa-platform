@@ -415,9 +415,13 @@ class _TableDetailPanel extends StatelessWidget {
                 key: const Key('open-table-button'),
                 onPressed: controller.busy
                     ? null
-                    : () async =>
-                          _showOpenTableDialog(context, controller, table),
-                icon: const Icon(Icons.group_add_outlined),
+                    : () async => _showOpenTableDialog(
+                        context,
+                        controller,
+                        orderController,
+                        table,
+                      ),
+                icon: const Icon(Icons.add_shopping_cart),
                 label: const Text('Apri tavolo'),
               ),
             ],
@@ -492,7 +496,7 @@ class _SessionDetail extends StatelessWidget {
                       icon: Icons.receipt_long_outlined,
                       title: 'Nessun ordine collegato',
                       message:
-                          'Crea un ordine TABLE oppure collegane uno esistente.',
+                          'Crea un ordine per il tavolo oppure collega un ordine aperto esistente.',
                     )
                   : ListView.separated(
                       itemCount: session.orders.length,
@@ -646,78 +650,122 @@ class _SessionTotal extends StatelessWidget {
 Future<void> _showOpenTableDialog(
   BuildContext context,
   TableController controller,
+  OrderController orderController,
   DiningTableFloor table,
 ) async {
   var guestCountText = '1';
   var noteText = '';
   String? validationMessage;
+
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: Text('Apri ${table.name}'),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  key: const Key('table-guest-count-field'),
-                  initialValue: guestCountText,
-                  onChanged: (value) => guestCountText = value,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Coperti',
-                    border: const OutlineInputBorder(),
-                    errorText: validationMessage,
+      builder: (builderContext, setState) {
+        int? validatedGuestCount() {
+          final guestCount = int.tryParse(guestCountText.trim());
+          if (guestCount == null || guestCount < 1 || guestCount > 100) {
+            setState(
+              () => validationMessage =
+                  'Inserisci un numero di coperti da 1 a 100.',
+            );
+            return null;
+          }
+          setState(() => validationMessage = null);
+          return guestCount;
+        }
+
+        return AlertDialog(
+          title: Text('Apri ${table.name}'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    key: const Key('table-guest-count-field'),
+                    initialValue: guestCountText,
+                    onChanged: (value) => guestCountText = value,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Coperti',
+                      border: const OutlineInputBorder(),
+                      errorText: validationMessage,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  key: const Key('table-note-field'),
-                  initialValue: noteText,
-                  onChanged: (value) => noteText = value,
-                  maxLength: 500,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Nota (facoltativa)',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    key: const Key('table-note-field'),
+                    initialValue: noteText,
+                    onChanged: (value) => noteText = value,
+                    maxLength: 500,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Nota (facoltativa)',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            key: const Key('confirm-open-table-button'),
-            onPressed: () async {
-              final guestCount = int.tryParse(guestCountText.trim());
-              if (guestCount == null || guestCount < 1 || guestCount > 100) {
-                setState(
-                  () => validationMessage =
-                      'Inserisci un numero di coperti da 1 a 100.',
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Annulla'),
+            ),
+            OutlinedButton(
+              key: const Key('confirm-open-table-only-button'),
+              onPressed: () async {
+                final guestCount = validatedGuestCount();
+                if (guestCount == null) {
+                  return;
+                }
+                final opened = await controller.openSession(
+                  table: table,
+                  guestCount: guestCount,
+                  note: noteText,
                 );
-                return;
-              }
-              final opened = await controller.openSession(
-                table: table,
-                guestCount: guestCount,
-                note: noteText,
-              );
-              if (opened && dialogContext.mounted) {
-                Navigator.pop(dialogContext);
-              }
-            },
-            child: const Text('Apri'),
-          ),
-        ],
-      ),
+                if (opened && dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+              },
+              child: const Text('Solo apri'),
+            ),
+            FilledButton.icon(
+              key: const Key('confirm-open-table-button'),
+              onPressed: () async {
+                final guestCount = validatedGuestCount();
+                if (guestCount == null) {
+                  return;
+                }
+                final order = await controller.openSessionAndCreateOrder(
+                  table: table,
+                  guestCount: guestCount,
+                  note: noteText,
+                );
+                if (order == null) {
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+                  return;
+                }
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+                final selected = await orderController.selectOrder(
+                  order.header.id,
+                );
+                if (selected && context.mounted) {
+                  context.go('/home');
+                }
+              },
+              icon: const Icon(Icons.add_shopping_cart),
+              label: const Text('Apri e ordina'),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -862,7 +910,7 @@ Future<void> _showAttachOrderDialog(
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Collega ordine TABLE'),
+      title: const Text('Collega ordine aperto'),
       content: SizedBox(
         width: 520,
         height: 360,
@@ -871,7 +919,7 @@ Future<void> _showAttachOrderDialog(
                 icon: Icons.link_off,
                 title: 'Nessun ordine collegabile',
                 message:
-                    'Sono ammessi soltanto ordini TABLE aperti o in attesa.',
+                    'Non ci sono ordini aperti o in attesa disponibili per questa sede.',
               )
             : ListView.separated(
                 itemCount: controller.attachableOrders.length,
@@ -881,10 +929,15 @@ Future<void> _showAttachOrderDialog(
                   return ListTile(
                     title: Text(order.number),
                     subtitle: Text(
-                      '${order.status.label} · '
+                      '${order.serviceMode.label} · ${order.status.label} · '
                       '${formatOrderMoney(order.totalCents, order.currency)}',
                     ),
-                    trailing: const Icon(Icons.add_link),
+                    trailing: order.serviceMode == OrderServiceMode.table
+                        ? const Icon(Icons.add_link)
+                        : const Tooltip(
+                            message: 'Verrà convertito in servizio Tavolo',
+                            child: Icon(Icons.swap_horiz),
+                          ),
                     onTap: () async {
                       final attached = await controller.attachExistingOrder(
                         order,
