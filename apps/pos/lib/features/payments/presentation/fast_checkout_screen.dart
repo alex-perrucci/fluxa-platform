@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
-import '../../orders/domain/order_models.dart';
 import '../../orders/domain/uuid_v4.dart';
 import '../../orders/presentation/order_controller.dart';
 import '../domain/payment_models.dart';
