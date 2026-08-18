@@ -6,6 +6,7 @@ import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../fiscal/domain/fiscal_models.dart';
 import '../../fiscal/presentation/fiscal_controller.dart';
+import '../../fiscal/presentation/fiscal_screen.dart';
 import '../domain/order_models.dart';
 import 'order_controller.dart';
 
@@ -263,11 +264,17 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
               if (document == null)
                 FilledButton.icon(
                   onPressed: () async {
+                    final lotteryCode = await showLotteryCodeDialog(
+                      sheetContext,
+                      order.number,
+                    );
+                    if (lotteryCode == null || !sheetContext.mounted) return;
                     await ref
                         .read(posWorkflowCoordinatorProvider)
                         .recoverFiscalDocument(
                           locationId: locationId,
                           orderId: order.id,
+                          lotteryCode: lotteryCode,
                         );
                     if (sheetContext.mounted) Navigator.pop(sheetContext);
                   },
