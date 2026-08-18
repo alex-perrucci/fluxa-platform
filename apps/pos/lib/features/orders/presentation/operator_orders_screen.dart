@@ -149,7 +149,9 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
     OrderController orders,
     FiscalController fiscal,
   ) {
-    if (_scheduledLocationId == locationId && orders.locationId == locationId) {
+    if (_scheduledLocationId == locationId &&
+        orders.locationId == locationId &&
+        orders.statusFilter == null) {
       return;
     }
     _scheduledLocationId = locationId;
