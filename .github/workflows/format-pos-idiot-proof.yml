@@ -1,0 +1,48 @@
+name: Format POS idiot-proof pass
+
+on:
+  push:
+    branches:
+      - agent/pos-idiot-proof-workflow
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/pos-idiot-proof-workflow
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.5'
+          channel: stable
+          cache: true
+
+      - name: Format changed POS files
+        working-directory: apps/pos
+        run: |
+          dart format \
+            lib/core/routing/app_shell.dart \
+            lib/features/hospitality/presentation/fast_tables_screen.dart \
+            lib/features/payments/presentation/fast_checkout_screen.dart
+
+      - name: Commit formatting
+        run: |
+          if git diff --quiet; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/pos/lib/core/routing/app_shell.dart \
+                  apps/pos/lib/features/hospitality/presentation/fast_tables_screen.dart \
+                  apps/pos/lib/features/payments/presentation/fast_checkout_screen.dart
+          git commit -m "style(pos): format idiot-proof workflow pass"
+          git push origin HEAD:agent/pos-idiot-proof-workflow
