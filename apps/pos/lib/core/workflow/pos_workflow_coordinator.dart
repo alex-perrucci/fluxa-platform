@@ -126,7 +126,9 @@ class PosWorkflowCoordinator extends ChangeNotifier {
         return;
       }
 
-      await _closeTableWhenPossible(orderId);
+      if (order.header.serviceMode == OrderServiceMode.table) {
+        await _closeTableWhenPossible(orderId);
+      }
       final document = await _ensureFiscalDocument(
         locationId: locationId,
         orderId: orderId,
