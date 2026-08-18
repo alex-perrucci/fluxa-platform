@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/core/network/backend_error.dart';
+import 'package:fluxa_pos/features/hospitality/domain/hospitality_models.dart';
 import 'package:fluxa_pos/features/hospitality/presentation/table_controller.dart';
 import 'package:fluxa_pos/features/orders/domain/order_models.dart';
 
@@ -32,6 +35,52 @@ void main() {
     expect(hospitality.attachedOrderId, 'order-1');
   });
 
+  test('new table order does not wait for floor reconciliation', () async {
+    final hospitality = _ControllableFloorHospitalityGateway();
+    final orders = FakeOrdersGateway();
+    final controller = TableController(hospitality, orders);
+
+    await controller.bindLocation('location-1');
+    await controller.selectTable(controller.floor!.tables.first);
+
+    final reconciliation = Completer<FloorSnapshot>();
+    hospitality.pendingFloorRefresh = reconciliation;
+
+    final order = await controller
+        .createAndAttachOrder()
+        .timeout(const Duration(seconds: 1));
+
+    expect(order?.header.id, 'order-1');
+    expect(controller.busy, isFalse);
+    expect(controller.noticeMessage, contains('collegato al tavolo'));
+
+    reconciliation.complete(hospitality.floor);
+    await Future<void>.delayed(Duration.zero);
+  });
+
+  test('existing table order does not wait for floor reconciliation', () async {
+    final hospitality = _ControllableFloorHospitalityGateway();
+    final orders = FakeOrdersGateway();
+    final controller = TableController(hospitality, orders);
+
+    await controller.bindLocation('location-1');
+    await controller.selectTable(controller.floor!.tables.first);
+
+    final reconciliation = Completer<FloorSnapshot>();
+    hospitality.pendingFloorRefresh = reconciliation;
+
+    final attached = await controller
+        .attachExistingOrder(orders.order.header)
+        .timeout(const Duration(seconds: 1));
+
+    expect(attached, isTrue);
+    expect(controller.busy, isFalse);
+    expect(controller.noticeMessage, contains('collegato al tavolo'));
+
+    reconciliation.complete(hospitality.floor);
+    await Future<void>.delayed(Duration.zero);
+  });
+
   test('reloads authoritative session after version conflict', () async {
     final hospitality = FakeHospitalityGateway()
       ..updateSessionError = const BackendError(
@@ -52,4 +101,17 @@ void main() {
     expect(controller.selectedSession?.id, 'session-1');
     expect(controller.errorMessage, contains('altro dispositivo'));
   });
+}
+
+class _ControllableFloorHospitalityGateway extends FakeHospitalityGateway {
+  Completer<FloorSnapshot>? pendingFloorRefresh;
+
+  @override
+  Future<FloorSnapshot> fetchFloor(String locationId) {
+    final pending = pendingFloorRefresh;
+    if (pending != null) {
+      return pending.future;
+    }
+    return super.fetchFloor(locationId);
+  }
 }
