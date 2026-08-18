@@ -53,11 +53,7 @@ class AdvancedModeFrame extends StatelessWidget {
               if (constraints.maxWidth < 760) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    message,
-                    const SizedBox(height: 8),
-                    backButton,
-                  ],
+                  children: [message, const SizedBox(height: 8), backButton],
                 );
               }
 
