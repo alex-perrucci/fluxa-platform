@@ -6,6 +6,7 @@ import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../orders/domain/order_models.dart';
 import '../../orders/presentation/order_controller.dart';
+import '../../payments/presentation/quick_payment_sheet.dart';
 import '../domain/hospitality_models.dart';
 import 'table_controller.dart';
 
@@ -483,7 +484,13 @@ Future<void> _continueOrder(
   final selected = await controller.selectOrder(order.id);
   if (!selected || !context.mounted) return;
   if (order.status == OrderStatus.awaitingPayment) {
-    context.push('/checkout/${order.id}');
+    final detail = controller.activeOrder;
+    if (detail == null) return;
+    final completed = await showQuickPaymentSheet(context, order: detail);
+    if (completed && context.mounted) {
+      controller.discardCurrentView();
+      context.go('/home');
+    }
   } else {
     context.go('/home');
   }
