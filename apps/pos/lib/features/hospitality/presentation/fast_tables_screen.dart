@@ -136,7 +136,7 @@ class _FastTablesView extends StatelessWidget {
                 ),
               ),
               PopupMenuButton<String>(
-                tooltip: 'Altre operazioni tavoli',
+                tooltip: 'Opzioni tavoli',
                 onSelected: (value) async {
                   if (value == 'manage') {
                     context.go('/tables/manage');
@@ -163,8 +163,8 @@ class _FastTablesView extends StatelessWidget {
                   ),
                 ],
                 child: const Chip(
-                  avatar: Icon(Icons.more_horiz, size: 18),
-                  label: Text('Altro'),
+                  avatar: Icon(Icons.tune, size: 18),
+                  label: Text('Opzioni'),
                 ),
               ),
             ],
@@ -280,6 +280,7 @@ class _FastTableCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = table.session;
+    final theme = Theme.of(context);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -303,23 +304,55 @@ class _FastTableCard extends StatelessWidget {
                       table.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: theme.textTheme.titleLarge,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: table.occupied
+                          ? theme.colorScheme.primaryContainer
+                          : theme.colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      table.occupied ? 'OCCUPATO' : 'LIBERO',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ],
               ),
               Text('${table.code} · ${table.capacity} posti'),
               const Spacer(),
-              if (session == null)
-                Text('LIBERO', style: Theme.of(context).textTheme.titleMedium)
-              else ...[
+              if (session == null) ...[
+                Text(
+                  'Tocca per aprire',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text('Scegli i coperti e inizi subito l’ordine.'),
+              ] else ...[
                 Text(
                   '${session.guestCount} coperti · ${session.orderCount} ordini',
                 ),
                 const SizedBox(height: 4),
                 Text(
                   formatOrderMoney(session.openTotalCents, 'EUR'),
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Tocca per continuare',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ],
@@ -402,9 +435,10 @@ Future<int?> _pickGuestCount(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${table.name} · quanti coperti?',
+              'Quanti siete?',
               style: Theme.of(sheetContext).textTheme.headlineSmall,
             ),
+            Text('${table.name} · ${table.capacity} posti'),
             const SizedBox(height: 16),
             Wrap(
               spacing: 10,
@@ -427,14 +461,10 @@ Future<int?> _pickGuestCount(
                   height: 58,
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(sheetContext, 0),
-                    child: const Text('Altro…'),
+                    child: const Text('7+'),
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Un tap sul numero apre il tavolo, crea l’ordine e porta subito in cassa.',
             ),
           ],
         ),
@@ -461,13 +491,13 @@ Future<int?> _askGuestCount(BuildContext context) async {
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
-        title: const Text('Coperti'),
+        title: const Text('Quanti siete?'),
         content: TextField(
           autofocus: true,
           keyboardType: TextInputType.number,
           onChanged: (next) => value = next,
           decoration: InputDecoration(
-            labelText: 'Numero coperti',
+            labelText: 'Numero persone',
             errorText: errorText,
           ),
         ),
@@ -485,7 +515,7 @@ Future<int?> _askGuestCount(BuildContext context) async {
               }
               Navigator.pop(dialogContext, guests);
             },
-            child: const Text('Apri e ordina'),
+            child: const Text('APRI TAVOLO'),
           ),
         ],
       ),
@@ -500,6 +530,7 @@ Future<void> _showOccupiedTableActions(
   TableSessionDetail session,
   List<OrderHeader> actionableOrders,
 ) async {
+  final canClose = !session.hasBlockingOrders;
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -518,7 +549,10 @@ Future<void> _showOccupiedTableActions(
             Text('${session.guestCount} coperti'),
             const SizedBox(height: 16),
             if (actionableOrders.isNotEmpty) ...[
-              const Text('Scegli l’ordine da aprire'),
+              Text(
+                'Cosa vuoi continuare?',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 260),
@@ -530,10 +564,22 @@ Future<void> _showOccupiedTableActions(
                   itemBuilder: (context, index) {
                     final order = actionableOrders[index];
                     return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(_orderActionIcon(order.status)),
                       title: Text(order.number),
-                      subtitle: Text(order.status.label),
-                      trailing: Text(
-                        formatOrderMoney(order.totalCents, order.currency),
+                      subtitle: Text(_orderActionLabel(order.status)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            formatOrderMoney(
+                              order.totalCents,
+                              order.currency,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.chevron_right),
+                        ],
                       ),
                       onTap: () async {
                         Navigator.pop(sheetContext);
@@ -544,32 +590,23 @@ Future<void> _showOccupiedTableActions(
                 ),
               ),
               const SizedBox(height: 12),
+            ] else if (canClose) ...[
+              Material(
+                color: Theme.of(sheetContext).colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(12),
+                child: const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: Text(
+                    'Non ci sono ordini da completare. Il tavolo può essere liberato.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
             ],
-            FilledButton.icon(
-              key: const Key('fast-table-new-order'),
-              onPressed: controller.busy
-                  ? null
-                  : () async {
-                      final order = await controller.createAndAttachOrder();
-                      if (order == null) {
-                        return;
-                      }
-                      if (sheetContext.mounted) {
-                        Navigator.pop(sheetContext);
-                      }
-                      final selected = await orderController.selectOrder(
-                        order.header.id,
-                      );
-                      if (selected && context.mounted) {
-                        context.go('/home');
-                      }
-                    },
-              icon: const Icon(Icons.add_shopping_cart),
-              label: const Text('Nuovo ordine'),
-            ),
-            if (!session.hasBlockingOrders) ...[
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
+            if (canClose && actionableOrders.isEmpty) ...[
+              FilledButton.icon(
+                key: const Key('fast-table-close'),
                 onPressed: controller.busy
                     ? null
                     : () async {
@@ -578,9 +615,52 @@ Future<void> _showOccupiedTableActions(
                           Navigator.pop(sheetContext);
                         }
                       },
-                icon: const Icon(Icons.lock_open_outlined),
-                label: const Text('Libera tavolo'),
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('LIBERA TAVOLO'),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                key: const Key('fast-table-new-order'),
+                onPressed: controller.busy
+                    ? null
+                    : () => _createNewTableOrder(
+                        context,
+                        sheetContext,
+                        controller,
+                        orderController,
+                      ),
+                icon: const Icon(Icons.add_shopping_cart),
+                label: const Text('Aggiungi un altro ordine'),
+              ),
+            ] else ...[
+              OutlinedButton.icon(
+                key: const Key('fast-table-new-order'),
+                onPressed: controller.busy
+                    ? null
+                    : () => _createNewTableOrder(
+                        context,
+                        sheetContext,
+                        controller,
+                        orderController,
+                      ),
+                icon: const Icon(Icons.add_shopping_cart),
+                label: const Text('Nuovo ordine sul tavolo'),
+              ),
+              if (canClose) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: controller.busy
+                      ? null
+                      : () async {
+                          final closed = await controller.closeSession();
+                          if (closed && sheetContext.mounted) {
+                            Navigator.pop(sheetContext);
+                          }
+                        },
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Libera tavolo'),
+                ),
+              ],
             ],
             const SizedBox(height: 8),
             TextButton.icon(
@@ -589,7 +669,7 @@ Future<void> _showOccupiedTableActions(
                 context.go('/tables/manage');
               },
               icon: const Icon(Icons.tune),
-              label: const Text('Gestisci tavolo'),
+              label: const Text('Gestione avanzata tavolo'),
             ),
           ],
         ),
@@ -597,6 +677,37 @@ Future<void> _showOccupiedTableActions(
     ),
   );
 }
+
+Future<void> _createNewTableOrder(
+  BuildContext context,
+  BuildContext sheetContext,
+  TableController controller,
+  OrderController orderController,
+) async {
+  final order = await controller.createAndAttachOrder();
+  if (order == null) {
+    return;
+  }
+  if (sheetContext.mounted) {
+    Navigator.pop(sheetContext);
+  }
+  final selected = await orderController.selectOrder(order.header.id);
+  if (selected && context.mounted) {
+    context.go('/home');
+  }
+}
+
+String _orderActionLabel(OrderStatus status) => switch (status) {
+  OrderStatus.awaitingPayment => 'Vai al pagamento',
+  OrderStatus.held => 'Riprendi ordine',
+  _ => 'Continua ordine',
+};
+
+IconData _orderActionIcon(OrderStatus status) => switch (status) {
+  OrderStatus.awaitingPayment => Icons.payments_outlined,
+  OrderStatus.held => Icons.play_arrow,
+  _ => Icons.shopping_cart_outlined,
+};
 
 Future<void> _openOrder(
   BuildContext context,
