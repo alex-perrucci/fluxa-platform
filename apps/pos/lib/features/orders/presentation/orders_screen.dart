@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../device/domain/device_assignment_models.dart';
-import '../../printing/presentation/printing_controller.dart';
+import '../../fiscal/domain/fiscal_models.dart';
+import '../../fiscal/presentation/fiscal_controller.dart';
 import '../../hospitality/presentation/kitchen_controller.dart';
+import '../../printing/presentation/printing_controller.dart';
 import '../domain/order_models.dart';
 import 'order_controller.dart';
 
@@ -20,12 +22,15 @@ class OrdersScreen extends ConsumerStatefulWidget {
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String? _scheduledLocationId;
   String? _scheduledKitchenLocationId;
+  String? _scheduledFiscalLocationId;
+  String? _fiscalSyncedLocationId;
 
   @override
   Widget build(BuildContext context) {
     final authController = ref.watch(authControllerProvider);
     final orderController = ref.read(orderControllerProvider);
     final kitchenController = ref.watch(kitchenControllerProvider);
+    final fiscalController = ref.read(fiscalControllerProvider);
     final printingController = ref.watch(printingControllerProvider);
     final location = authController.state.deviceAssignment?.location;
     if (location == null) {
@@ -37,6 +42,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     }
     _scheduleBind(orderController, location.id);
     _scheduleKitchenBind(kitchenController, location.id);
+    _scheduleFiscalSync(fiscalController, location.id);
     if (orderController.locationId != location.id ||
         kitchenController.locationId != location.id) {
       return const FluxaLoadingView(label: 'Allineamento ordini');
@@ -44,6 +50,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return OrdersView(
       controller: orderController,
       kitchenController: kitchenController,
+      fiscalController: fiscalController,
       printingController: printingController,
       location: location,
     );
@@ -82,12 +89,37 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       }
     });
   }
+
+  void _scheduleFiscalSync(FiscalController controller, String locationId) {
+    if (_fiscalSyncedLocationId == locationId ||
+        _scheduledFiscalLocationId == locationId) {
+      return;
+    }
+    _scheduledFiscalLocationId = locationId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (controller.locationId == locationId) {
+          await controller.refresh();
+        } else {
+          await controller.bindLocation(locationId);
+        }
+      } finally {
+        if (mounted && _scheduledFiscalLocationId == locationId) {
+          setState(() {
+            _scheduledFiscalLocationId = null;
+            _fiscalSyncedLocationId = locationId;
+          });
+        }
+      }
+    });
+  }
 }
 
 class OrdersView extends StatelessWidget {
   const OrdersView({
     required this.controller,
     required this.kitchenController,
+    this.fiscalController,
     this.printingController,
     required this.location,
     super.key,
@@ -95,12 +127,16 @@ class OrdersView extends StatelessWidget {
 
   final OrderController controller;
   final KitchenController kitchenController;
+  final FiscalController? fiscalController;
   final PrintingController? printingController;
   final OperationalLocation location;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: controller,
+    animation: Listenable.merge([
+      controller,
+      if (fiscalController != null) fiscalController!,
+    ]),
     builder: (context, child) => Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -132,6 +168,7 @@ class OrdersView extends StatelessWidget {
                 final detail = _OrderDetailPane(
                   controller: controller,
                   kitchenController: kitchenController,
+                  fiscalController: fiscalController,
                   printingController: printingController,
                   locationId: location.id,
                 );
@@ -322,12 +359,14 @@ class _OrderDetailPane extends StatelessWidget {
   const _OrderDetailPane({
     required this.controller,
     required this.kitchenController,
+    this.fiscalController,
     this.printingController,
     required this.locationId,
   });
 
   final OrderController controller;
   final KitchenController kitchenController;
+  final FiscalController? fiscalController;
   final PrintingController? printingController;
   final String locationId;
 
@@ -556,14 +595,7 @@ class _OrderDetailPane extends StatelessWidget {
             label: const Text('Stampa riepilogo'),
           ),
         if (order.header.status == OrderStatus.paid)
-          FilledButton.tonalIcon(
-            key: const Key('fiscalize-paid-order-button'),
-            onPressed: controller.busy
-                ? null
-                : () => context.push('/fiscalize/${order.header.id}'),
-            icon: const Icon(Icons.receipt_long_outlined),
-            label: const Text('Fiscalizza'),
-          ),
+          _buildFiscalAction(context, order),
         if ((order.header.status == OrderStatus.open ||
                 order.header.status == OrderStatus.held) &&
             order.items.isNotEmpty)
@@ -632,6 +664,72 @@ class _OrderDetailPane extends StatelessWidget {
       ],
     ),
   );
+
+  Widget _buildFiscalAction(BuildContext context, OrderDetail order) {
+    final fiscal = fiscalController;
+    if (fiscal == null) {
+      return FilledButton.tonalIcon(
+        key: const Key('fiscalize-paid-order-button'),
+        onPressed: controller.busy
+            ? null
+            : () => context.push('/fiscalize/${order.header.id}'),
+        icon: const Icon(Icons.receipt_long_outlined),
+        label: const Text('Fiscalizza'),
+      );
+    }
+
+    final sameLocation = fiscal.locationId == locationId;
+    final document = sameLocation
+        ? fiscal.documentForOrder(order.header.id)
+        : null;
+
+    if (document != null) {
+      final issued = document.status == FiscalDocumentStatus.issued;
+      return FilledButton.tonalIcon(
+        key: Key('fiscal-status-${document.status.wireValue.toLowerCase()}'),
+        onPressed: () => context.go('/fiscal'),
+        icon: Icon(
+          issued ? Icons.verified_outlined : Icons.receipt_long_outlined,
+        ),
+        label: Text(
+          issued
+              ? 'Fiscale emesso'
+              : 'Fiscale ${document.status.label.toLowerCase()}',
+        ),
+      );
+    }
+
+    if (!sameLocation ||
+        fiscal.status == FiscalLoadStatus.idle ||
+        fiscal.status == FiscalLoadStatus.loading) {
+      return FilledButton.tonalIcon(
+        onPressed: null,
+        icon: SizedBox.square(
+          dimension: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        label: Text('Verifica fiscale…'),
+      );
+    }
+
+    if (fiscal.status == FiscalLoadStatus.failure) {
+      return OutlinedButton.icon(
+        key: const Key('open-fiscal-status-button'),
+        onPressed: () => context.go('/fiscal'),
+        icon: const Icon(Icons.sync_problem_outlined),
+        label: const Text('Controlla stato fiscale'),
+      );
+    }
+
+    return FilledButton.tonalIcon(
+      key: const Key('fiscalize-paid-order-button'),
+      onPressed: controller.busy
+          ? null
+          : () => context.push('/fiscalize/${order.header.id}'),
+      icon: const Icon(Icons.receipt_long_outlined),
+      label: const Text('Fiscalizza'),
+    );
+  }
 }
 
 class _StatusChip extends StatelessWidget {
