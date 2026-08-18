@@ -7,6 +7,7 @@ import '../../../core/widgets/async_states.dart';
 import '../../device/domain/device_assignment_models.dart';
 import '../../orders/domain/order_models.dart';
 import '../../orders/presentation/manual_amount_keypad.dart';
+import '../../orders/presentation/order_cancellation_action.dart';
 import '../../orders/presentation/order_composer.dart';
 import '../../orders/presentation/order_controller.dart';
 import '../../payments/presentation/quick_payment_sheet.dart';
@@ -459,15 +460,16 @@ class _ProductButton extends StatelessWidget {
   }
 }
 
-class _OrderPane extends StatelessWidget {
+class _OrderPane extends ConsumerWidget {
   const _OrderPane({required this.orders, required this.currency});
 
   final OrderController orders;
   final String currency;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final order = orders.activeOrder;
+    final role = ref.watch(authControllerProvider).state.session?.role;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -475,9 +477,32 @@ class _OrderPane extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              order == null ? 'Vendita corrente' : order.header.number,
-              style: Theme.of(context).textTheme.titleLarge,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    order == null ? 'Vendita corrente' : order.header.number,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                if (order != null && canQuickCancelOrder(order.header, role))
+                  TextButton.icon(
+                    key: const Key('cancel-current-order'),
+                    onPressed: orders.busy
+                        ? null
+                        : () => confirmAndCancelOrder(
+                            context,
+                            ref,
+                            order.header,
+                            discardCurrentView: true,
+                          ),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('ANNULLA'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
             ),
             if (orders.errorMessage != null) ...[
               const SizedBox(height: 6),
