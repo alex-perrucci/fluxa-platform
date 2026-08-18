@@ -303,21 +303,8 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   }
 
   Future<void> _closeTableWhenPossible(String orderId) async {
-    final selected = _tables.selectedSession;
-    if (selected == null ||
-        !selected.orders.any((order) => order.id == orderId)) {
-      return;
-    }
-
-    await _tables.refreshOperationalState();
-    final refreshed = _tables.selectedSession;
-    if (refreshed == null ||
-        !refreshed.orders.any((order) => order.id == orderId) ||
-        refreshed.hasBlockingOrders) {
-      return;
-    }
-
-    final closed = await _tables.closeSession(
+    final closed = await _tables.closeSessionForSettledOrder(
+      orderId,
       reason: 'Chiusura automatica dopo incasso',
     );
     if (!closed) {
