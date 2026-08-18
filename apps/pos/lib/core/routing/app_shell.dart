@@ -303,7 +303,8 @@ class _DesktopNavigation extends StatelessWidget {
                     _DesktopDestinationTile(
                       destination: destination,
                       selected: destination.branchIndex == selectedBranch,
-                      onTap: () => onSelected(destinations.indexOf(destination)),
+                      onTap: () =>
+                          onSelected(destinations.indexOf(destination)),
                     ),
                 ],
                 if (management.isNotEmpty) ...[
@@ -313,7 +314,8 @@ class _DesktopNavigation extends StatelessWidget {
                     _DesktopDestinationTile(
                       destination: destination,
                       selected: destination.branchIndex == selectedBranch,
-                      onTap: () => onSelected(destinations.indexOf(destination)),
+                      onTap: () =>
+                          onSelected(destinations.indexOf(destination)),
                     ),
                 ],
               ],

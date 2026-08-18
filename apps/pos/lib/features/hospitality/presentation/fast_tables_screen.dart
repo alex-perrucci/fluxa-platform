@@ -572,10 +572,7 @@ Future<void> _showOccupiedTableActions(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            formatOrderMoney(
-                              order.totalCents,
-                              order.currency,
-                            ),
+                            formatOrderMoney(order.totalCents, order.currency),
                           ),
                           const SizedBox(width: 6),
                           const Icon(Icons.chevron_right),
