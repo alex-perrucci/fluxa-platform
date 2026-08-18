@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/backend_error.dart';
@@ -319,7 +321,7 @@ class TableController extends ChangeNotifier {
       );
       _acceptSession(updated);
       _noticeMessage = 'Ordine ${order.header.number} collegato al tavolo.';
-      await _refreshFloorSilently();
+      unawaited(_refreshFloorSilently(notifyOnSuccess: true));
       return order;
     } on BackendError catch (error) {
       await _handleSessionError(error);
@@ -390,7 +392,7 @@ class TableController extends ChangeNotifier {
           .where((item) => item.id != order.id)
           .toList(growable: false);
       _noticeMessage = 'Ordine ${order.number} collegato al tavolo.';
-      await _refreshFloorSilently();
+      unawaited(_refreshFloorSilently(notifyOnSuccess: true));
       return true;
     } on BackendError catch (error) {
       await _handleSessionError(error);
@@ -519,7 +521,7 @@ class TableController extends ChangeNotifier {
     _errorMessage = error.message;
   }
 
-  Future<void> _refreshFloorSilently() async {
+  Future<void> _refreshFloorSilently({bool notifyOnSuccess = false}) async {
     final currentLocationId = _locationId;
     if (currentLocationId == null) {
       return;
@@ -533,6 +535,9 @@ class TableController extends ChangeNotifier {
         final currentSession = _selectedSession;
         if (currentSession != null && currentSession.status.isOpen) {
           _selectedTableId = currentSession.tableId;
+        }
+        if (notifyOnSuccess) {
+          notifyListeners();
         }
       }
     } catch (_) {
