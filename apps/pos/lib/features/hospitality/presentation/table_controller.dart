@@ -534,7 +534,8 @@ class TableController extends ChangeNotifier {
       var session = _selectedSession;
       if (session == null ||
           !session.orders.any((order) => order.id == orderId)) {
-        final snapshot = _floor ?? await _hospitality.fetchFloor(currentLocationId);
+        final snapshot =
+            _floor ?? await _hospitality.fetchFloor(currentLocationId);
         if (snapshot.locationId != currentLocationId) {
           throw const BackendError(
             message: 'La pianta sala appartiene a una location diversa.',
@@ -553,7 +554,9 @@ class TableController extends ChangeNotifier {
         }
       }
 
-      if (session == null || !session.status.isOpen || session.hasBlockingOrders) {
+      if (session == null ||
+          !session.status.isOpen ||
+          session.hasBlockingOrders) {
         return true;
       }
 
