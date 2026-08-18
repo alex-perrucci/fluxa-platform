@@ -122,6 +122,35 @@ void main() {
     await Future<void>.delayed(Duration.zero);
   });
 
+  test('closes settled table by order without a current selection', () async {
+    final hospitality = _TrackingHospitalityGateway(
+      session: _paidTableSession(),
+    );
+    final controller = TableController(hospitality, FakeOrdersGateway());
+
+    await controller.bindLocation('location-1');
+    expect(controller.selectedSession, isNull);
+
+    final closed = await controller.closeSessionForSettledOrder('order-1');
+
+    expect(closed, isTrue);
+    expect(hospitality.closeCalls, 1);
+    expect(hospitality.closedSessionId, 'session-1');
+  });
+
+  test('does not close table while another order is still blocking', () async {
+    final hospitality = _TrackingHospitalityGateway(
+      session: _paidTableSession(includeBlockingOrder: true),
+    );
+    final controller = TableController(hospitality, FakeOrdersGateway());
+
+    await controller.bindLocation('location-1');
+    final closed = await controller.closeSessionForSettledOrder('order-1');
+
+    expect(closed, isTrue);
+    expect(hospitality.closeCalls, 0);
+  });
+
   test('reloads authoritative session after version conflict', () async {
     final hospitality = FakeHospitalityGateway()
       ..updateSessionError = const BackendError(
@@ -170,6 +199,44 @@ TableSessionDetail _emptyTableSession() => TableSessionDetail.fromJson({
   'orders': [],
 });
 
+TableSessionDetail _paidTableSession({bool includeBlockingOrder = false}) {
+  final paid = orderHeaderJson(status: 'PAID');
+  final orders = <Map<String, Object?>>[paid];
+  if (includeBlockingOrder) {
+    orders.add({
+      ...orderHeaderJson(status: 'OPEN'),
+      'id': 'order-2',
+      'clientOrderId': 'client-order-2',
+      'number': '20260721-0002',
+    });
+  }
+  return TableSessionDetail.fromJson({
+    'id': 'session-1',
+    'organizationId': 'organization-1',
+    'locationId': 'location-1',
+    'tableId': 'table-1',
+    'deviceId': 'device-1',
+    'clientSessionId': 'client-session-1',
+    'status': 'OPEN',
+    'guestCount': 2,
+    'note': null,
+    'version': 4,
+    'openedAt': '2026-07-21T10:00:00.000Z',
+    'closedAt': null,
+    'cancelledAt': null,
+    'table': {
+      'id': 'table-1',
+      'code': 'T01',
+      'name': 'Tavolo 1',
+      'capacity': 4,
+      'areaId': 'area-1',
+      'areaCode': 'SALA',
+      'areaName': 'Sala principale',
+    },
+    'orders': orders,
+  });
+}
+
 class _ControllableFloorHospitalityGateway extends FakeHospitalityGateway {
   Completer<FloorSnapshot>? pendingFloorRefresh;
 
@@ -180,5 +247,24 @@ class _ControllableFloorHospitalityGateway extends FakeHospitalityGateway {
       return pending.future;
     }
     return super.fetchFloor(locationId);
+  }
+}
+
+class _TrackingHospitalityGateway extends FakeHospitalityGateway {
+  _TrackingHospitalityGateway({required super.session});
+
+  int closeCalls = 0;
+  String? closedSessionId;
+
+  @override
+  Future<TableSessionDetail> closeTableSession({
+    required String sessionId,
+    required String mutationId,
+    required int expectedVersion,
+    String? reason,
+  }) async {
+    closeCalls += 1;
+    closedSessionId = sessionId;
+    return session;
   }
 }

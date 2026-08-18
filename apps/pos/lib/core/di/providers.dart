@@ -38,6 +38,7 @@ import '../routing/app_router.dart';
 import '../storage/secure_store.dart';
 import '../storage/session_store.dart';
 import '../theme/theme_controller.dart';
+import '../workflow/pos_workflow_coordinator.dart';
 
 final appConfigProvider = Provider<AppConfig>(
   (_) => throw UnimplementedError(),
@@ -168,6 +169,17 @@ final printingControllerProvider = ChangeNotifierProvider<PrintingController>(
     ref.watch(localPrinterBackendProvider),
   ),
 );
+final posWorkflowCoordinatorProvider =
+    ChangeNotifierProvider<PosWorkflowCoordinator>((ref) {
+      return PosWorkflowCoordinator(
+        orders: ref.read(orderControllerProvider),
+        checkout: ref.read(checkoutControllerProvider),
+        fiscal: ref.read(fiscalControllerProvider),
+        tables: ref.read(tableControllerProvider),
+        printing: ref.read(printingControllerProvider),
+        fiscalGateway: ref.read(fiscalApiProvider),
+      );
+    });
 
 final themeControllerProvider = ChangeNotifierProvider<ThemeController>(
   (ref) => ThemeController(ref.watch(sessionStoreProvider)),

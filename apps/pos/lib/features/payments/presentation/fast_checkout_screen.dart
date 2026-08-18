@@ -217,11 +217,17 @@ class _FastCheckoutScreenState extends ConsumerState<FastCheckoutScreen> {
     CheckoutController checkoutController,
     OrderController orderController,
   ) async {
-    if (checkoutController.checkout?.isCompleted != true || !mounted) {
+    final checkout = checkoutController.checkout;
+    if (checkout?.isCompleted != true || !mounted) {
       return;
     }
     setState(() => _finishingSale = true);
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    await ref
+        .read(posWorkflowCoordinatorProvider)
+        .completePaidSale(
+          locationId: checkout!.locationId,
+          orderId: checkout.orderId,
+        );
     if (!mounted) {
       return;
     }

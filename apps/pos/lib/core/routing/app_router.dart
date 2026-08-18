@@ -5,18 +5,24 @@ import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/organization_selection_screen.dart';
 import '../../features/catalog/presentation/fast_cashier_screen.dart';
+import '../../features/catalog/presentation/operator_cashier_screen.dart';
 import '../../features/device/presentation/operational_blocked_screen.dart';
 import '../../features/fiscal/presentation/fiscal_screen.dart';
 import '../../features/fiscal/presentation/fiscalize_screen.dart';
+import '../../features/fiscal/presentation/operator_fiscal_screen.dart';
 import '../../features/hospitality/presentation/fast_tables_screen.dart';
 import '../../features/hospitality/presentation/kitchen_screen.dart';
+import '../../features/hospitality/presentation/operator_tables_screen.dart';
 import '../../features/hospitality/presentation/tables_screen.dart';
+import '../../features/orders/presentation/operator_orders_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/payments/presentation/checkout_screen.dart';
 import '../../features/payments/presentation/fast_checkout_screen.dart';
 import '../../features/payments/presentation/refunds_screen.dart';
+import '../../features/printing/presentation/operator_printing_screen.dart';
 import '../../features/printing/presentation/printer_setup_screen.dart';
 import '../../features/printing/presentation/printing_screen.dart';
+import '../../features/settings/presentation/operator_diagnostics_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/async_states.dart';
 import 'app_shell.dart';
@@ -101,7 +107,13 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/home',
-              builder: (context, state) => const FastCashierScreen(),
+              builder: (context, state) => const OperatorCashierScreen(),
+              routes: [
+                GoRoute(
+                  path: 'manage',
+                  builder: (context, state) => const FastCashierScreen(),
+                ),
+              ],
             ),
           ],
         ),
@@ -109,11 +121,15 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/tables',
-              builder: (context, state) => const FastTablesScreen(),
+              builder: (context, state) => const OperatorTablesScreen(),
               routes: [
                 GoRoute(
                   path: 'manage',
                   builder: (context, state) => const TablesScreen(),
+                ),
+                GoRoute(
+                  path: 'legacy-fast',
+                  builder: (context, state) => const FastTablesScreen(),
                 ),
               ],
             ),
@@ -123,7 +139,13 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/orders',
-              builder: (context, state) => const OrdersScreen(),
+              builder: (context, state) => const OperatorOrdersScreen(),
+              routes: [
+                GoRoute(
+                  path: 'manage',
+                  builder: (context, state) => const OrdersScreen(),
+                ),
+              ],
             ),
           ],
         ),
@@ -147,7 +169,13 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/printing',
-              builder: (context, state) => const PrintingScreen(),
+              builder: (context, state) => const OperatorPrintingScreen(),
+              routes: [
+                GoRoute(
+                  path: 'manage',
+                  builder: (context, state) => const PrintingScreen(),
+                ),
+              ],
             ),
           ],
         ),
@@ -155,7 +183,13 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/fiscal',
-              builder: (context, state) => const FiscalScreen(),
+              builder: (context, state) => const OperatorFiscalScreen(),
+              routes: [
+                GoRoute(
+                  path: 'manage',
+                  builder: (context, state) => const FiscalScreen(),
+                ),
+              ],
             ),
           ],
         ),
@@ -163,7 +197,13 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/settings',
-              builder: (context, state) => const SettingsScreen(),
+              builder: (context, state) => const OperatorDiagnosticsScreen(),
+              routes: [
+                GoRoute(
+                  path: 'manage',
+                  builder: (context, state) => const SettingsScreen(),
+                ),
+              ],
             ),
           ],
         ),

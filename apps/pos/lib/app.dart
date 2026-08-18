@@ -33,6 +33,7 @@ class _FluxaAppState extends ConsumerState<FluxaApp> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider).state;
+    ref.watch(posWorkflowCoordinatorProvider);
     _schedulePrintingContext(authState);
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeControllerProvider).mode;
