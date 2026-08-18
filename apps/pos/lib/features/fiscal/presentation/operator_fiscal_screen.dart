@@ -55,7 +55,10 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
     final missing = fiscal.ordersToFiscalize;
     final profileReady = fiscal.profile?.enabled == true;
     final allGood =
-        profileReady && problems.isEmpty && missing.isEmpty && fiscal.errorMessage == null;
+        profileReady &&
+        problems.isEmpty &&
+        missing.isEmpty &&
+        fiscal.errorMessage == null;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -66,8 +69,13 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Fiscale', style: Theme.of(context).textTheme.headlineMedium),
-                  const Text('Qui devi intervenire solo se Fluxa segnala un problema.'),
+                  Text(
+                    'Fiscale',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const Text(
+                    'Qui devi intervenire solo se Fluxa segnala un problema.',
+                  ),
                 ],
               ),
             ),
@@ -108,7 +116,8 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
           const SizedBox(height: 14),
           _ExceptionCard(
             title: 'Richiedono attenzione',
-            message: 'Apri la gestione fiscale per vedere errore e azioni disponibili.',
+            message:
+                'Apri la gestione fiscale per vedere errore e azioni disponibili.',
             children: problems
                 .map(
                   (document) => ListTile(
@@ -129,7 +138,9 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
             child: ListTile(
               leading: const Icon(Icons.hourglass_top),
               title: Text('${pending.length} scontrini in elaborazione'),
-              subtitle: const Text('Fluxa continua a controllarli automaticamente.'),
+              subtitle: const Text(
+                'Fluxa continua a controllarli automaticamente.',
+              ),
               trailing: const CircularProgressIndicator(strokeWidth: 2),
             ),
           ),
@@ -162,10 +173,9 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
   }
 
   Future<void> _recover(String locationId, OrderHeader order) async {
-    await ref.read(posWorkflowCoordinatorProvider).recoverFiscalDocument(
-      locationId: locationId,
-      orderId: order.id,
-    );
+    await ref
+        .read(posWorkflowCoordinatorProvider)
+        .recoverFiscalDocument(locationId: locationId, orderId: order.id);
     if (!mounted) return;
     await ref.read(fiscalControllerProvider).refresh(silent: true);
   }
@@ -190,7 +200,8 @@ class _FiscalSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final attention = !allGood && (missingCount > 0 || problemCount > 0 || !profileReady);
+    final attention =
+        !allGood && (missingCount > 0 || problemCount > 0 || !profileReady);
     final title = allGood
         ? 'TUTTO A POSTO'
         : attention

@@ -85,10 +85,7 @@ class PosWorkflowCoordinator extends ChangeNotifier {
       return;
     }
 
-    final future = _completePaidSale(
-      locationId: locationId,
-      orderId: orderId,
-    );
+    final future = _completePaidSale(locationId: locationId, orderId: orderId);
     _finalizations[orderId] = future;
     try {
       await future;

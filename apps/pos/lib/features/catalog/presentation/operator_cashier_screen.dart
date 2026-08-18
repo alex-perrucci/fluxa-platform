@@ -189,7 +189,10 @@ class _CatalogPane extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Cassa', style: Theme.of(context).textTheme.headlineMedium),
+                  Text(
+                    'Cassa',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                   Text('${location.name} · tocca un prodotto per aggiungerlo'),
                 ],
               ),
@@ -300,12 +303,13 @@ class _CatalogPane extends StatelessWidget {
                           };
                           return GridView.builder(
                             padding: const EdgeInsets.only(bottom: 88),
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: columns,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                              childAspectRatio: columns == 1 ? 3 : 1.35,
-                            ),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                  childAspectRatio: columns == 1 ? 3 : 1.35,
+                                ),
                             itemCount: products.length,
                             itemBuilder: (context, index) => _ProductButton(
                               product: products[index],
@@ -419,7 +423,11 @@ class _ProductButton extends StatelessWidget {
     final active = orders.activeOrder;
     if (active != null && active.header.status != OrderStatus.open) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Concludi la vendita corrente prima di aggiungere prodotti.')),
+        const SnackBar(
+          content: Text(
+            'Concludi la vendita corrente prima di aggiungere prodotti.',
+          ),
+        ),
       );
       return;
     }
@@ -484,7 +492,8 @@ class _OrderPane extends StatelessWidget {
                   ? const Center(child: Text('Tocca un prodotto per iniziare.'))
                   : ListView.separated(
                       itemCount: order.items.length,
-                      separatorBuilder: (context, index) => const Divider(height: 1),
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1),
                       itemBuilder: (context, index) => _OrderLine(
                         order: order,
                         item: order.items[index],
@@ -497,10 +506,16 @@ class _OrderPane extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text('TOTALE', style: Theme.of(context).textTheme.titleLarge),
+                    child: Text(
+                      'TOTALE',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                   Text(
-                    formatOrderMoney(order.header.totalCents, order.header.currency),
+                    formatOrderMoney(
+                      order.header.totalCents,
+                      order.header.currency,
+                    ),
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                 ],
@@ -604,9 +619,16 @@ class _OrderLine extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.displayName, maxLines: 2, overflow: TextOverflow.ellipsis),
                   Text(
-                    formatOrderMoney(item.finalGrossCents, order.header.currency),
+                    item.displayName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    formatOrderMoney(
+                      item.finalGrossCents,
+                      order.header.currency,
+                    ),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -682,7 +704,9 @@ class _WorkflowBanner extends StatelessWidget {
         : Theme.of(context).colorScheme.secondaryContainer,
     borderRadius: BorderRadius.circular(12),
     child: ListTile(
-      leading: Icon(attention ? Icons.warning_amber : Icons.check_circle_outline),
+      leading: Icon(
+        attention ? Icons.warning_amber : Icons.check_circle_outline,
+      ),
       title: Text(message),
       trailing: IconButton(onPressed: onClose, icon: const Icon(Icons.close)),
     ),

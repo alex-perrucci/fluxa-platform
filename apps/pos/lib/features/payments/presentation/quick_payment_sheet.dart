@@ -18,10 +18,8 @@ Future<bool> showQuickPaymentSheet(
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (context) => _QuickPaymentSheet(
-        order: order,
-        initialMethod: initialMethod,
-      ),
+      builder: (context) =>
+          _QuickPaymentSheet(order: order, initialMethod: initialMethod),
     ) ??
     false;
 
@@ -32,8 +30,7 @@ class _QuickPaymentSheet extends ConsumerStatefulWidget {
   final String? initialMethod;
 
   @override
-  ConsumerState<_QuickPaymentSheet> createState() =>
-      _QuickPaymentSheetState();
+  ConsumerState<_QuickPaymentSheet> createState() => _QuickPaymentSheetState();
 }
 
 class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
@@ -119,7 +116,8 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
               )
             else if (checkout == null)
               _ErrorBox(
-                text: checkoutController.errorMessage ??
+                text:
+                    checkoutController.errorMessage ??
                     'Impossibile preparare il pagamento.',
               )
             else if (_finishing)
@@ -191,7 +189,8 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
                 label: const Text('Resto, pagamento parziale o altro'),
               ),
             ],
-            if (checkoutController.errorMessage != null && checkout != null) ...[
+            if (checkoutController.errorMessage != null &&
+                checkout != null) ...[
               const SizedBox(height: 10),
               _ErrorBox(text: checkoutController.errorMessage!),
             ],
@@ -243,10 +242,9 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
   }
 
   Future<void> _cancelCard(PaymentRecord payment) async {
-    await ref.read(checkoutControllerProvider).cancelPayment(
-      payment,
-      reason: 'Pagamento non riuscito sul terminale',
-    );
+    await ref
+        .read(checkoutControllerProvider)
+        .cancelPayment(payment, reason: 'Pagamento non riuscito sul terminale');
   }
 
   Future<void> _finishIfCompleted() async {
@@ -255,10 +253,12 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
       return;
     }
     setState(() => _finishing = true);
-    await ref.read(posWorkflowCoordinatorProvider).completePaidSale(
-      locationId: widget.order.header.locationId,
-      orderId: widget.order.header.id,
-    );
+    await ref
+        .read(posWorkflowCoordinatorProvider)
+        .completePaidSale(
+          locationId: widget.order.header.locationId,
+          orderId: widget.order.header.id,
+        );
     if (!mounted) {
       return;
     }

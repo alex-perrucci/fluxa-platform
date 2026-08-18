@@ -35,7 +35,8 @@ class _OperatorDiagnosticsScreenState
 
     _scheduleLoad(location.id);
     final health = _health;
-    final ready = health != null &&
+    final ready =
+        health != null &&
         health.apiStatus == HealthStatus.ok &&
         health.printerStatus != HealthStatus.down &&
         health.fiscalStatus != HealthStatus.down;
@@ -304,7 +305,8 @@ class _StatusBadge extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final background = switch (status) {
       HealthStatus.ok => scheme.primaryContainer,
-      HealthStatus.degraded || HealthStatus.unknown => scheme.secondaryContainer,
+      HealthStatus.degraded ||
+      HealthStatus.unknown => scheme.secondaryContainer,
       HealthStatus.down => scheme.errorContainer,
       HealthStatus.notConfigured => scheme.surfaceContainerHighest,
     };

@@ -59,8 +59,13 @@ class OperatorPrintingScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Stampa', style: Theme.of(context).textTheme.headlineMedium),
-                  const Text('Controlla in un attimo se la postazione è pronta.'),
+                  Text(
+                    'Stampa',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const Text(
+                    'Controlla in un attimo se la postazione è pronta.',
+                  ),
                 ],
               ),
             ),
@@ -115,7 +120,9 @@ class OperatorPrintingScreen extends ConsumerWidget {
                 color: Theme.of(context).colorScheme.error,
               ),
               title: Text('${failedJobs.length} stampe non riuscite'),
-              subtitle: const Text('Apri la gestione per riprovare o vedere il motivo.'),
+              subtitle: const Text(
+                'Apri la gestione per riprovare o vedere il motivo.',
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.go('/printing/manage'),
             ),
@@ -152,7 +159,8 @@ class _PrintingSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = ready ? 'STAMPANTI PRONTE' : 'CONTROLLA LA STAMPA';
-    final detail = errorMessage ??
+    final detail =
+        errorMessage ??
         (assignedCount == 0
             ? 'Nessuna stampante assegnata a questa postazione.'
             : '$connectedCount/$assignedCount collegate · $waitingCount in coda · $failedCount con errore');
@@ -204,14 +212,22 @@ class _PrinterCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          Icon(connected ? Icons.print : Icons.print_disabled_outlined, size: 36),
+          Icon(
+            connected ? Icons.print : Icons.print_disabled_outlined,
+            size: 36,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(printer.name, style: Theme.of(context).textTheme.titleMedium),
-                Text('${printer.purpose.label} · ${connected ? 'Pronta' : 'Da collegare'}'),
+                Text(
+                  printer.name,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  '${printer.purpose.label} · ${connected ? 'Pronta' : 'Da collegare'}',
+                ),
                 if (connected)
                   Text(
                     connection,

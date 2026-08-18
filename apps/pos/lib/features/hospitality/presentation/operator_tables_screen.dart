@@ -101,7 +101,10 @@ class _TablesWorkspace extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Tavoli', style: Theme.of(context).textTheme.headlineMedium),
+                    Text(
+                      'Tavoli',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
                     Text('$occupied occupati · tocca il tavolo e continua'),
                   ],
                 ),
@@ -359,7 +362,10 @@ Future<int?> _pickGuests(BuildContext context, DiningTableFloor table) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Quanti siete?', style: Theme.of(sheetContext).textTheme.headlineSmall),
+            Text(
+              'Quanti siete?',
+              style: Theme.of(sheetContext).textTheme.headlineSmall,
+            ),
             Text(table.name),
             const SizedBox(height: 14),
             Wrap(
@@ -440,13 +446,17 @@ Future<void> _chooseLegacyOrder(
               'Ci sono più conti aperti',
               style: Theme.of(sheetContext).textTheme.titleLarge,
             ),
-            const Text('È una situazione eccezionale: scegli quale continuare.'),
+            const Text(
+              'È una situazione eccezionale: scegli quale continuare.',
+            ),
             const SizedBox(height: 8),
             ...orders.map(
               (order) => ListTile(
                 title: Text(order.number),
                 subtitle: Text(order.status.label),
-                trailing: Text(formatOrderMoney(order.totalCents, order.currency)),
+                trailing: Text(
+                  formatOrderMoney(order.totalCents, order.currency),
+                ),
                 onTap: () => Navigator.pop(sheetContext, order),
               ),
             ),

@@ -55,8 +55,13 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Ordini', style: Theme.of(context).textTheme.headlineMedium),
-                    const Text('Apri una vendita e Fluxa ti porta al prossimo passo.'),
+                    Text(
+                      'Ordini',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const Text(
+                      'Apri una vendita e Fluxa ti porta al prossimo passo.',
+                    ),
                   ],
                 ),
               ),
@@ -82,7 +87,8 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
               ),
             ],
             selected: {_bucket},
-            onSelectionChanged: (values) => setState(() => _bucket = values.first),
+            onSelectionChanged: (values) =>
+                setState(() => _bucket = values.first),
           ),
           if (orders.errorMessage != null) ...[
             const SizedBox(height: 10),
@@ -100,7 +106,8 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
           ],
           const SizedBox(height: 12),
           Expanded(
-            child: orders.listStatus == OrdersLoadStatus.loading &&
+            child:
+                orders.listStatus == OrdersLoadStatus.loading &&
                     orders.orders.isEmpty
                 ? const FluxaLoadingView(label: 'Aggiornamento ordini')
                 : visible.isEmpty
@@ -117,7 +124,8 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
                   )
                 : ListView.separated(
                     itemCount: visible.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 8),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
                     itemBuilder: (context, index) => _OrderCard(
                       order: visible[index],
                       fiscal: fiscal,
@@ -242,7 +250,10 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(order.number, style: Theme.of(sheetContext).textTheme.headlineSmall),
+              Text(
+                order.number,
+                style: Theme.of(sheetContext).textTheme.headlineSmall,
+              ),
               Text(formatOrderMoney(order.totalCents, order.currency)),
               const SizedBox(height: 16),
               _FiscalResult(document: document),
@@ -250,10 +261,12 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
               if (document == null)
                 FilledButton.icon(
                   onPressed: () async {
-                    await ref.read(posWorkflowCoordinatorProvider).recoverFiscalDocument(
-                      locationId: locationId,
-                      orderId: order.id,
-                    );
+                    await ref
+                        .read(posWorkflowCoordinatorProvider)
+                        .recoverFiscalDocument(
+                          locationId: locationId,
+                          orderId: order.id,
+                        );
                     if (sheetContext.mounted) Navigator.pop(sheetContext);
                   },
                   icon: const Icon(Icons.receipt_long_outlined),
@@ -308,7 +321,10 @@ class _OrderCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        title: Text(order.number, style: Theme.of(context).textTheme.titleMedium),
+        title: Text(
+          order.number,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         subtitle: Text('${order.serviceMode.label} · $action'),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
