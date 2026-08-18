@@ -34,11 +34,13 @@ jobs:
             lib/features/catalog/presentation/operator_cashier_screen.dart \
             lib/features/fiscal/presentation/operator_fiscal_screen.dart \
             lib/features/hospitality/presentation/operator_tables_screen.dart \
+            lib/features/hospitality/presentation/table_controller.dart \
             lib/features/orders/presentation/operator_orders_screen.dart \
             lib/features/payments/presentation/fast_checkout_screen.dart \
             lib/features/payments/presentation/quick_payment_sheet.dart \
             lib/features/printing/presentation/operator_printing_screen.dart \
-            lib/features/settings/presentation/operator_diagnostics_screen.dart
+            lib/features/settings/presentation/operator_diagnostics_screen.dart \
+            test/features/hospitality/table_controller_test.dart
 
       - name: Commit formatter output
         run: |
@@ -48,6 +50,6 @@ jobs:
           fi
           git config user.name "alex-perrucci"
           git config user.email "128584526+alex-perrucci@users.noreply.github.com"
-          git add apps/pos/lib
+          git add apps/pos/lib apps/pos/test/features/hospitality/table_controller_test.dart
           git commit -m "style(pos): format unified workflow final pass"
           git push origin HEAD:agent/pos-unified-idiot-proof-workflow
