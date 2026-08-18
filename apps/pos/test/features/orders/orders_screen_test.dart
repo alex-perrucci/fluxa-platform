@@ -113,6 +113,14 @@ class _WidgetOrdersGateway implements OrdersGateway {
   }) async => order;
 
   @override
+  Future<OrderDetail> cancelOrder({
+    required String orderId,
+    required String mutationId,
+    required int expectedVersion,
+    String? reason,
+  }) async => order;
+
+  @override
   Future<OrderDetail> createOrder({
     required String clientOrderId,
     required String locationId,

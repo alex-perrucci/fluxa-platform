@@ -150,6 +150,14 @@ class _NoopOrdersGateway implements OrdersGateway {
   }) async => _unsupported();
 
   @override
+  Future<OrderDetail> cancelOrder({
+    required String orderId,
+    required String mutationId,
+    required int expectedVersion,
+    String? reason,
+  }) async => _unsupported();
+
+  @override
   Future<OrderDetail> createOrder({
     required String clientOrderId,
     required String locationId,

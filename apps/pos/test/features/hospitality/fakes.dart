@@ -227,6 +227,14 @@ class FakeOrdersGateway implements OrdersGateway {
     required String mutationId,
     required int expectedVersion,
   }) async => order;
+
+  @override
+  Future<OrderDetail> cancelOrder({
+    required String orderId,
+    required String mutationId,
+    required int expectedVersion,
+    String? reason,
+  }) async => order;
 }
 
 FloorSnapshot hospitalityFloorFixture() => FloorSnapshot.fromJson({

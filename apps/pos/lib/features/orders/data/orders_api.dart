@@ -68,6 +68,13 @@ abstract interface class OrdersGateway {
     required String mutationId,
     required int expectedVersion,
   });
+
+  Future<OrderDetail> cancelOrder({
+    required String orderId,
+    required String mutationId,
+    required int expectedVersion,
+    String? reason,
+  });
 }
 
 class OrdersApi implements OrdersGateway {
@@ -253,6 +260,31 @@ class OrdersApi implements OrdersGateway {
     mutationId: mutationId,
     expectedVersion: expectedVersion,
   );
+
+  @override
+  Future<OrderDetail> cancelOrder({
+    required String orderId,
+    required String mutationId,
+    required int expectedVersion,
+    String? reason,
+  }) async {
+    try {
+      final normalizedReason = reason?.trim();
+      final response = await _dio.post<Map<String, Object?>>(
+        'orders/$orderId/cancel',
+        data: {
+          'mutationId': mutationId,
+          'expectedVersion': expectedVersion,
+          'reason': normalizedReason == null || normalizedReason.isEmpty
+              ? null
+              : normalizedReason,
+        },
+      );
+      return OrderDetail.fromJson(_requireData(response.data));
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
 
   Future<OrderDetail> _transition({
     required String path,

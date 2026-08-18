@@ -97,6 +97,36 @@ class PosWorkflowCoordinator extends ChangeNotifier {
     }
   }
 
+  Future<void> reconcileCancelledOrder({
+    required String locationId,
+    required String orderId,
+    required OrderServiceMode serviceMode,
+  }) async {
+    _setStatus(PosWorkflowStatus.working, 'Aggiornamento ordine annullato…');
+    try {
+      if (serviceMode == OrderServiceMode.table) {
+        await _closeTableWhenPossible(
+          locationId,
+          orderId,
+          reason: 'Chiusura automatica dopo annullamento ordine',
+          operationLabel: 'Ordine annullato',
+        );
+      }
+
+      await _orders.refreshOrders();
+      if (_tables.locationId == locationId && !_tables.busy) {
+        unawaited(_tables.refreshOperationalState());
+      }
+      if (_status != PosWorkflowStatus.attention) {
+        _setStatus(PosWorkflowStatus.ready, 'Ordine annullato.');
+      }
+    } catch (_) {
+      _setAttention(
+        'Ordine annullato. Alcuni dati operativi richiedono un aggiornamento.',
+      );
+    }
+  }
+
   Future<void> _completePaidSale({
     required String locationId,
     required String orderId,
@@ -317,8 +347,10 @@ class PosWorkflowCoordinator extends ChangeNotifier {
 
   Future<void> _closeTableWhenPossible(
     String locationId,
-    String orderId,
-  ) async {
+    String orderId, {
+    String reason = 'Chiusura automatica dopo incasso',
+    String operationLabel = 'Vendita completata',
+  }) async {
     if (_tables.locationId != locationId) {
       await _tables.bindLocation(locationId);
     } else {
@@ -326,18 +358,18 @@ class PosWorkflowCoordinator extends ChangeNotifier {
     }
     if (_tables.busy) {
       _setAttention(
-        'Vendita completata. Il tavolo è occupato da un’altra operazione e non è stato liberato automaticamente.',
+        '$operationLabel. Il tavolo è occupato da un’altra operazione e non è stato liberato automaticamente.',
       );
       return;
     }
 
     final closed = await _tables.closeSessionForSettledOrder(
       orderId,
-      reason: 'Chiusura automatica dopo incasso',
+      reason: reason,
     );
     if (!closed) {
       _setAttention(
-        'Vendita completata. Il tavolo non è stato liberato automaticamente.',
+        '$operationLabel. Il tavolo non è stato liberato automaticamente.',
       );
     }
   }

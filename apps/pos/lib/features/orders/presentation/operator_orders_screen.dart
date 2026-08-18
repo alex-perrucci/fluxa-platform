@@ -9,6 +9,7 @@ import '../../fiscal/presentation/fiscal_controller.dart';
 import '../../fiscal/presentation/fiscal_screen.dart';
 import '../../payments/presentation/quick_payment_sheet.dart';
 import '../domain/order_models.dart';
+import 'order_cancellation_action.dart';
 import 'order_controller.dart';
 
 enum _OrderBucket { active, completedToday }
@@ -31,6 +32,7 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
     final orders = ref.watch(orderControllerProvider);
     final fiscal = ref.watch(fiscalControllerProvider);
     final location = auth.deviceAssignment?.location;
+    final role = auth.session?.role;
 
     if (location == null) {
       return const FluxaEmptyView(
@@ -128,17 +130,23 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
                     itemCount: visible.length,
                     separatorBuilder: (context, index) =>
                         const SizedBox(height: 8),
-                    itemBuilder: (context, index) => _OrderCard(
-                      order: visible[index],
-                      fiscal: fiscal,
-                      onTap: () => _openOrder(
-                        context,
-                        visible[index],
-                        orders,
-                        fiscal,
-                        location.id,
-                      ),
-                    ),
+                    itemBuilder: (context, index) {
+                      final order = visible[index];
+                      return _OrderCard(
+                        order: order,
+                        fiscal: fiscal,
+                        onTap: () => _openOrder(
+                          context,
+                          order,
+                          orders,
+                          fiscal,
+                          location.id,
+                        ),
+                        onCancel: canQuickCancelOrder(order, role)
+                            ? () => confirmAndCancelOrder(context, ref, order)
+                            : null,
+                      );
+                    },
                   ),
           ),
         ],
@@ -318,11 +326,13 @@ class _OrderCard extends StatelessWidget {
     required this.order,
     required this.fiscal,
     required this.onTap,
+    this.onCancel,
   });
 
   final OrderHeader order;
   final FiscalController fiscal;
   final VoidCallback onTap;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -345,6 +355,14 @@ class _OrderCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (onCancel != null)
+              IconButton(
+                key: Key('cancel-order-${order.id}'),
+                tooltip: 'Annulla ordine',
+                onPressed: onCancel,
+                color: Theme.of(context).colorScheme.error,
+                icon: const Icon(Icons.delete_outline),
+              ),
             Text(
               formatOrderMoney(order.totalCents, order.currency),
               style: Theme.of(context).textTheme.titleMedium,
