@@ -180,10 +180,61 @@ class AppShell extends ConsumerWidget {
       branchIndex,
       initialLocation: branchIndex == navigationShell.currentIndex,
     );
-    if (branchIndex == 5) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _refreshBranch(ref, branchIndex);
+    });
+  }
+
+  Future<void> _refreshBranch(WidgetRef ref, int branchIndex) async {
+    final locationId = ref
+        .read(authControllerProvider)
+        .state
+        .deviceAssignment
+        ?.location
+        ?.id;
+    if (locationId == null) {
+      return;
+    }
+
+    switch (branchIndex) {
+      case 0:
+      case 2:
+        final controller = ref.read(orderControllerProvider);
+        if (controller.locationId != locationId) {
+          await controller.bindLocation(locationId);
+        } else {
+          await controller.refreshOperationalState();
+        }
+        return;
+      case 1:
+        final controller = ref.read(tableControllerProvider);
+        if (controller.locationId != locationId) {
+          await controller.bindLocation(locationId);
+        } else {
+          await controller.refreshOperationalState();
+        }
+        return;
+      case 4:
+        final controller = ref.read(kitchenControllerProvider);
+        if (controller.locationId != locationId) {
+          await controller.bindLocation(locationId);
+        } else {
+          await controller.refresh();
+        }
+        return;
+      case 5:
         await ref.read(printingControllerProvider).refresh();
-      });
+        return;
+      case 6:
+        final controller = ref.read(fiscalControllerProvider);
+        if (controller.locationId != locationId) {
+          await controller.bindLocation(locationId);
+        } else {
+          await controller.refresh(silent: true);
+        }
+        return;
+      default:
+        return;
     }
   }
 }
