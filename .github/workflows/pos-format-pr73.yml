@@ -1,0 +1,51 @@
+name: POS format PR 73
+
+on:
+  push:
+    branches:
+      - agent/fix-simple-mode-return-and-order-cancel
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/fix-simple-mode-return-and-order-cancel
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.32.5
+          channel: stable
+          cache: true
+
+      - name: Format changed POS files
+        working-directory: apps/pos
+        run: |
+          dart format \
+            lib/core/routing/advanced_mode_frame.dart \
+            lib/core/routing/app_router.dart \
+            lib/core/workflow/pos_workflow_coordinator.dart \
+            lib/features/catalog/presentation/operator_cashier_screen.dart \
+            lib/features/orders/data/orders_api.dart \
+            lib/features/orders/presentation/operator_orders_screen.dart \
+            lib/features/orders/presentation/order_cancellation_action.dart \
+            lib/features/orders/presentation/order_controller.dart \
+            test/features/hospitality/fakes.dart \
+            test/features/orders/order_controller_test.dart
+
+      - name: Commit formatter output
+        run: |
+          if git diff --quiet; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.name "alex-perrucci"
+          git config user.email "128584526+alex-perrucci@users.noreply.github.com"
+          git add apps/pos
+          git commit -m "style(pos): format quick cancel fixes"
+          git push origin HEAD:agent/fix-simple-mode-return-and-order-cancel
