@@ -35,7 +35,7 @@ void main() {
     expect(hospitality.attachedOrderId, 'order-1');
   });
 
-  test('new table order does not wait for floor reconciliation', () async {
+  test('new order attachment does not wait for floor refresh', () async {
     final hospitality = _ControllableFloorHospitalityGateway();
     final orders = FakeOrdersGateway();
     final controller = TableController(hospitality, orders);
@@ -58,7 +58,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
   });
 
-  test('existing table order does not wait for floor reconciliation', () async {
+  test('existing order attachment does not wait for floor refresh', () async {
     final hospitality = _ControllableFloorHospitalityGateway();
     final orders = FakeOrdersGateway();
     final controller = TableController(hospitality, orders);
