@@ -45,7 +45,10 @@ Future<bool> confirmAndCancelOrder(
   final orders = ref.read(orderControllerProvider);
   if (orders.activeOrder?.header.id != order.id) {
     final selected = await orders.selectOrder(order.id);
-    if (!selected || !context.mounted) {
+    if (!context.mounted) {
+      return false;
+    }
+    if (!selected) {
       _showCancellationError(context, orders.errorMessage);
       return false;
     }
