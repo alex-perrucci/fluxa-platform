@@ -520,6 +520,68 @@ class TableController extends ChangeNotifier {
     }
   }
 
+  Future<bool> closeSessionForSettledOrder(
+    String orderId, {
+    String? reason,
+  }) async {
+    final currentLocationId = _locationId;
+    if (_busy || currentLocationId == null) {
+      return true;
+    }
+
+    _setBusy();
+    try {
+      var session = _selectedSession;
+      if (session == null ||
+          !session.orders.any((order) => order.id == orderId)) {
+        final snapshot = _floor ?? await _hospitality.fetchFloor(currentLocationId);
+        if (snapshot.locationId != currentLocationId) {
+          throw const BackendError(
+            message: 'La pianta sala appartiene a una location diversa.',
+          );
+        }
+        session = null;
+        for (final table in snapshot.tables) {
+          final sessionId = table.session?.id;
+          if (sessionId == null) continue;
+          final candidate = await _hospitality.getTableSession(sessionId);
+          if (candidate.locationId != currentLocationId) continue;
+          if (candidate.orders.any((order) => order.id == orderId)) {
+            session = candidate;
+            break;
+          }
+        }
+      }
+
+      if (session == null || !session.status.isOpen || session.hasBlockingOrders) {
+        return true;
+      }
+
+      await _hospitality.closeTableSession(
+        sessionId: session.id,
+        mutationId: UuidV4.generate(),
+        expectedVersion: session.version,
+        reason: _normalize(reason),
+      );
+      if (_selectedSession?.id == session.id) {
+        _selectedTableId = null;
+        _selectedSession = null;
+        _attachableOrders = const [];
+      }
+      _noticeMessage = 'Tavolo chiuso e liberato automaticamente.';
+      await _refreshFloorSilently();
+      return true;
+    } on BackendError catch (error) {
+      _errorMessage = error.message;
+      return false;
+    } catch (_) {
+      _errorMessage = 'Impossibile liberare automaticamente il tavolo.';
+      return false;
+    } finally {
+      _finishBusy();
+    }
+  }
+
   Future<bool> cancelSession({String? reason}) async {
     final session = _selectedSession;
     if (_busy || session == null || !session.status.isOpen) {
