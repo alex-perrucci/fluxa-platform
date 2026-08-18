@@ -702,7 +702,7 @@ class _OrderDetailPane extends StatelessWidget {
     if (!sameLocation ||
         fiscal.status == FiscalLoadStatus.idle ||
         fiscal.status == FiscalLoadStatus.loading) {
-      return const FilledButton.tonalIcon(
+      return FilledButton.tonalIcon(
         onPressed: null,
         icon: SizedBox.square(
           dimension: 16,
