@@ -149,11 +149,14 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   Future<void> recoverFiscalDocument({
     required String locationId,
     required String orderId,
+    String? lotteryCode,
   }) async {
     _setStatus(PosWorkflowStatus.working, 'Recupero scontrino fiscale…');
     final document = await _ensureFiscalDocument(
       locationId: locationId,
       orderId: orderId,
+      allowManualIssue: true,
+      lotteryCode: lotteryCode,
     );
     if (document == null) {
       return;
@@ -190,6 +193,8 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   Future<FiscalDocument?> _ensureFiscalDocument({
     required String locationId,
     required String orderId,
+    bool allowManualIssue = false,
+    String? lotteryCode,
   }) async {
     if (_fiscal.locationId == locationId) {
       await _fiscal.refresh(silent: true);
@@ -206,8 +211,18 @@ class PosWorkflowCoordinator extends ChangeNotifier {
     }
 
     var document = _fiscal.documentForOrder(orderId);
+    if (document == null && !profile.autoIssueOnPaid && !allowManualIssue) {
+      _setAttention(
+        'Vendita pagata. L’emissione automatica dello scontrino è disattivata per questa sede.',
+      );
+      return null;
+    }
+
     if (document == null) {
-      final issued = await _fiscal.issueOrder(orderId);
+      final issued = await _fiscal.issueOrder(
+        orderId,
+        lotteryCode: lotteryCode,
+      );
       if (!issued) {
         _setAttention(
           _fiscal.errorMessage ??
