@@ -686,9 +686,7 @@ class _OrderDetailPane extends StatelessWidget {
     if (document != null) {
       final issued = document.status == FiscalDocumentStatus.issued;
       return FilledButton.tonalIcon(
-        key: Key(
-          'fiscal-status-${document.status.wireValue.toLowerCase()}',
-        ),
+        key: Key('fiscal-status-${document.status.wireValue.toLowerCase()}'),
         onPressed: () => context.go('/fiscal'),
         icon: Icon(
           issued ? Icons.verified_outlined : Icons.receipt_long_outlined,

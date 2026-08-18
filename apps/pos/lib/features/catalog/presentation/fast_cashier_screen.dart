@@ -739,11 +739,7 @@ class _FastOrderLine extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 onTap: controller.busy
                     ? null
-                    : () => showEditOrderItemDialog(
-                        context,
-                        controller,
-                        item,
-                      ),
+                    : () => showEditOrderItemDialog(context, controller, item),
                 child: Center(
                   child: Text(
                     item.displayQuantity,
