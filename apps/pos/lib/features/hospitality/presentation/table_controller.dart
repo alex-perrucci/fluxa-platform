@@ -443,8 +443,7 @@ class TableController extends ChangeNotifier {
       _attachableOrders = pages
           .expand((page) => page.items)
           .where(
-            (order) =>
-                !attachedIds.contains(order.id) && seenIds.add(order.id),
+            (order) => !attachedIds.contains(order.id) && seenIds.add(order.id),
           )
           .toList(growable: false);
     } on BackendError catch (error) {
