@@ -40,6 +40,7 @@ class PosWorkflowCoordinator extends ChangeNotifier {
 
   final Set<String> _printingDocuments = <String>{};
   final Set<String> _handledCompletedCheckouts = <String>{};
+  final Map<String, bool> _observedCheckoutCompletion = <String, bool>{};
   final Map<String, Future<void>> _finalizations = <String, Future<void>>{};
 
   PosWorkflowStatus _status = PosWorkflowStatus.idle;
@@ -178,10 +179,20 @@ class PosWorkflowCoordinator extends ChangeNotifier {
 
   void _onCheckoutChanged() {
     final checkout = _checkout.checkout;
-    if (checkout?.isCompleted != true ||
-        !_handledCompletedCheckouts.add(checkout!.id)) {
+    if (checkout == null) {
       return;
     }
+
+    final completed = checkout.isCompleted;
+    final previous = _observedCheckoutCompletion[checkout.id];
+    _observedCheckoutCompletion[checkout.id] = completed;
+
+    if (previous != false ||
+        !completed ||
+        !_handledCompletedCheckouts.add(checkout.id)) {
+      return;
+    }
+
     unawaited(
       completePaidSale(
         locationId: checkout.locationId,
