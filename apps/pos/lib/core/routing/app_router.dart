@@ -4,14 +4,16 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/organization_selection_screen.dart';
-import '../../features/catalog/presentation/catalog_screen.dart';
+import '../../features/catalog/presentation/fast_cashier_screen.dart';
 import '../../features/device/presentation/operational_blocked_screen.dart';
 import '../../features/fiscal/presentation/fiscal_screen.dart';
 import '../../features/fiscal/presentation/fiscalize_screen.dart';
+import '../../features/hospitality/presentation/fast_tables_screen.dart';
 import '../../features/hospitality/presentation/kitchen_screen.dart';
 import '../../features/hospitality/presentation/tables_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/payments/presentation/checkout_screen.dart';
+import '../../features/payments/presentation/fast_checkout_screen.dart';
 import '../../features/payments/presentation/refunds_screen.dart';
 import '../../features/printing/presentation/printer_setup_screen.dart';
 import '../../features/printing/presentation/printing_screen.dart';
@@ -50,7 +52,8 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
     }
 
     final allowed = _allowedPaths(authController);
-    if (_isShellPath(location) && !allowed.contains(location)) {
+    final shellRoot = _shellRoot(location);
+    if (shellRoot != null && !allowed.contains(shellRoot)) {
       return _operatorHome(authController);
     }
     return null;
@@ -81,6 +84,13 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
     ),
     GoRoute(
       path: '/checkout/:orderId',
+      builder: (context, state) => FastCheckoutScreen(
+        orderId: state.pathParameters['orderId']!,
+        quickMethod: state.uri.queryParameters['quick'],
+      ),
+    ),
+    GoRoute(
+      path: '/checkout-advanced/:orderId',
       builder: (context, state) =>
           CheckoutScreen(orderId: state.pathParameters['orderId']!),
     ),
@@ -91,7 +101,7 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/home',
-              builder: (context, state) => const CatalogScreen(),
+              builder: (context, state) => const FastCashierScreen(),
             ),
           ],
         ),
@@ -99,7 +109,13 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/tables',
-              builder: (context, state) => const TablesScreen(),
+              builder: (context, state) => const FastTablesScreen(),
+              routes: [
+                GoRoute(
+                  path: 'manage',
+                  builder: (context, state) => const TablesScreen(),
+                ),
+              ],
             ),
           ],
         ),
@@ -199,13 +215,21 @@ String _operatorHome(AuthController controller) {
   return priority.firstWhere(allowed.contains, orElse: () => '/settings');
 }
 
-bool _isShellPath(String location) => const {
-  '/home',
-  '/tables',
-  '/orders',
-  '/refunds',
-  '/kitchen',
-  '/printing',
-  '/fiscal',
-  '/settings',
-}.contains(location);
+String? _shellRoot(String location) {
+  const roots = {
+    '/home',
+    '/tables',
+    '/orders',
+    '/refunds',
+    '/kitchen',
+    '/printing',
+    '/fiscal',
+    '/settings',
+  };
+  for (final root in roots) {
+    if (location == root || location.startsWith('$root/')) {
+      return root;
+    }
+  }
+  return null;
+}
