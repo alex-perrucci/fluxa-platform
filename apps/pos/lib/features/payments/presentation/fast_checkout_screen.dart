@@ -422,9 +422,7 @@ class _FastCheckoutView extends StatelessWidget {
                           ? null
                           : () => context.push('/checkout-advanced/$orderId'),
                       icon: const Icon(Icons.tune),
-                      label: const Text(
-                        'Importo diverso / pagamento parziale',
-                      ),
+                      label: const Text('Importo diverso / pagamento parziale'),
                     ),
                   ],
                 ],

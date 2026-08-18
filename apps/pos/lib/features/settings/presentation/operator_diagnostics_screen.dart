@@ -119,7 +119,9 @@ class _OperatorDiagnosticsScreenState
         ),
         const SizedBox(height: 8),
         TextButton.icon(
-          onPressed: auth.busy ? null : authController.refreshOperationalContext,
+          onPressed: auth.busy
+              ? null
+              : authController.refreshOperationalContext,
           icon: const Icon(Icons.sync),
           label: const Text('Ricarica configurazione della postazione'),
         ),

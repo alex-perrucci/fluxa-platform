@@ -184,7 +184,9 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
                         height: 72,
                         child: FilledButton.icon(
                           key: const Key('quick-payment-card'),
-                          onPressed: checkoutController.busy ? null : _startCard,
+                          onPressed: checkoutController.busy
+                              ? null
+                              : _startCard,
                           icon: const Icon(Icons.credit_card),
                           label: const Text('CARTA'),
                         ),
@@ -488,7 +490,9 @@ Future<int?> _showTenderedDialog(
             const SizedBox(height: 12),
             TextField(
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               onChanged: (value) => raw = value,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.euro),
