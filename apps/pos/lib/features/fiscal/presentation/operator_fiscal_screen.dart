@@ -57,6 +57,7 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
     final allGood =
         profileReady &&
         problems.isEmpty &&
+        pending.isEmpty &&
         missing.isEmpty &&
         fiscal.errorMessage == null;
 
@@ -156,7 +157,10 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
   }
 
   void _scheduleLoad(String locationId, FiscalController fiscal) {
-    if (_scheduledLocationId == locationId && fiscal.locationId == locationId) {
+    if (_scheduledLocationId == locationId &&
+        fiscal.locationId == locationId &&
+        fiscal.statusFilter == null &&
+        fiscal.typeFilter == null) {
       return;
     }
     _scheduledLocationId = locationId;
