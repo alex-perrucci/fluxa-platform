@@ -162,6 +162,39 @@ class TableController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshOperationalState() async {
+    final currentLocationId = _locationId;
+    if (currentLocationId == null || _busy) {
+      return;
+    }
+
+    await refreshFloor();
+    if (_locationId != currentLocationId) {
+      return;
+    }
+
+    final table = selectedTable;
+    final sessionId = table?.session?.id;
+    if (sessionId == null) {
+      if (_selectedSession != null) {
+        _selectedSession = null;
+        _attachableOrders = const [];
+        notifyListeners();
+      }
+      return;
+    }
+
+    try {
+      final session = await _hospitality.getTableSession(sessionId);
+      if (_locationId == currentLocationId) {
+        _acceptSession(session);
+        notifyListeners();
+      }
+    } catch (_) {
+      // The floor remains usable; session detail can be retried on selection.
+    }
+  }
+
   void selectArea(String? areaId) {
     if (_selectedAreaId == areaId) {
       return;
@@ -229,6 +262,57 @@ class TableController extends ChangeNotifier {
     } catch (_) {
       _errorMessage = 'Impossibile aprire il tavolo.';
       return false;
+    } finally {
+      _finishBusy();
+    }
+  }
+
+  Future<OrderDetail?> openSessionAndCreateOrder({
+    required DiningTableFloor table,
+    required int guestCount,
+    String? note,
+  }) async {
+    final currentLocationId = _locationId;
+    if (_busy || currentLocationId == null) {
+      return null;
+    }
+    _setBusy();
+    try {
+      final session = await _hospitality.openTableSession(
+        clientSessionId: UuidV4.generate(),
+        tableId: table.id,
+        guestCount: guestCount,
+        note: _normalize(note),
+      );
+      _acceptSession(session);
+
+      final order = await _orders.createOrder(
+        clientOrderId: UuidV4.generate(),
+        locationId: currentLocationId,
+        serviceMode: OrderServiceMode.table,
+        customerNote: 'Tavolo ${table.code}',
+      );
+      final updated = await _hospitality.attachOrder(
+        sessionId: session.id,
+        mutationId: UuidV4.generate(),
+        expectedVersion: session.version,
+        orderId: order.header.id,
+      );
+      _acceptSession(updated);
+      _noticeMessage =
+          'Tavolo ${table.code} aperto con ordine ${order.header.number}.';
+      unawaited(_refreshFloorSilently(notifyOnSuccess: true));
+      return order;
+    } on BackendError catch (error) {
+      await _handleSessionError(error);
+      return null;
+    } on FormatException {
+      _errorMessage =
+          'Il backend ha restituito dati tavolo o ordine non validi.';
+      return null;
+    } catch (_) {
+      _errorMessage = 'Impossibile aprire il tavolo e creare l’ordine.';
+      return null;
     } finally {
       _finishBusy();
     }
@@ -355,12 +439,12 @@ class TableController extends ChangeNotifier {
         ),
       ]);
       final attachedIds = session.orders.map((order) => order.id).toSet();
+      final seenIds = <String>{};
       _attachableOrders = pages
           .expand((page) => page.items)
           .where(
             (order) =>
-                order.serviceMode == OrderServiceMode.table &&
-                !attachedIds.contains(order.id),
+                !attachedIds.contains(order.id) && seenIds.add(order.id),
           )
           .toList(growable: false);
     } on BackendError catch (error) {
@@ -391,7 +475,9 @@ class TableController extends ChangeNotifier {
       _attachableOrders = _attachableOrders
           .where((item) => item.id != order.id)
           .toList(growable: false);
-      _noticeMessage = 'Ordine ${order.number} collegato al tavolo.';
+      _noticeMessage = order.serviceMode == OrderServiceMode.table
+          ? 'Ordine ${order.number} collegato al tavolo.'
+          : 'Ordine ${order.number} convertito in Tavolo e collegato.';
       unawaited(_refreshFloorSilently(notifyOnSuccess: true));
       return true;
     } on BackendError catch (error) {
