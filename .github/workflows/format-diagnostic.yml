@@ -1,0 +1,39 @@
+name: POS format diagnostic
+
+on:
+  push:
+    branches:
+      - agent/pos-fast-cashier-flow
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.32.5
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Print exact formatter diff
+        shell: bash
+        run: |
+          dart format \
+            lib/features/catalog/presentation/fast_cashier_screen.dart \
+            lib/features/hospitality/presentation/fast_tables_screen.dart \
+            lib/features/payments/presentation/fast_checkout_screen.dart
+          git diff -- \
+            lib/features/catalog/presentation/fast_cashier_screen.dart \
+            lib/features/hospitality/presentation/fast_tables_screen.dart \
+            lib/features/payments/presentation/fast_checkout_screen.dart
+          exit 1
