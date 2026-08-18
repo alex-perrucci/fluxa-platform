@@ -7,6 +7,7 @@ import '../../../core/widgets/async_states.dart';
 import '../../fiscal/domain/fiscal_models.dart';
 import '../../fiscal/presentation/fiscal_controller.dart';
 import '../../fiscal/presentation/fiscal_screen.dart';
+import '../../payments/presentation/quick_payment_sheet.dart';
 import '../domain/order_models.dart';
 import 'order_controller.dart';
 
@@ -218,7 +219,13 @@ class _OperatorOrdersScreenState extends ConsumerState<OperatorOrdersScreen> {
       return;
     }
     if (order.status == OrderStatus.awaitingPayment) {
-      context.push('/checkout/${order.id}');
+      final detail = orders.activeOrder;
+      if (detail == null) return;
+      final completed = await showQuickPaymentSheet(context, order: detail);
+      if (completed && context.mounted) {
+        orders.discardCurrentView();
+        context.go('/home');
+      }
       return;
     }
     if (order.status == OrderStatus.paid) {
