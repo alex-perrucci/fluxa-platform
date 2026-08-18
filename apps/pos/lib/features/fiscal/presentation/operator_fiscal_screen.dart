@@ -7,6 +7,7 @@ import '../../../core/widgets/async_states.dart';
 import '../../orders/domain/order_models.dart';
 import '../domain/fiscal_models.dart';
 import 'fiscal_controller.dart';
+import 'fiscal_screen.dart';
 
 class OperatorFiscalScreen extends ConsumerStatefulWidget {
   const OperatorFiscalScreen({super.key});
@@ -177,9 +178,15 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
   }
 
   Future<void> _recover(String locationId, OrderHeader order) async {
+    final lotteryCode = await showLotteryCodeDialog(context, order.number);
+    if (lotteryCode == null || !mounted) return;
     await ref
         .read(posWorkflowCoordinatorProvider)
-        .recoverFiscalDocument(locationId: locationId, orderId: order.id);
+        .recoverFiscalDocument(
+          locationId: locationId,
+          orderId: order.id,
+          lotteryCode: lotteryCode,
+        );
     if (!mounted) return;
     await ref.read(fiscalControllerProvider).refresh(silent: true);
   }
