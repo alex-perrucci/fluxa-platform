@@ -54,6 +54,23 @@ void main() {
     expect(controller.errorMessage, contains('altro dispositivo'));
   });
 
+  test('cancels the active order with the authoritative version', () async {
+    final gateway = _FakeOrdersGateway();
+    final controller = OrderController(gateway);
+    await controller.bindLocation('location-1');
+    expect(await controller.selectOrder('order-1'), isTrue);
+
+    final cancelled = await controller.cancelActiveOrder(
+      reason: 'Cliente ha cambiato idea',
+    );
+
+    expect(cancelled, isTrue);
+    expect(gateway.cancelCalls, 1);
+    expect(gateway.cancelReason, 'Cliente ha cambiato idea');
+    expect(controller.activeOrder?.header.status, OrderStatus.cancelled);
+    expect(controller.noticeMessage, contains('annullato'));
+  });
+
   test('clears draft and active order when the location changes', () async {
     final gateway = _FakeOrdersGateway();
     final controller = OrderController(gateway);
@@ -73,6 +90,8 @@ class _FakeOrdersGateway implements OrdersGateway {
   BackendError? updateError;
   int createCalls = 0;
   int addCalls = 0;
+  int cancelCalls = 0;
+  String? cancelReason;
 
   @override
   Future<OrderDetail> addItem({
@@ -103,6 +122,23 @@ class _FakeOrdersGateway implements OrdersGateway {
     String? description,
     String? note,
   }) async => current;
+
+  @override
+  Future<OrderDetail> cancelOrder({
+    required String orderId,
+    required String mutationId,
+    required int expectedVersion,
+    String? reason,
+  }) async {
+    cancelCalls += 1;
+    cancelReason = reason;
+    current = _detail(
+      version: expectedVersion + 1,
+      status: OrderStatus.cancelled,
+      items: current.items,
+    );
+    return current;
+  }
 
   @override
   Future<OrderDetail> createOrder({
@@ -250,8 +286,10 @@ OrderDetail _detail({
       netTotalCents: subtotal,
       taxTotalCents: 0,
       heldAt: status == OrderStatus.held ? DateTime.utc(2026, 7, 21) : null,
-      cancelledAt: null,
-      cancelReason: null,
+      cancelledAt: status == OrderStatus.cancelled
+          ? DateTime.utc(2026, 7, 21, 12)
+          : null,
+      cancelReason: status == OrderStatus.cancelled ? 'Annullato' : null,
       createdAt: DateTime.utc(2026, 7, 21),
       updatedAt: DateTime.utc(2026, 7, 21),
     ),
