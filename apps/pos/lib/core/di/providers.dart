@@ -173,6 +173,7 @@ final posWorkflowCoordinatorProvider =
     ChangeNotifierProvider<PosWorkflowCoordinator>((ref) {
       return PosWorkflowCoordinator(
         orders: ref.watch(orderControllerProvider),
+        checkout: ref.watch(checkoutControllerProvider),
         fiscal: ref.watch(fiscalControllerProvider),
         tables: ref.watch(tableControllerProvider),
         printing: ref.watch(printingControllerProvider),
