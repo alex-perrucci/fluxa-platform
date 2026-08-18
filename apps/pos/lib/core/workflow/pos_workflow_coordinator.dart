@@ -9,6 +9,7 @@ import '../../features/fiscal/presentation/fiscal_controller.dart';
 import '../../features/hospitality/presentation/table_controller.dart';
 import '../../features/orders/domain/order_models.dart';
 import '../../features/orders/presentation/order_controller.dart';
+import '../../features/payments/presentation/checkout_controller.dart';
 import '../../features/printing/presentation/printing_controller.dart';
 
 enum PosWorkflowStatus { idle, working, ready, attention }
@@ -16,24 +17,29 @@ enum PosWorkflowStatus { idle, working, ready, attention }
 class PosWorkflowCoordinator extends ChangeNotifier {
   PosWorkflowCoordinator({
     required OrderController orders,
+    required CheckoutController checkout,
     required FiscalController fiscal,
     required TableController tables,
     required PrintingController printing,
     required FiscalGateway fiscalGateway,
   }) : _orders = orders,
+       _checkout = checkout,
        _fiscal = fiscal,
        _tables = tables,
        _printing = printing,
-       _fiscalGateway = fiscalGateway;
+       _fiscalGateway = fiscalGateway {
+    _checkout.addListener(_onCheckoutChanged);
+  }
 
   final OrderController _orders;
+  final CheckoutController _checkout;
   final FiscalController _fiscal;
   final TableController _tables;
   final PrintingController _printing;
   final FiscalGateway _fiscalGateway;
 
   final Set<String> _printingDocuments = <String>{};
-  final Set<String> _finalizingOrders = <String>{};
+  final Map<String, Future<void>> _finalizations = <String, Future<void>>{};
 
   PosWorkflowStatus _status = PosWorkflowStatus.idle;
   String? _message;
@@ -72,10 +78,30 @@ class PosWorkflowCoordinator extends ChangeNotifier {
     required String locationId,
     required String orderId,
   }) async {
-    if (!_finalizingOrders.add(orderId)) {
+    final existing = _finalizations[orderId];
+    if (existing != null) {
+      await existing;
       return;
     }
 
+    final future = _completePaidSale(
+      locationId: locationId,
+      orderId: orderId,
+    );
+    _finalizations[orderId] = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_finalizations[orderId], future)) {
+        _finalizations.remove(orderId);
+      }
+    }
+  }
+
+  Future<void> _completePaidSale({
+    required String locationId,
+    required String orderId,
+  }) async {
     _setStatus(PosWorkflowStatus.working, 'Chiusura vendita…');
     try {
       if (_orders.locationId != locationId) {
@@ -119,8 +145,6 @@ class PosWorkflowCoordinator extends ChangeNotifier {
       _setAttention(
         'Pagamento completato. Alcune operazioni automatiche sono da controllare.',
       );
-    } finally {
-      _finalizingOrders.remove(orderId);
     }
   }
 
@@ -149,6 +173,19 @@ class PosWorkflowCoordinator extends ChangeNotifier {
     _status = PosWorkflowStatus.idle;
     _message = null;
     notifyListeners();
+  }
+
+  void _onCheckoutChanged() {
+    final checkout = _checkout.checkout;
+    if (checkout?.isCompleted != true) {
+      return;
+    }
+    unawaited(
+      completePaidSale(
+        locationId: checkout!.locationId,
+        orderId: checkout.orderId,
+      ),
+    );
   }
 
   Future<FiscalDocument?> _ensureFiscalDocument({
@@ -292,5 +329,11 @@ class PosWorkflowCoordinator extends ChangeNotifier {
     _status = status;
     _message = message;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _checkout.removeListener(_onCheckoutChanged);
+    super.dispose();
   }
 }
