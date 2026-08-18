@@ -200,13 +200,6 @@ class _FastCatalog extends StatelessWidget {
                   case 'order-options':
                     await showNewOrderDialog(context, orderController);
                     return;
-                  case 'manual':
-                    await showManualAmountKeypad(
-                      context,
-                      controller: orderController,
-                      currency: snapshot.currency,
-                    );
-                    return;
                   case 'hold':
                     await orderController.holdActiveOrder();
                     return;
@@ -224,14 +217,6 @@ class _FastCatalog extends StatelessWidget {
                   child: ListTile(
                     leading: Icon(Icons.tune),
                     title: Text('Ordine con opzioni'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'manual',
-                  child: ListTile(
-                    leading: Icon(Icons.dialpad),
-                    title: Text('Importo libero'),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
@@ -305,38 +290,63 @@ class _FastCatalog extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         Expanded(
-          child: products.isEmpty
-              ? const FluxaEmptyView(
-                  icon: Icons.search_off,
-                  title: 'Nessun prodotto',
-                  message: 'Prova un’altra ricerca o usa Importo libero.',
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns = switch (constraints.maxWidth) {
-                      >= 1200 => 5,
-                      >= 900 => 4,
-                      >= 620 => 3,
-                      >= 400 => 2,
-                      _ => 1,
-                    };
-                    return GridView.builder(
-                      key: const Key('fast-cashier-product-grid'),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: columns == 1 ? 2.8 : 1.35,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: products.isEmpty
+                    ? const FluxaEmptyView(
+                        icon: Icons.search_off,
+                        title: 'Nessun prodotto',
+                        message: 'Prova un’altra ricerca o usa Importo libero.',
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns = switch (constraints.maxWidth) {
+                            >= 1200 => 5,
+                            >= 900 => 4,
+                            >= 620 => 3,
+                            >= 400 => 2,
+                            _ => 1,
+                          };
+                          return GridView.builder(
+                            key: const Key('fast-cashier-product-grid'),
+                            padding: const EdgeInsets.only(bottom: 88),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                  childAspectRatio: columns == 1 ? 2.8 : 1.35,
+                                ),
+                            itemCount: products.length,
+                            itemBuilder: (context, index) => _FastProductTile(
+                              product: products[index],
+                              currency: snapshot.currency,
+                              controller: orderController,
+                            ),
+                          );
+                        },
                       ),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) => _FastProductTile(
-                        product: products[index],
-                        currency: snapshot.currency,
-                        controller: orderController,
-                      ),
-                    );
-                  },
+              ),
+              Positioned(
+                right: 4,
+                bottom: 4,
+                child: FloatingActionButton.extended(
+                  key: const Key('fast-cashier-manual-amount'),
+                  heroTag: 'fast-cashier-manual-amount',
+                  onPressed: orderController.busy
+                      ? null
+                      : () => showManualAmountKeypad(
+                          context,
+                          controller: orderController,
+                          currency: snapshot.currency,
+                        ),
+                  icon: const Icon(Icons.dialpad),
+                  label: const Text('Importo libero'),
                 ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -360,9 +370,29 @@ class _FastProductTile extends StatelessWidget {
       product.unit == CatalogProductUnit.each &&
       product.quantityScale == 0;
 
+  OrderItem? get _existingQuickItem {
+    if (!_canQuickAdd) {
+      return null;
+    }
+    final active = controller.activeOrder;
+    if (active == null) {
+      return null;
+    }
+    for (final item in active.items) {
+      if (item.productId == product.id &&
+          item.variantId == null &&
+          item.note == null &&
+          item.quantityScale == 0) {
+        return item;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final price = product.lowestPrice;
+    final existing = _existingQuickItem;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -374,14 +404,38 @@ class _FastProductTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    product.name,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          product.name,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                    ),
+                    if (existing != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '×${existing.displayQuantity}',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               if (product.variants.isNotEmpty)
@@ -415,24 +469,13 @@ class _FastProductTile extends StatelessWidget {
     }
 
     if (_canQuickAdd) {
-      if (active != null) {
-        OrderItem? existing;
-        for (final item in active.items) {
-          if (item.productId == product.id &&
-              item.variantId == null &&
-              item.note == null &&
-              item.quantityScale == 0) {
-            existing = item;
-            break;
-          }
-        }
-        if (existing != null) {
-          await controller.updateItem(
-            item: existing,
-            quantityAmount: existing.quantityAmount + 1,
-          );
-          return;
-        }
+      final existing = _existingQuickItem;
+      if (existing != null) {
+        await controller.updateItem(
+          item: existing,
+          quantityAmount: existing.quantityAmount + 1,
+        );
+        return;
       }
 
       if (!controller.hasCurrentOrder) {
@@ -525,53 +568,10 @@ class _FastOrderPanel extends StatelessWidget {
                           const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final item = order.items[index];
-                        return ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(item.displayName),
-                          subtitle: Text(
-                            '${item.displayQuantity} × ${formatOrderMoney(item.unitPriceCents, order.header.currency)}',
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                formatOrderMoney(
-                                  item.finalGrossCents,
-                                  order.header.currency,
-                                ),
-                              ),
-                              if (order.header.status == OrderStatus.open)
-                                PopupMenuButton<String>(
-                                  tooltip: 'Gestisci riga',
-                                  onSelected: (value) async {
-                                    if (value == 'edit') {
-                                      await showEditOrderItemDialog(
-                                        context,
-                                        controller,
-                                        item,
-                                      );
-                                    } else if (value == 'delete') {
-                                      await confirmDeleteOrderItem(
-                                        context,
-                                        controller,
-                                        item,
-                                      );
-                                    }
-                                  },
-                                  itemBuilder: (context) => const [
-                                    PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Modifica quantità / nota'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: Text('Rimuovi'),
-                                    ),
-                                  ],
-                                ),
-                            ],
-                          ),
+                        return _FastOrderLine(
+                          order: order,
+                          item: item,
+                          controller: controller,
                         );
                       },
                     ),
@@ -662,6 +662,128 @@ class _FastOrderPanel extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FastOrderLine extends StatelessWidget {
+  const _FastOrderLine({
+    required this.order,
+    required this.item,
+    required this.controller,
+  });
+
+  final OrderDetail order;
+  final OrderItem item;
+  final OrderController controller;
+
+  bool get _canStepQuantity =>
+      order.header.status == OrderStatus.open &&
+      item.quantityScale == 0 &&
+      item.unitSnapshot == CatalogProductUnit.each.wireValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final unitPrice = formatOrderMoney(
+      item.unitPriceCents,
+      order.header.currency,
+    );
+    final lineTotal = formatOrderMoney(
+      item.finalGrossCents,
+      order.header.currency,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.displayName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _canStepQuantity
+                      ? '$unitPrice cad. · $lineTotal'
+                      : '${item.displayQuantity} × $unitPrice · $lineTotal',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (_canStepQuantity) ...[
+            IconButton.filledTonal(
+              key: Key('fast-order-minus-${item.id}'),
+              tooltip: 'Riduci quantità',
+              onPressed: controller.busy || item.quantityAmount <= 1
+                  ? null
+                  : () => controller.updateItem(
+                      item: item,
+                      quantityAmount: item.quantityAmount - 1,
+                    ),
+              icon: const Icon(Icons.remove),
+            ),
+            SizedBox(
+              width: 46,
+              height: 44,
+              child: InkWell(
+                key: Key('fast-order-quantity-${item.id}'),
+                borderRadius: BorderRadius.circular(10),
+                onTap: controller.busy
+                    ? null
+                    : () => showEditOrderItemDialog(
+                        context,
+                        controller,
+                        item,
+                      ),
+                child: Center(
+                  child: Text(
+                    item.displayQuantity,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ),
+            ),
+            IconButton.filled(
+              key: Key('fast-order-plus-${item.id}'),
+              tooltip: 'Aumenta quantità',
+              onPressed: controller.busy
+                  ? null
+                  : () => controller.updateItem(
+                      item: item,
+                      quantityAmount: item.quantityAmount + 1,
+                    ),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+          if (order.header.status == OrderStatus.open)
+            PopupMenuButton<String>(
+              tooltip: 'Altre opzioni riga',
+              onSelected: (value) async {
+                if (value == 'edit') {
+                  await showEditOrderItemDialog(context, controller, item);
+                } else if (value == 'delete') {
+                  await confirmDeleteOrderItem(context, controller, item);
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Text('Modifica quantità / nota'),
+                ),
+                PopupMenuItem(value: 'delete', child: Text('Rimuovi')),
+              ],
+            ),
+        ],
       ),
     );
   }
