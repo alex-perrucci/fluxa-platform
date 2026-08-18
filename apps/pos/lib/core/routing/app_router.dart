@@ -25,6 +25,7 @@ import '../../features/printing/presentation/printing_screen.dart';
 import '../../features/settings/presentation/operator_diagnostics_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/async_states.dart';
+import 'advanced_mode_frame.dart';
 import 'app_shell.dart';
 import 'operator_navigation_policy.dart';
 
@@ -111,7 +112,11 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
               routes: [
                 GoRoute(
                   path: 'manage',
-                  builder: (context, state) => const FastCashierScreen(),
+                  builder: (context, state) => const AdvancedModeFrame(
+                    simplePath: '/home',
+                    label: 'Gestione cassa',
+                    child: FastCashierScreen(),
+                  ),
                 ),
               ],
             ),
@@ -125,7 +130,11 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
               routes: [
                 GoRoute(
                   path: 'manage',
-                  builder: (context, state) => const TablesScreen(),
+                  builder: (context, state) => const AdvancedModeFrame(
+                    simplePath: '/tables',
+                    label: 'Gestione tavoli',
+                    child: TablesScreen(),
+                  ),
                 ),
                 GoRoute(
                   path: 'legacy-fast',
@@ -143,7 +152,11 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
               routes: [
                 GoRoute(
                   path: 'manage',
-                  builder: (context, state) => const OrdersScreen(),
+                  builder: (context, state) => const AdvancedModeFrame(
+                    simplePath: '/orders',
+                    label: 'Dettaglio ordini',
+                    child: OrdersScreen(),
+                  ),
                 ),
               ],
             ),
@@ -173,7 +186,11 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
               routes: [
                 GoRoute(
                   path: 'manage',
-                  builder: (context, state) => const PrintingScreen(),
+                  builder: (context, state) => const AdvancedModeFrame(
+                    simplePath: '/printing',
+                    label: 'Gestione stampa',
+                    child: PrintingScreen(),
+                  ),
                 ),
               ],
             ),
@@ -187,7 +204,11 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
               routes: [
                 GoRoute(
                   path: 'manage',
-                  builder: (context, state) => const FiscalScreen(),
+                  builder: (context, state) => const AdvancedModeFrame(
+                    simplePath: '/fiscal',
+                    label: 'Gestione fiscale',
+                    child: FiscalScreen(),
+                  ),
                 ),
               ],
             ),
@@ -201,7 +222,11 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
               routes: [
                 GoRoute(
                   path: 'manage',
-                  builder: (context, state) => const SettingsScreen(),
+                  builder: (context, state) => const AdvancedModeFrame(
+                    simplePath: '/settings',
+                    label: 'Dettagli tecnici',
+                    child: SettingsScreen(),
+                  ),
                 ),
               ],
             ),
