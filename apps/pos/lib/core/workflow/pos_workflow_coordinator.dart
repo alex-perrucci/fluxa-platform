@@ -321,6 +321,8 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   ) async {
     if (_tables.locationId != locationId) {
       await _tables.bindLocation(locationId);
+    } else {
+      await _tables.refreshOperationalState();
     }
     if (_tables.busy) {
       _setAttention(
