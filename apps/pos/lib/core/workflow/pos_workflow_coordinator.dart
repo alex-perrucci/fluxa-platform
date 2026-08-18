@@ -39,6 +39,7 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   final FiscalGateway _fiscalGateway;
 
   final Set<String> _printingDocuments = <String>{};
+  final Set<String> _handledCompletedCheckouts = <String>{};
   final Map<String, Future<void>> _finalizations = <String, Future<void>>{};
 
   PosWorkflowStatus _status = PosWorkflowStatus.idle;
@@ -177,12 +178,13 @@ class PosWorkflowCoordinator extends ChangeNotifier {
 
   void _onCheckoutChanged() {
     final checkout = _checkout.checkout;
-    if (checkout?.isCompleted != true) {
+    if (checkout?.isCompleted != true ||
+        !_handledCompletedCheckouts.add(checkout!.id)) {
       return;
     }
     unawaited(
       completePaidSale(
-        locationId: checkout!.locationId,
+        locationId: checkout.locationId,
         orderId: checkout.orderId,
       ),
     );
@@ -315,7 +317,16 @@ class PosWorkflowCoordinator extends ChangeNotifier {
 
   Future<void> _refreshAfterSale(String locationId) async {
     try {
-      await synchronizeLocation(locationId);
+      await Future.wait([
+        _orders.refreshOrders(),
+        _tables.locationId == locationId
+            ? _tables.refreshOperationalState()
+            : _tables.bindLocation(locationId),
+        _fiscal.locationId == locationId
+            ? _fiscal.refresh(silent: true)
+            : _fiscal.bindLocation(locationId),
+        _printing.refresh(),
+      ]);
     } catch (_) {
       // The payment is already authoritative. Each section can refresh again.
     }
