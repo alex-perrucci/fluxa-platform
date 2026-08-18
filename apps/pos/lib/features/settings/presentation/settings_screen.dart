@@ -65,7 +65,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final config = ref.watch(appConfigProvider);
     final authController = ref.watch(authControllerProvider);
     final state = authController.state;
-    final session = state.session!;
+    final session = state.session;
+    if (session == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     final assignment = state.deviceAssignment;
     final location = assignment?.location;
     final canManagePrinters = {'OWNER', 'ADMIN', 'MANAGER'}.contains(session.role);
