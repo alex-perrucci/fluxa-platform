@@ -1,0 +1,442 @@
+name: Apply POS UX coherence pass
+
+on:
+  push:
+    branches:
+      - agent/pos-ux-coherence-pass
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/pos-ux-coherence-pass
+          fetch-depth: 0
+      - name: Patch POS UX
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              return text.replace(old, new, 1)
+
+          orders_path = Path('apps/pos/lib/features/orders/presentation/orders_screen.dart')
+          orders = orders_path.read_text()
+
+          orders = replace_once(
+              orders,
+              "import '../../device/domain/device_assignment_models.dart';\nimport '../../printing/presentation/printing_controller.dart';\nimport '../../hospitality/presentation/kitchen_controller.dart';",
+              "import '../../device/domain/device_assignment_models.dart';\nimport '../../fiscal/domain/fiscal_models.dart';\nimport '../../fiscal/presentation/fiscal_controller.dart';\nimport '../../hospitality/presentation/kitchen_controller.dart';\nimport '../../printing/presentation/printing_controller.dart';",
+              'orders imports',
+          )
+          orders = replace_once(
+              orders,
+              "  String? _scheduledLocationId;\n  String? _scheduledKitchenLocationId;",
+              "  String? _scheduledLocationId;\n  String? _scheduledKitchenLocationId;\n  String? _scheduledFiscalLocationId;\n  String? _fiscalSyncedLocationId;",
+              'orders state fields',
+          )
+          orders = replace_once(
+              orders,
+              "    final orderController = ref.read(orderControllerProvider);\n    final kitchenController = ref.watch(kitchenControllerProvider);\n    final printingController = ref.watch(printingControllerProvider);",
+              "    final orderController = ref.read(orderControllerProvider);\n    final kitchenController = ref.watch(kitchenControllerProvider);\n    final fiscalController = ref.read(fiscalControllerProvider);\n    final printingController = ref.watch(printingControllerProvider);",
+              'orders controllers',
+          )
+          orders = replace_once(
+              orders,
+              "    _scheduleBind(orderController, location.id);\n    _scheduleKitchenBind(kitchenController, location.id);",
+              "    _scheduleBind(orderController, location.id);\n    _scheduleKitchenBind(kitchenController, location.id);\n    _scheduleFiscalSync(fiscalController, location.id);",
+              'orders scheduling',
+          )
+          orders = replace_once(
+              orders,
+              "      controller: orderController,\n      kitchenController: kitchenController,\n      printingController: printingController,",
+              "      controller: orderController,\n      kitchenController: kitchenController,\n      fiscalController: fiscalController,\n      printingController: printingController,",
+              'orders view wiring',
+          )
+          orders = replace_once(
+              orders,
+              "  void _scheduleKitchenBind(KitchenController controller, String locationId) {\n    if (controller.locationId == locationId ||\n        _scheduledKitchenLocationId == locationId) {\n      return;\n    }\n    _scheduledKitchenLocationId = locationId;\n    WidgetsBinding.instance.addPostFrameCallback((_) async {\n      try {\n        await controller.bindLocation(locationId);\n      } finally {\n        if (mounted && _scheduledKitchenLocationId == locationId) {\n          setState(() => _scheduledKitchenLocationId = null);\n        }\n      }\n    });\n  }\n}",
+              "  void _scheduleKitchenBind(KitchenController controller, String locationId) {\n    if (controller.locationId == locationId ||\n        _scheduledKitchenLocationId == locationId) {\n      return;\n    }\n    _scheduledKitchenLocationId = locationId;\n    WidgetsBinding.instance.addPostFrameCallback((_) async {\n      try {\n        await controller.bindLocation(locationId);\n      } finally {\n        if (mounted && _scheduledKitchenLocationId == locationId) {\n          setState(() => _scheduledKitchenLocationId = null);\n        }\n      }\n    });\n  }\n\n  void _scheduleFiscalSync(FiscalController controller, String locationId) {\n    if (_fiscalSyncedLocationId == locationId ||\n        _scheduledFiscalLocationId == locationId) {\n      return;\n    }\n    _scheduledFiscalLocationId = locationId;\n    WidgetsBinding.instance.addPostFrameCallback((_) async {\n      try {\n        if (controller.locationId == locationId) {\n          await controller.refresh();\n        } else {\n          await controller.bindLocation(locationId);\n        }\n      } finally {\n        if (mounted && _scheduledFiscalLocationId == locationId) {\n          setState(() {\n            _scheduledFiscalLocationId = null;\n            _fiscalSyncedLocationId = locationId;\n          });\n        }\n      }\n    });\n  }\n}",
+              'fiscal sync method',
+          )
+          orders = replace_once(
+              orders,
+              "    required this.controller,\n    required this.kitchenController,\n    this.printingController,",
+              "    required this.controller,\n    required this.kitchenController,\n    this.fiscalController,\n    this.printingController,",
+              'orders view constructor',
+          )
+          orders = replace_once(
+              orders,
+              "  final OrderController controller;\n  final KitchenController kitchenController;\n  final PrintingController? printingController;",
+              "  final OrderController controller;\n  final KitchenController kitchenController;\n  final FiscalController? fiscalController;\n  final PrintingController? printingController;",
+              'orders view fields',
+          )
+          orders = replace_once(
+              orders,
+              "  Widget build(BuildContext context) => AnimatedBuilder(\n    animation: controller,",
+              "  Widget build(BuildContext context) => AnimatedBuilder(\n    animation: Listenable.merge([\n      controller,\n      if (fiscalController != null) fiscalController!,\n    ]),",
+              'orders view animation',
+          )
+          orders = replace_once(
+              orders,
+              "                  controller: controller,\n                  kitchenController: kitchenController,\n                  printingController: printingController,",
+              "                  controller: controller,\n                  kitchenController: kitchenController,\n                  fiscalController: fiscalController,\n                  printingController: printingController,",
+              'order detail wiring',
+          )
+          orders = replace_once(
+              orders,
+              "    required this.controller,\n    required this.kitchenController,\n    this.printingController,\n    required this.locationId,",
+              "    required this.controller,\n    required this.kitchenController,\n    this.fiscalController,\n    this.printingController,\n    required this.locationId,",
+              'order detail constructor',
+          )
+          orders = replace_once(
+              orders,
+              "  final OrderController controller;\n  final KitchenController kitchenController;\n  final PrintingController? printingController;\n  final String locationId;",
+              "  final OrderController controller;\n  final KitchenController kitchenController;\n  final FiscalController? fiscalController;\n  final PrintingController? printingController;\n  final String locationId;",
+              'order detail fields',
+          )
+          orders = replace_once(
+              orders,
+              "        if (order.header.status == OrderStatus.paid)\n          FilledButton.tonalIcon(\n            key: const Key('fiscalize-paid-order-button'),\n            onPressed: controller.busy\n                ? null\n                : () => context.push('/fiscalize/${order.header.id}'),\n            icon: const Icon(Icons.receipt_long_outlined),\n            label: const Text('Fiscalizza'),\n          ),",
+              "        if (order.header.status == OrderStatus.paid)\n          _buildFiscalAction(context, order),",
+              'paid fiscal action',
+          )
+          orders = replace_once(
+              orders,
+              "      ],\n    ),\n  );\n}\n\nclass _StatusChip extends StatelessWidget {",
+              "      ],\n    ),\n  );\n\n  Widget _buildFiscalAction(BuildContext context, OrderDetail order) {\n    final fiscal = fiscalController;\n    if (fiscal == null) {\n      return FilledButton.tonalIcon(\n        key: const Key('fiscalize-paid-order-button'),\n        onPressed: controller.busy\n            ? null\n            : () => context.push('/fiscalize/${order.header.id}'),\n        icon: const Icon(Icons.receipt_long_outlined),\n        label: const Text('Fiscalizza'),\n      );\n    }\n\n    final sameLocation = fiscal.locationId == locationId;\n    final document = sameLocation\n        ? fiscal.documentForOrder(order.header.id)\n        : null;\n\n    if (document != null) {\n      final issued = document.status == FiscalDocumentStatus.issued;\n      return FilledButton.tonalIcon(\n        key: Key(\n          'fiscal-status-${document.status.wireValue.toLowerCase()}',\n        ),\n        onPressed: () => context.go('/fiscal'),\n        icon: Icon(\n          issued ? Icons.verified_outlined : Icons.receipt_long_outlined,\n        ),\n        label: Text(\n          issued\n              ? 'Fiscale emesso'\n              : 'Fiscale ${document.status.label.toLowerCase()}',\n        ),\n      );\n    }\n\n    if (!sameLocation ||\n        fiscal.status == FiscalLoadStatus.idle ||\n        fiscal.status == FiscalLoadStatus.loading) {\n      return const FilledButton.tonalIcon(\n        onPressed: null,\n        icon: SizedBox.square(\n          dimension: 16,\n          child: CircularProgressIndicator(strokeWidth: 2),\n        ),\n        label: Text('Verifica fiscale…'),\n      );\n    }\n\n    if (fiscal.status == FiscalLoadStatus.failure) {\n      return OutlinedButton.icon(\n        key: const Key('open-fiscal-status-button'),\n        onPressed: () => context.go('/fiscal'),\n        icon: const Icon(Icons.sync_problem_outlined),\n        label: const Text('Controlla stato fiscale'),\n      );\n    }\n\n    return FilledButton.tonalIcon(\n      key: const Key('fiscalize-paid-order-button'),\n      onPressed: controller.busy\n          ? null\n          : () => context.push('/fiscalize/${order.header.id}'),\n      icon: const Icon(Icons.receipt_long_outlined),\n      label: const Text('Fiscalizza'),\n    );\n  }\n}\n\nclass _StatusChip extends StatelessWidget {",
+              'fiscal action helper',
+          )
+          orders_path.write_text(orders)
+
+          cashier_path = Path('apps/pos/lib/features/catalog/presentation/fast_cashier_screen.dart')
+          cashier = cashier_path.read_text()
+
+          cashier = replace_once(
+              cashier,
+              "                  case 'manual':\n                    await showManualAmountKeypad(\n                      context,\n                      controller: orderController,\n                      currency: snapshot.currency,\n                    );\n                    return;\n",
+              "",
+              'manual menu case',
+          )
+          cashier = replace_once(
+              cashier,
+              "                const PopupMenuItem(\n                  value: 'manual',\n                  child: ListTile(\n                    leading: Icon(Icons.dialpad),\n                    title: Text('Importo libero'),\n                    contentPadding: EdgeInsets.zero,\n                  ),\n                ),\n",
+              "",
+              'manual menu item',
+          )
+          old_grid = """        Expanded(
+          child: products.isEmpty
+              ? const FluxaEmptyView(
+                  icon: Icons.search_off,
+                  title: 'Nessun prodotto',
+                  message: 'Prova un’altra ricerca o usa Importo libero.',
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = switch (constraints.maxWidth) {
+                      >= 1200 => 5,
+                      >= 900 => 4,
+                      >= 620 => 3,
+                      >= 400 => 2,
+                      _ => 1,
+                    };
+                    return GridView.builder(
+                      key: const Key('fast-cashier-product-grid'),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: columns == 1 ? 2.8 : 1.35,
+                      ),
+                      itemCount: products.length,
+                      itemBuilder: (context, index) => _FastProductTile(
+                        product: products[index],
+                        currency: snapshot.currency,
+                        controller: orderController,
+                      ),
+                    );
+                  },
+                ),
+        ),"""
+          new_grid = """        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: products.isEmpty
+                    ? const FluxaEmptyView(
+                        icon: Icons.search_off,
+                        title: 'Nessun prodotto',
+                        message: 'Prova un’altra ricerca o usa Importo libero.',
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns = switch (constraints.maxWidth) {
+                            >= 1200 => 5,
+                            >= 900 => 4,
+                            >= 620 => 3,
+                            >= 400 => 2,
+                            _ => 1,
+                          };
+                          return GridView.builder(
+                            key: const Key('fast-cashier-product-grid'),
+                            padding: const EdgeInsets.only(bottom: 88),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                  childAspectRatio: columns == 1 ? 2.8 : 1.35,
+                                ),
+                            itemCount: products.length,
+                            itemBuilder: (context, index) => _FastProductTile(
+                              product: products[index],
+                              currency: snapshot.currency,
+                              controller: orderController,
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              Positioned(
+                right: 4,
+                bottom: 4,
+                child: FloatingActionButton.extended(
+                  key: const Key('fast-cashier-manual-amount'),
+                  heroTag: 'fast-cashier-manual-amount',
+                  onPressed: orderController.busy
+                      ? null
+                      : () => showManualAmountKeypad(
+                          context,
+                          controller: orderController,
+                          currency: snapshot.currency,
+                        ),
+                  icon: const Icon(Icons.dialpad),
+                  label: const Text('Importo libero'),
+                ),
+              ),
+            ],
+          ),
+        ),"""
+          cashier = replace_once(cashier, old_grid, new_grid, 'catalog grid and manual FAB')
+
+          cashier = replace_once(
+              cashier,
+              "  @override\n  Widget build(BuildContext context) {\n    final price = product.lowestPrice;\n    return Card(\n      clipBehavior: Clip.antiAlias,\n      child: InkWell(\n        key: Key('fast-product-${product.id}'),\n        onTap: controller.busy ? null : () => _add(context),\n        child: Padding(\n          padding: const EdgeInsets.all(14),\n          child: Column(\n            crossAxisAlignment: CrossAxisAlignment.start,\n            children: [\n              Expanded(\n                child: Align(\n                  alignment: Alignment.centerLeft,\n                  child: Text(\n                    product.name,\n                    maxLines: 3,\n                    overflow: TextOverflow.ellipsis,\n                    style: Theme.of(context).textTheme.titleMedium,\n                  ),\n                ),\n              ),",
+              "  OrderItem? get _existingQuickItem {\n    if (!_canQuickAdd) {\n      return null;\n    }\n    final active = controller.activeOrder;\n    if (active == null) {\n      return null;\n    }\n    for (final item in active.items) {\n      if (item.productId == product.id &&\n          item.variantId == null &&\n          item.note == null &&\n          item.quantityScale == 0) {\n        return item;\n      }\n    }\n    return null;\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    final price = product.lowestPrice;\n    final existing = _existingQuickItem;\n    return Card(\n      clipBehavior: Clip.antiAlias,\n      child: InkWell(\n        key: Key('fast-product-${product.id}'),\n        onTap: controller.busy ? null : () => _add(context),\n        child: Padding(\n          padding: const EdgeInsets.all(14),\n          child: Column(\n            crossAxisAlignment: CrossAxisAlignment.start,\n            children: [\n              Expanded(\n                child: Row(\n                  crossAxisAlignment: CrossAxisAlignment.start,\n                  children: [\n                    Expanded(\n                      child: Align(\n                        alignment: Alignment.centerLeft,\n                        child: Text(\n                          product.name,\n                          maxLines: 3,\n                          overflow: TextOverflow.ellipsis,\n                          style: Theme.of(context).textTheme.titleMedium,\n                        ),\n                      ),\n                    ),\n                    if (existing != null) ...[\n                      const SizedBox(width: 8),\n                      Container(\n                        padding: const EdgeInsets.symmetric(\n                          horizontal: 8,\n                          vertical: 4,\n                        ),\n                        decoration: BoxDecoration(\n                          color: Theme.of(context).colorScheme.primaryContainer,\n                          borderRadius: BorderRadius.circular(999),\n                        ),\n                        child: Text(\n                          '×${existing.displayQuantity}',\n                          style: Theme.of(context).textTheme.labelLarge,\n                        ),\n                      ),\n                    ],\n                  ],\n                ),\n              ),",
+              'product quantity badge',
+          )
+          cashier = replace_once(
+              cashier,
+              "    if (_canQuickAdd) {\n      if (active != null) {\n        OrderItem? existing;\n        for (final item in active.items) {\n          if (item.productId == product.id &&\n              item.variantId == null &&\n              item.note == null &&\n              item.quantityScale == 0) {\n            existing = item;\n            break;\n          }\n        }\n        if (existing != null) {\n          await controller.updateItem(\n            item: existing,\n            quantityAmount: existing.quantityAmount + 1,\n          );\n          return;\n        }\n      }",
+              "    if (_canQuickAdd) {\n      final existing = _existingQuickItem;\n      if (existing != null) {\n        await controller.updateItem(\n          item: existing,\n          quantityAmount: existing.quantityAmount + 1,\n        );\n        return;\n      }",
+              'reuse quick item lookup',
+          )
+          old_line = """                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(item.displayName),
+                          subtitle: Text(
+                            '${item.displayQuantity} × ${formatOrderMoney(item.unitPriceCents, order.header.currency)}',
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                formatOrderMoney(
+                                  item.finalGrossCents,
+                                  order.header.currency,
+                                ),
+                              ),
+                              if (order.header.status == OrderStatus.open)
+                                PopupMenuButton<String>(
+                                  tooltip: 'Gestisci riga',
+                                  onSelected: (value) async {
+                                    if (value == 'edit') {
+                                      await showEditOrderItemDialog(
+                                        context,
+                                        controller,
+                                        item,
+                                      );
+                                    } else if (value == 'delete') {
+                                      await confirmDeleteOrderItem(
+                                        context,
+                                        controller,
+                                        item,
+                                      );
+                                    }
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(
+                                      value: 'edit',
+                                      child: Text('Modifica quantità / nota'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text('Rimuovi'),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        );"""
+          new_line = """                        return _FastOrderLine(
+                          order: order,
+                          item: item,
+                          controller: controller,
+                        );"""
+          cashier = replace_once(cashier, old_line, new_line, 'fast order line')
+
+          cashier = replace_once(
+              cashier,
+              "}\n\nclass _InlineMessage extends StatelessWidget {",
+              """}
+
+class _FastOrderLine extends StatelessWidget {
+  const _FastOrderLine({
+    required this.order,
+    required this.item,
+    required this.controller,
+  });
+
+  final OrderDetail order;
+  final OrderItem item;
+  final OrderController controller;
+
+  bool get _canStepQuantity =>
+      order.header.status == OrderStatus.open &&
+      item.quantityScale == 0 &&
+      item.unitSnapshot == CatalogProductUnit.each.wireValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final unitPrice = formatOrderMoney(
+      item.unitPriceCents,
+      order.header.currency,
+    );
+    final lineTotal = formatOrderMoney(
+      item.finalGrossCents,
+      order.header.currency,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.displayName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _canStepQuantity
+                      ? '$unitPrice cad. · $lineTotal'
+                      : '${item.displayQuantity} × $unitPrice · $lineTotal',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (_canStepQuantity) ...[
+            IconButton.filledTonal(
+              key: Key('fast-order-minus-${item.id}'),
+              tooltip: 'Riduci quantità',
+              onPressed: controller.busy || item.quantityAmount <= 1
+                  ? null
+                  : () => controller.updateItem(
+                      item: item,
+                      quantityAmount: item.quantityAmount - 1,
+                    ),
+              icon: const Icon(Icons.remove),
+            ),
+            SizedBox(
+              width: 46,
+              child: TextButton(
+                key: Key('fast-order-quantity-${item.id}'),
+                onPressed: controller.busy
+                    ? null
+                    : () => showEditOrderItemDialog(
+                        context,
+                        controller,
+                        item,
+                      ),
+                child: Text(
+                  item.displayQuantity,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ),
+            IconButton.filled(
+              key: Key('fast-order-plus-${item.id}'),
+              tooltip: 'Aumenta quantità',
+              onPressed: controller.busy
+                  ? null
+                  : () => controller.updateItem(
+                      item: item,
+                      quantityAmount: item.quantityAmount + 1,
+                    ),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+          if (order.header.status == OrderStatus.open)
+            PopupMenuButton<String>(
+              tooltip: 'Altre opzioni riga',
+              onSelected: (value) async {
+                if (value == 'edit') {
+                  await showEditOrderItemDialog(context, controller, item);
+                } else if (value == 'delete') {
+                  await confirmDeleteOrderItem(context, controller, item);
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Text('Modifica quantità / nota'),
+                ),
+                PopupMenuItem(value: 'delete', child: Text('Rimuovi')),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineMessage extends StatelessWidget {""",
+              'quantity stepper widget',
+          )
+          cashier_path.write_text(cashier)
+          PY
+
+          cd apps/pos
+          dart format \
+            lib/features/orders/presentation/orders_screen.dart \
+            lib/features/catalog/presentation/fast_cashier_screen.dart
+          cd ../..
+
+          rm .github/workflows/apply-pos-ux-coherence.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/pos/lib/features/orders/presentation/orders_screen.dart \
+            apps/pos/lib/features/catalog/presentation/fast_cashier_screen.dart \
+            .github/workflows/apply-pos-ux-coherence.yml
+          git commit -m "feat(pos): simplify cashier and sync fiscal status"
+          git push origin HEAD:agent/pos-ux-coherence-pass
