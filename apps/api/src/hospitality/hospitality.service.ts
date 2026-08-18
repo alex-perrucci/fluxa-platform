@@ -531,18 +531,31 @@ export class HospitalityService {
             code: 'ORDER_NOT_FOUND',
             message: 'Ordine non trovato nella sede corrente.',
           });
-        if (row.serviceMode !== 'TABLE')
-          throw new ConflictException({
-            code: 'ORDER_NOT_TABLE_SERVICE',
-            message:
-              'Solo gli ordini TABLE possono essere collegati a un tavolo.',
-          });
         if (!['OPEN', 'HELD'].includes(row.status))
           throw new ConflictException({
             code: 'ORDER_NOT_ATTACHABLE',
             message:
               'Lo stato dell’ordine non consente il collegamento al tavolo.',
           });
+        if (row.serviceMode !== 'TABLE') {
+          await client.query(
+            `UPDATE orders SET service_mode='TABLE',version=version+1,updated_at=NOW() WHERE id=$1 AND organization_id=$2`,
+            [dto.orderId, session.organizationId],
+          );
+          await this.audit(
+            client,
+            session.organizationId,
+            auth.userId,
+            'order.service_mode.changed',
+            'order',
+            dto.orderId,
+            {
+              from: row.serviceMode,
+              to: 'TABLE',
+              reason: 'table_session.attach',
+            },
+          );
+        }
         try {
           await client.query(
             `INSERT INTO table_session_orders (id,organization_id,table_session_id,order_id,attached_by_user_id) VALUES ($1,$2,$3,$4,$5)`,

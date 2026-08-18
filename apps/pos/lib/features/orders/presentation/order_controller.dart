@@ -158,6 +158,41 @@ class OrderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshOperationalState() async {
+    final currentLocationId = _locationId;
+    if (currentLocationId == null || _busy) {
+      return;
+    }
+
+    await refreshOrders();
+
+    final activeOrderId = _activeOrder?.header.id;
+    if (_locationId != currentLocationId || activeOrderId == null || _busy) {
+      return;
+    }
+
+    try {
+      final refreshed = await _gateway.getOrder(activeOrderId);
+      if (_locationId != currentLocationId ||
+          refreshed.header.locationId != currentLocationId) {
+        return;
+      }
+      if (_statusFilter != null && refreshed.header.status != _statusFilter) {
+        _activeOrder = null;
+      } else {
+        _activeOrder = refreshed;
+      }
+      notifyListeners();
+    } on BackendError catch (error) {
+      if (_locationId == currentLocationId && error.statusCode == 404) {
+        _activeOrder = null;
+        notifyListeners();
+      }
+    } catch (_) {
+      // The refreshed list remains usable; detail can be retried on demand.
+    }
+  }
+
   Future<void> setStatusFilter(OrderStatus? status) async {
     if (_statusFilter == status) {
       return;

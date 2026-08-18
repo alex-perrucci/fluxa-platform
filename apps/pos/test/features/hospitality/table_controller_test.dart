@@ -35,6 +35,49 @@ void main() {
     expect(hospitality.attachedOrderId, 'order-1');
   });
 
+  test('opens a table and creates its order in one workflow', () async {
+    final hospitality = FakeHospitalityGateway();
+    final orders = FakeOrdersGateway();
+    final controller = TableController(hospitality, orders);
+
+    await controller.bindLocation('location-1');
+    final table = controller.floor!.tables.last;
+    final order = await controller.openSessionAndCreateOrder(
+      table: table,
+      guestCount: 2,
+    );
+
+    expect(order?.header.id, 'order-1');
+    expect(orders.createdServiceMode, OrderServiceMode.table);
+    expect(hospitality.attachedOrderId, 'order-1');
+    expect(controller.noticeMessage, contains('aperto con ordine'));
+  });
+
+  test('lists a COUNTER order as attachable and de-duplicates it', () async {
+    final hospitality = FakeHospitalityGateway(session: _emptyTableSession());
+    final orders = FakeOrdersGateway(
+      order: orderDetailFixture(serviceMode: 'COUNTER'),
+    );
+    final controller = TableController(hospitality, orders);
+
+    await controller.bindLocation('location-1');
+    await controller.selectTable(controller.floor!.tables.first);
+    await controller.loadAttachableOrders();
+
+    expect(controller.attachableOrders, hasLength(1));
+    expect(
+      controller.attachableOrders.single.serviceMode,
+      OrderServiceMode.counter,
+    );
+
+    final attached = await controller.attachExistingOrder(
+      controller.attachableOrders.single,
+    );
+
+    expect(attached, isTrue);
+    expect(controller.noticeMessage, contains('convertito in Tavolo'));
+  });
+
   test('new order attachment does not wait for floor refresh', () async {
     final hospitality = _ControllableFloorHospitalityGateway();
     final orders = FakeOrdersGateway();
@@ -100,6 +143,32 @@ void main() {
     expect(controller.errorMessage, contains('altro dispositivo'));
   });
 }
+
+TableSessionDetail _emptyTableSession() => TableSessionDetail.fromJson({
+  'id': 'session-1',
+  'organizationId': 'organization-1',
+  'locationId': 'location-1',
+  'tableId': 'table-1',
+  'deviceId': 'device-1',
+  'clientSessionId': 'client-session-1',
+  'status': 'OPEN',
+  'guestCount': 2,
+  'note': null,
+  'version': 1,
+  'openedAt': '2026-07-21T10:00:00.000Z',
+  'closedAt': null,
+  'cancelledAt': null,
+  'table': {
+    'id': 'table-1',
+    'code': 'T01',
+    'name': 'Tavolo 1',
+    'capacity': 4,
+    'areaId': 'area-1',
+    'areaCode': 'SALA',
+    'areaName': 'Sala principale',
+  },
+  'orders': [],
+});
 
 class _ControllableFloorHospitalityGateway extends FakeHospitalityGateway {
   Completer<FloorSnapshot>? pendingFloorRefresh;

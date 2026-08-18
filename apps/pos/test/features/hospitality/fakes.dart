@@ -370,14 +370,20 @@ KitchenDispatchBatch kitchenBatchFixture() => KitchenDispatchBatch.fromJson({
   ],
 });
 
-OrderDetail orderDetailFixture() => OrderDetail.fromJson({
-  ...orderHeaderJson(),
+OrderDetail orderDetailFixture({
+  String status = 'OPEN',
+  String serviceMode = 'TABLE',
+}) => OrderDetail.fromJson({
+  ...orderHeaderJson(status: status, serviceMode: serviceMode),
   'items': [],
   'adjustments': [],
   'vatSummaries': [],
 });
 
-Map<String, Object?> orderHeaderJson() => {
+Map<String, Object?> orderHeaderJson({
+  String status = 'OPEN',
+  String serviceMode = 'TABLE',
+}) => {
   'id': 'order-1',
   'organizationId': 'organization-1',
   'locationId': 'location-1',
@@ -386,8 +392,8 @@ Map<String, Object?> orderHeaderJson() => {
   'clientOrderId': 'client-order-1',
   'number': '20260721-0001',
   'businessDate': '2026-07-21',
-  'status': 'OPEN',
-  'serviceMode': 'TABLE',
+  'status': status,
+  'serviceMode': serviceMode,
   'customerNote': null,
   'currency': 'EUR',
   'version': 1,
