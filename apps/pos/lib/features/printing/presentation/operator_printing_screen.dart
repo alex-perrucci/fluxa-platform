@@ -7,11 +7,20 @@ import '../../../core/widgets/async_states.dart';
 import '../domain/printing_models.dart';
 import 'printing_controller.dart';
 
-class OperatorPrintingScreen extends ConsumerWidget {
+class OperatorPrintingScreen extends ConsumerStatefulWidget {
   const OperatorPrintingScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OperatorPrintingScreen> createState() =>
+      _OperatorPrintingScreenState();
+}
+
+class _OperatorPrintingScreenState
+    extends ConsumerState<OperatorPrintingScreen> {
+  String? _scheduledContextKey;
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider).state;
     final controller = ref.watch(printingControllerProvider);
     final location = auth.deviceAssignment?.location;
@@ -24,6 +33,8 @@ class OperatorPrintingScreen extends ConsumerWidget {
         message: 'Questa postazione non è ancora pronta per la stampa.',
       );
     }
+
+    _scheduleResetFilters(controller, location.id, session.device.id);
 
     if (controller.status == PrintingLoadStatus.loading &&
         controller.printers.isEmpty) {
@@ -44,9 +55,12 @@ class OperatorPrintingScreen extends ConsumerWidget {
     final connected = assigned
         .where((printer) => controller.queueFor(printer.id)?.isNotEmpty == true)
         .toList(growable: false);
+    final localAgentReady =
+        !controller.agentSupported || controller.agentEnabled;
     final allReady =
         assigned.isNotEmpty &&
         connected.length == assigned.length &&
+        localAgentReady &&
         failedJobs.isEmpty &&
         controller.errorMessage == null;
 
@@ -83,6 +97,7 @@ class OperatorPrintingScreen extends ConsumerWidget {
           connectedCount: connected.length,
           failedCount: failedJobs.length,
           waitingCount: waitingJobs.length,
+          agentReady: localAgentReady,
           errorMessage: controller.errorMessage,
         ),
         const SizedBox(height: 14),
@@ -98,7 +113,19 @@ class OperatorPrintingScreen extends ConsumerWidget {
               onTap: () => context.go('/printing/manage'),
             ),
           )
-        else
+        else ...[
+          if (!localAgentReady)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.pause_circle_outline),
+                title: const Text('Stampa automatica disattivata'),
+                subtitle: const Text(
+                  'Attiva l’agente locale dalla Gestione avanzata.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.go('/printing/manage'),
+              ),
+            ),
           ...assigned.map(
             (printer) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -111,6 +138,7 @@ class OperatorPrintingScreen extends ConsumerWidget {
               ),
             ),
           ),
+        ],
         if (failedJobs.isNotEmpty) ...[
           const SizedBox(height: 6),
           Card(
@@ -137,6 +165,29 @@ class OperatorPrintingScreen extends ConsumerWidget {
       ],
     );
   }
+
+  void _scheduleResetFilters(
+    PrintingController controller,
+    String locationId,
+    String deviceId,
+  ) {
+    final key = '$locationId:$deviceId';
+    final filtersClear =
+        controller.statusFilter == null && controller.printerFilterId == null;
+    if (_scheduledContextKey == key && filtersClear) {
+      return;
+    }
+    _scheduledContextKey = key;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (controller.statusFilter != null) {
+        await controller.setStatusFilter(null);
+      }
+      if (controller.printerFilterId != null) {
+        await controller.setPrinterFilter(null);
+      }
+      if (mounted) setState(() {});
+    });
+  }
 }
 
 class _PrintingSummary extends StatelessWidget {
@@ -146,6 +197,7 @@ class _PrintingSummary extends StatelessWidget {
     required this.connectedCount,
     required this.failedCount,
     required this.waitingCount,
+    required this.agentReady,
     required this.errorMessage,
   });
 
@@ -154,6 +206,7 @@ class _PrintingSummary extends StatelessWidget {
   final int connectedCount;
   final int failedCount;
   final int waitingCount;
+  final bool agentReady;
   final String? errorMessage;
 
   @override
@@ -163,6 +216,8 @@ class _PrintingSummary extends StatelessWidget {
         errorMessage ??
         (assignedCount == 0
             ? 'Nessuna stampante assegnata a questa postazione.'
+            : !agentReady
+            ? 'La stampa automatica locale è disattivata.'
             : '$connectedCount/$assignedCount collegate · $waitingCount in coda · $failedCount con errore');
     return Card(
       child: Padding(
