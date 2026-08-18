@@ -127,7 +127,7 @@ class PosWorkflowCoordinator extends ChangeNotifier {
       }
 
       if (order.header.serviceMode == OrderServiceMode.table) {
-        await _closeTableWhenPossible(orderId);
+        await _closeTableWhenPossible(locationId, orderId);
       }
       final document = await _ensureFiscalDocument(
         locationId: locationId,
@@ -315,7 +315,20 @@ class PosWorkflowCoordinator extends ChangeNotifier {
     }
   }
 
-  Future<void> _closeTableWhenPossible(String orderId) async {
+  Future<void> _closeTableWhenPossible(
+    String locationId,
+    String orderId,
+  ) async {
+    if (_tables.locationId != locationId) {
+      await _tables.bindLocation(locationId);
+    }
+    if (_tables.busy) {
+      _setAttention(
+        'Vendita completata. Il tavolo è occupato da un’altra operazione e non è stato liberato automaticamente.',
+      );
+      return;
+    }
+
     final closed = await _tables.closeSessionForSettledOrder(
       orderId,
       reason: 'Chiusura automatica dopo incasso',
