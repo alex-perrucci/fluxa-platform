@@ -172,12 +172,12 @@ final printingControllerProvider = ChangeNotifierProvider<PrintingController>(
 final posWorkflowCoordinatorProvider =
     ChangeNotifierProvider<PosWorkflowCoordinator>((ref) {
       return PosWorkflowCoordinator(
-        orders: ref.watch(orderControllerProvider),
-        checkout: ref.watch(checkoutControllerProvider),
-        fiscal: ref.watch(fiscalControllerProvider),
-        tables: ref.watch(tableControllerProvider),
-        printing: ref.watch(printingControllerProvider),
-        fiscalGateway: ref.watch(fiscalApiProvider),
+        orders: ref.read(orderControllerProvider),
+        checkout: ref.read(checkoutControllerProvider),
+        fiscal: ref.read(fiscalControllerProvider),
+        tables: ref.read(tableControllerProvider),
+        printing: ref.read(printingControllerProvider),
+        fiscalGateway: ref.read(fiscalApiProvider),
       );
     });
 
