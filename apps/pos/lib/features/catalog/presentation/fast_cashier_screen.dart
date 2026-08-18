@@ -185,7 +185,10 @@ class _FastCatalog extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Cassa', style: Theme.of(context).textTheme.headlineMedium),
+                  Text(
+                    'Cassa',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                   Text('${location.name} · vendita rapida'),
                 ],
               ),
@@ -435,10 +438,7 @@ class _FastProductTile extends StatelessWidget {
       if (!controller.hasCurrentOrder) {
         controller.startDraft(serviceMode: OrderServiceMode.counter);
       }
-      await controller.addCatalogItem(
-        product: product,
-        quantityAmount: 1,
-      );
+      await controller.addCatalogItem(product: product, quantityAmount: 1);
       return;
     }
 
@@ -516,7 +516,9 @@ class _FastOrderPanel extends StatelessWidget {
                       ),
                     )
                   : order.items.isEmpty
-                  ? const Center(child: Text('Tocca un prodotto per aggiungerlo.'))
+                  ? const Center(
+                      child: Text('Tocca un prodotto per aggiungerlo.'),
+                    )
                   : ListView.separated(
                       itemCount: order.items.length,
                       separatorBuilder: (context, index) =>

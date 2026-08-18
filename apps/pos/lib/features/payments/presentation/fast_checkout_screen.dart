@@ -21,8 +21,7 @@ class FastCheckoutScreen extends ConsumerStatefulWidget {
   final String? quickMethod;
 
   @override
-  ConsumerState<FastCheckoutScreen> createState() =>
-      _FastCheckoutScreenState();
+  ConsumerState<FastCheckoutScreen> createState() => _FastCheckoutScreenState();
 }
 
 class _FastCheckoutScreenState extends ConsumerState<FastCheckoutScreen> {
@@ -77,23 +76,12 @@ class _FastCheckoutScreenState extends ConsumerState<FastCheckoutScreen> {
         orderId: widget.orderId,
         canRecordPayments: canRecordPayments,
         finishingSale: _finishingSale,
-        onExactCash: () => _payExactCash(
-          checkoutController,
-          orderController,
-        ),
-        onStartCard: () => _startCard(
-          checkoutController,
-          orderController,
-        ),
-        onConfirmCard: (payment) => _confirmCard(
-          checkoutController,
-          orderController,
-          payment,
-        ),
-        onCancelPending: (payment) => _cancelPending(
-          checkoutController,
-          payment,
-        ),
+        onExactCash: () => _payExactCash(checkoutController, orderController),
+        onStartCard: () => _startCard(checkoutController, orderController),
+        onConfirmCard: (payment) =>
+            _confirmCard(checkoutController, orderController, payment),
+        onCancelPending: (payment) =>
+            _cancelPending(checkoutController, payment),
       ),
     );
   }
@@ -316,7 +304,9 @@ class _FastCheckoutView extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    checkout.isCompleted ? 'Pagamento completato' : 'Da incassare',
+                    checkout.isCompleted
+                        ? 'Pagamento completato'
+                        : 'Da incassare',
                     textAlign: TextAlign.center,
                   ),
                   if (controller.errorMessage != null) ...[

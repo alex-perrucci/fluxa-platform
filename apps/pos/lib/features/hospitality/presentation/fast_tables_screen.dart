@@ -101,10 +101,12 @@ class _FastTablesView extends StatelessWidget {
     final tables = controller.floor?.tables ?? const <DiningTableFloor>[];
     final occupied = tables.where((table) => table.occupied).length;
 
-    if (controller.status == FloorLoadStatus.loading && controller.floor == null) {
+    if (controller.status == FloorLoadStatus.loading &&
+        controller.floor == null) {
       return const FluxaLoadingView(label: 'Caricamento tavoli');
     }
-    if (controller.status == FloorLoadStatus.failure && controller.floor == null) {
+    if (controller.status == FloorLoadStatus.failure &&
+        controller.floor == null) {
       return FluxaEmptyView(
         icon: Icons.cloud_off_outlined,
         title: 'Sala non disponibile',
@@ -127,7 +129,9 @@ class _FastTablesView extends StatelessWidget {
                       'Tavoli',
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
-                    Text('${location.name} · $occupied occupati su ${tables.length}'),
+                    Text(
+                      '${location.name} · $occupied occupati su ${tables.length}',
+                    ),
                   ],
                 ),
               ),
@@ -307,12 +311,11 @@ class _FastTableCard extends StatelessWidget {
               Text('${table.code} · ${table.capacity} posti'),
               const Spacer(),
               if (session == null)
-                Text(
-                  'LIBERO',
-                  style: Theme.of(context).textTheme.titleMedium,
-                )
+                Text('LIBERO', style: Theme.of(context).textTheme.titleMedium)
               else ...[
-                Text('${session.guestCount} coperti · ${session.orderCount} ordini'),
+                Text(
+                  '${session.guestCount} coperti · ${session.orderCount} ordini',
+                ),
                 const SizedBox(height: 4),
                 Text(
                   formatOrderMoney(session.openTotalCents, 'EUR'),
@@ -371,11 +374,7 @@ Future<void> _openTable(
       .toList(growable: false);
 
   if (actionableOrders.length == 1) {
-    await _openOrder(
-      context,
-      orderController,
-      actionableOrders.single,
-    );
+    await _openOrder(context, orderController, actionableOrders.single);
     return;
   }
 
@@ -526,7 +525,8 @@ Future<void> _showOccupiedTableActions(
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: actionableOrders.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final order = actionableOrders[index];
                     return ListTile(
