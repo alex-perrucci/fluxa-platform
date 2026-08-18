@@ -46,9 +46,8 @@ void main() {
     final reconciliation = Completer<FloorSnapshot>();
     hospitality.pendingFloorRefresh = reconciliation;
 
-    final order = await controller
-        .createAndAttachOrder()
-        .timeout(const Duration(seconds: 1));
+    final pendingOrder = controller.createAndAttachOrder();
+    final order = await pendingOrder.timeout(const Duration(seconds: 1));
 
     expect(order?.header.id, 'order-1');
     expect(controller.busy, isFalse);
@@ -69,9 +68,8 @@ void main() {
     final reconciliation = Completer<FloorSnapshot>();
     hospitality.pendingFloorRefresh = reconciliation;
 
-    final attached = await controller
-        .attachExistingOrder(orders.order.header)
-        .timeout(const Duration(seconds: 1));
+    final pendingAttach = controller.attachExistingOrder(orders.order.header);
+    final attached = await pendingAttach.timeout(const Duration(seconds: 1));
 
     expect(attached, isTrue);
     expect(controller.busy, isFalse);
