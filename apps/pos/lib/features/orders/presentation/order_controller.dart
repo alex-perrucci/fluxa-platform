@@ -516,6 +516,48 @@ class OrderController extends ChangeNotifier {
     }
   }
 
+  Future<bool> cancelActiveOrder({String? reason}) async {
+    final order = _activeOrder;
+    if (_busy ||
+        order == null ||
+        (order.header.status != OrderStatus.open &&
+            order.header.status != OrderStatus.held)) {
+      return false;
+    }
+
+    _setBusy();
+    try {
+      final updated = await _gateway.cancelOrder(
+        orderId: order.header.id,
+        mutationId: UuidV4.generate(),
+        expectedVersion: order.header.version,
+        reason: _normalizeNote(reason),
+      );
+      if (!_matchesLocation(updated)) {
+        throw const BackendError(
+          message: 'L’ordine annullato appartiene a una location diversa.',
+        );
+      }
+      _draft = null;
+      _activeOrder = updated;
+      _noticeMessage = 'Ordine ${updated.header.number} annullato.';
+      await _refreshOrdersSilently();
+      return true;
+    } on BackendError catch (error) {
+      await _handleMutationError(error);
+      return false;
+    } on FormatException {
+      _errorMessage =
+          'Il backend ha restituito un ordine annullato non valido.';
+      return false;
+    } catch (_) {
+      _errorMessage = 'Impossibile annullare l’ordine.';
+      return false;
+    } finally {
+      _finishBusy();
+    }
+  }
+
   bool _matchesLocation(OrderDetail order) =>
       _locationId != null && order.header.locationId == _locationId;
 
