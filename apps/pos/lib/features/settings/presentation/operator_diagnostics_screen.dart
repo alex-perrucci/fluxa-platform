@@ -23,7 +23,8 @@ class _OperatorDiagnosticsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final auth = ref.watch(authControllerProvider).state;
+    final authController = ref.watch(authControllerProvider);
+    final auth = authController.state;
     final location = auth.deviceAssignment?.location;
     final session = auth.session;
 
@@ -38,8 +39,8 @@ class _OperatorDiagnosticsScreenState
     final ready =
         health != null &&
         health.apiStatus == HealthStatus.ok &&
-        health.printerStatus != HealthStatus.down &&
-        health.fiscalStatus != HealthStatus.down;
+        health.printerStatus == HealthStatus.ok &&
+        health.fiscalStatus == HealthStatus.ok;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -118,7 +119,7 @@ class _OperatorDiagnosticsScreenState
         ),
         const SizedBox(height: 8),
         TextButton.icon(
-          onPressed: auth.busy ? null : auth.refreshOperationalContext,
+          onPressed: auth.busy ? null : authController.refreshOperationalContext,
           icon: const Icon(Icons.sync),
           label: const Text('Ricarica configurazione della postazione'),
         ),
@@ -144,7 +145,7 @@ class _OperatorDiagnosticsScreenState
       ).operational(locationId: locationId);
       if (!mounted) return;
       setState(() => _health = health);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _health = null;
@@ -176,7 +177,7 @@ class _OperatorDiagnosticsScreenState
     'ACUBE_SMART_RECEIPTS' => 'A-Cube Smart Receipts',
     'MOCK' => 'Ambiente di test',
     null => 'Nessun provider configurato',
-    _ => provider!,
+    _ => provider,
   };
 
   HealthStatus _paymentDisplayStatus(OperationalHealth health) {
