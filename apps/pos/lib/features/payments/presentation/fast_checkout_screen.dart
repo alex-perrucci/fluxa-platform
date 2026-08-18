@@ -62,7 +62,7 @@ class _FastCheckoutScreenState extends ConsumerState<FastCheckoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Incasso'),
+        title: const Text('Pagamento'),
         leading: IconButton(
           tooltip: 'Torna in cassa',
           onPressed: _finishingSale ? null : () => context.go('/home'),
@@ -290,9 +290,9 @@ class _FastCheckoutView extends StatelessWidget {
                   Text(
                     order?.header.number ?? orderId,
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Text(
                     formatPaymentMoney(
                       checkout.remainingCents,
@@ -305,8 +305,9 @@ class _FastCheckoutView extends StatelessWidget {
                   Text(
                     checkout.isCompleted
                         ? 'Pagamento completato'
-                        : 'Da incassare',
+                        : 'Totale da incassare',
                     textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                   if (controller.errorMessage != null) ...[
                     const SizedBox(height: 16),
@@ -337,18 +338,24 @@ class _FastCheckoutView extends StatelessWidget {
                   else if (checkout.isCompleted) ...[
                     const Icon(Icons.check_circle, size: 64),
                     const SizedBox(height: 12),
+                    Text(
+                      'Fatto. Puoi iniziare subito la vendita successiva.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: () {
                         orderController.discardCurrentView();
                         context.go('/home');
                       },
                       icon: const Icon(Icons.add_shopping_cart),
-                      label: const Text('Nuova vendita'),
+                      label: const Text('NUOVA VENDITA'),
                     ),
                     TextButton(
                       onPressed: () =>
                           context.push('/checkout-advanced/$orderId'),
-                      child: const Text('Stampa / fiscale / dettagli'),
+                      child: const Text('Dettagli / stampa / fiscale'),
                     ),
                   ] else if (!canRecordPayments)
                     const Text(
@@ -356,31 +363,20 @@ class _FastCheckoutView extends StatelessWidget {
                       textAlign: TextAlign.center,
                     )
                   else if (pendingPayment != null) ...[
-                    Text(
-                      pendingPayment.method == PaymentMethod.card
-                          ? 'Completa il pagamento sul terminale, poi conferma.'
-                          : 'Pagamento in attesa di conferma.',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      key: const Key('fast-checkout-confirm-card'),
-                      onPressed: controller.busy
-                          ? null
-                          : () => onConfirmCard(pendingPayment!),
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: Text(
-                        'CONFERMA CARTA ${formatPaymentMoney(pendingPayment.amountCents, checkout.currency)}',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: controller.busy
-                          ? null
-                          : () => onCancelPending(pendingPayment!),
-                      child: const Text('Pagamento non riuscito / annulla'),
+                    _CardConfirmationStep(
+                      payment: pendingPayment,
+                      currency: checkout.currency,
+                      busy: controller.busy,
+                      onConfirm: () => onConfirmCard(pendingPayment!),
+                      onCancel: () => onCancelPending(pendingPayment!),
                     ),
                   ] else ...[
+                    Text(
+                      'Come paga il cliente?',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
@@ -414,15 +410,13 @@ class _FastCheckoutView extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: controller.busy
                           ? null
                           : () => context.push('/checkout-advanced/$orderId'),
-                      icon: const Icon(Icons.more_horiz),
-                      label: const Text(
-                        'Altro: resto, parziale, provider, annullamento',
-                      ),
+                      icon: const Icon(Icons.tune),
+                      label: const Text('Importo diverso / pagamento parziale'),
                     ),
                   ],
                 ],
@@ -433,6 +427,55 @@ class _FastCheckoutView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CardConfirmationStep extends StatelessWidget {
+  const _CardConfirmationStep({
+    required this.payment,
+    required this.currency,
+    required this.busy,
+    required this.onConfirm,
+    required this.onCancel,
+  });
+
+  final PaymentRecord payment;
+  final String currency;
+  final bool busy;
+  final VoidCallback onConfirm;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Icon(Icons.credit_card, size: 52),
+      const SizedBox(height: 12),
+      Text(
+        'La carta è stata approvata sul terminale?',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 6),
+      Text(
+        formatPaymentMoney(payment.amountCents, currency),
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 20),
+      FilledButton.icon(
+        key: const Key('fast-checkout-confirm-card'),
+        onPressed: busy ? null : onConfirm,
+        icon: const Icon(Icons.check_circle_outline),
+        label: const Text('SÌ, PAGAMENTO RIUSCITO'),
+      ),
+      const SizedBox(height: 10),
+      OutlinedButton.icon(
+        onPressed: busy ? null : onCancel,
+        icon: const Icon(Icons.close),
+        label: const Text('NO, NON È RIUSCITO'),
+      ),
+    ],
+  );
 }
 
 class _StatusMessage extends StatelessWidget {
