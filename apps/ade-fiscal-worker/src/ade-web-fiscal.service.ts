@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { AdeBrowserService, type AdeBrowserStatus } from './ade-browser.service';
+import {
+  AdeBrowserService,
+  type AdeBrowserStatus,
+} from './ade-browser.service';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 import {
   AdeSelectorProfileService,
   type AdeSelectorProfileStatus,
 } from './ade-selector-profile.service';
-import { AdeSessionService, type AdeSessionStatus } from './ade-session.service';
+import {
+  AdeSessionService,
+  type AdeSessionStatus,
+} from './ade-session.service';
 
 export interface AdeWorkerReadiness {
   service: 'ok';

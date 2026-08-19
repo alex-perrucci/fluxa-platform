@@ -41,7 +41,8 @@ function readProfile(path: string): AdeSelectorProfile {
       throw new Error(`unsupported selector profile key: ${key}`);
     }
   }
-  if (record.version !== 1) throw new Error('selector profile version must be 1');
+  if (record.version !== 1)
+    throw new Error('selector profile version must be 1');
 
   return {
     version: 1,

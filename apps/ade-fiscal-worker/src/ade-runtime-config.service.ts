@@ -43,7 +43,9 @@ export class AdeRuntimeConfigService {
       internalToken: optionalString(process.env.ADE_WORKER_INTERNAL_TOKEN),
       entryUrl: optionalString(process.env.ADE_WEB_ENTRY_URL),
       storageStatePath: optionalString(process.env.ADE_STORAGE_STATE_PATH),
-      selectorProfilePath: optionalString(process.env.ADE_SELECTOR_PROFILE_PATH),
+      selectorProfilePath: optionalString(
+        process.env.ADE_SELECTOR_PROFILE_PATH,
+      ),
       navigationTimeoutMs: parseTimeout(process.env.ADE_NAVIGATION_TIMEOUT_MS),
     };
   }

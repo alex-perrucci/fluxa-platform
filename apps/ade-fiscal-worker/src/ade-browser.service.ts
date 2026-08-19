@@ -97,15 +97,19 @@ export class AdeBrowserService implements OnApplicationShutdown {
 
   private async browser(): Promise<Browser> {
     if (!this.browserPromise) {
-      this.browserPromise = chromium.launch({ headless: true }).catch((error) => {
-        this.browserPromise = null;
-        throw new AdeAutomationError(
-          error instanceof Error ? error.message : 'Chromium non disponibile.',
-          'ADE_BROWSER_UNAVAILABLE',
-          'BROWSER',
-          true,
-        );
-      });
+      this.browserPromise = chromium
+        .launch({ headless: true })
+        .catch((error) => {
+          this.browserPromise = null;
+          throw new AdeAutomationError(
+            error instanceof Error
+              ? error.message
+              : 'Chromium non disponibile.',
+            'ADE_BROWSER_UNAVAILABLE',
+            'BROWSER',
+            true,
+          );
+        });
     }
     const browser = await this.browserPromise;
     if (!browser.isConnected()) {
@@ -116,7 +120,9 @@ export class AdeBrowserService implements OnApplicationShutdown {
   }
 
   private async waitForMarker(
-    locator: { waitFor(options: { state: 'visible'; timeout: number }): Promise<void> },
+    locator: {
+      waitFor(options: { state: 'visible'; timeout: number }): Promise<void>;
+    },
     timeoutMs: number,
     marker: 'authenticated' | 'receipt_area',
   ): Promise<void> {

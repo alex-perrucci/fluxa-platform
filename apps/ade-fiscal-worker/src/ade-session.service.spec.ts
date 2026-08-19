@@ -33,7 +33,9 @@ describe('AdeSessionService', () => {
         const service = new AdeSessionService(new AdeRuntimeConfigService());
         expect(service.readiness()).toEqual({ status: 'ready' });
         expect(service.storageStatePathForUse()).toBe(path);
-        expect(JSON.stringify(service.readiness())).not.toContain('secret-cookie');
+        expect(JSON.stringify(service.readiness())).not.toContain(
+          'secret-cookie',
+        );
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });
