@@ -45,6 +45,23 @@ describe('AdeSelectorProfileService', () => {
     }
   });
 
+  it('treats a missing optional selector file as an empty profile', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fluxa-ade-selectors-'));
+    const path = join(dir, 'selectors.json');
+
+    try {
+      withEnv(path, () => {
+        const service = new AdeSelectorProfileService(
+          new AdeRuntimeConfigService(),
+        );
+        expect(service.readiness()).toBe('empty');
+        expect(service.loadForUse()).toBeNull();
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects submit or other actionable selector keys', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fluxa-ade-selectors-'));
     const path = join(dir, 'selectors.json');
