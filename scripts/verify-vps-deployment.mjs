@@ -144,6 +144,12 @@ for (const script of [
   );
 }
 
+const lib = fs.readFileSync(path.join(root, 'scripts/vps/lib.sh'), 'utf8');
+assert.ok(
+  lib.includes('ADE_DRY_RUN_ENABLED') && lib.includes('--profile ade-fiscal'),
+  'VPS helper must enable the ADE profile only from the explicit dry-run flag.',
+);
+
 const provision = fs.readFileSync(
   path.join(root, 'scripts/vps/provision.sh'),
   'utf8',
