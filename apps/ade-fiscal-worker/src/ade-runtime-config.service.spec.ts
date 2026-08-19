@@ -1,9 +1,6 @@
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 
-const managedKeys = [
-  'ADE_WORKER_INTERNAL_TOKEN',
-  'ADE_WEB_ENTRY_URL',
-] as const;
+const managedKeys = ['ADE_WORKER_INTERNAL_TOKEN', 'ADE_WEB_ENTRY_URL'] as const;
 
 function withEnvironment(
   values: Partial<Record<(typeof managedKeys)[number], string>>,
@@ -50,9 +47,12 @@ describe('AdeRuntimeConfigService', () => {
       expect(service.validatedEntryUrl()).toBeNull();
     });
 
-    withEnvironment({ ADE_WEB_ENTRY_URL: 'https://example.invalid/ade' }, () => {
-      const service = new AdeRuntimeConfigService();
-      expect(service.validatedEntryUrl()?.protocol).toBe('https:');
-    });
+    withEnvironment(
+      { ADE_WEB_ENTRY_URL: 'https://example.invalid/ade' },
+      () => {
+        const service = new AdeRuntimeConfigService();
+        expect(service.validatedEntryUrl()?.protocol).toBe('https:');
+      },
+    );
   });
 });
