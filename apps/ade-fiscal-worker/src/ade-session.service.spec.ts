@@ -45,7 +45,7 @@ describe('AdeSessionService', () => {
       const service = new AdeSessionService(new AdeRuntimeConfigService());
       expect(service.readiness().status).toBe('missing');
       expect(() => service.storageStatePathForUse()).toThrow(
-        expect.objectContaining({ code: 'ADE_SESSION_REQUIRED' }),
+        'La sessione Agenzia delle Entrate non è configurata.',
       );
     });
   });
@@ -60,7 +60,7 @@ describe('AdeSessionService', () => {
         const service = new AdeSessionService(new AdeRuntimeConfigService());
         expect(service.readiness().status).toBe('invalid');
         expect(() => service.storageStatePathForUse()).toThrow(
-          expect.objectContaining({ code: 'ADE_SESSION_INVALID' }),
+          'La sessione Agenzia delle Entrate non è valida o leggibile.',
         );
       });
     } finally {
