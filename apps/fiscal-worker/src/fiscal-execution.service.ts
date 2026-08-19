@@ -61,9 +61,7 @@ export class FiscalExecutionService {
       await this.fail(document, failure);
 
       if (failure.retryable) {
-        throw error instanceof Error
-          ? error
-          : new Error(failure.error.message);
+        throw error instanceof Error ? error : new Error(failure.error.message);
       }
 
       return {
@@ -141,10 +139,7 @@ export class FiscalExecutionService {
     });
   }
 
-  private async fail(
-    document: DocumentRow,
-    failure: FiscalFailureDecision,
-  ) {
+  private async fail(document: DocumentRow, failure: FiscalFailureDecision) {
     await this.withTransaction(async (client) => {
       const delaySeconds = Math.min(
         300,
