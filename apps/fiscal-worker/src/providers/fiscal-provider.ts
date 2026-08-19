@@ -1,8 +1,5 @@
 export type FiscalProviderName =
-  | 'MOCK'
-  | 'ACUBE_SMART_RECEIPTS'
-  | 'OPENAPI_SMART_RECEIPTS'
-  | 'ADE_WEB';
+  'MOCK' | 'ACUBE_SMART_RECEIPTS' | 'OPENAPI_SMART_RECEIPTS' | 'ADE_WEB';
 
 export type FiscalEnvironment = 'SANDBOX' | 'PRODUCTION';
 export type FiscalDocumentType = 'SALE' | 'VOID';
