@@ -5,16 +5,10 @@ import {
 } from './providers/fiscal-provider';
 
 export type FiscalFailureStatus =
-  | 'RETRY'
-  | 'REJECTED'
-  | 'UNKNOWN'
-  | 'AUTH_REQUIRED';
+  'RETRY' | 'REJECTED' | 'UNKNOWN' | 'AUTH_REQUIRED';
 
 export type FiscalAttemptFailureOutcome =
-  | 'RETRY'
-  | 'REJECTED'
-  | 'UNKNOWN'
-  | 'AUTH_REQUIRED';
+  'RETRY' | 'REJECTED' | 'UNKNOWN' | 'AUTH_REQUIRED';
 
 export interface FiscalFailureDetails {
   message: string;
