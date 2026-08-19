@@ -60,7 +60,7 @@ describe('AdeSelectorProfileService', () => {
         );
         expect(service.readiness()).toBe('invalid');
         expect(() => service.loadForUse()).toThrow(
-          expect.objectContaining({ code: 'ADE_SELECTOR_PROFILE_INVALID' }),
+          'Il profilo selector AdE non è valido.',
         );
       });
     } finally {
