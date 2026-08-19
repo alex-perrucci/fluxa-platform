@@ -17,6 +17,11 @@ coverage/
 *.pfx
 *.key
 
+# future AdE browser session state must never enter Git
+playwright/.auth/
+**/playwright/.auth/
+**/ade-storage-state*.json
+
 # logs
 *.log
 npm-debug.log*
