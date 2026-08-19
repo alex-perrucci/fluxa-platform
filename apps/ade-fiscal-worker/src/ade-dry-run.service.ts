@@ -48,7 +48,7 @@ export class AdeDryRunService {
     if (this.inFlight) {
       throw new AdeAutomationError(
         'Un dry-run AdE è già in corso.',
-        'ADE_CONFIGURATION_INVALID',
+        'ADE_DRY_RUN_BUSY',
         'CONFIGURATION',
         true,
       );
