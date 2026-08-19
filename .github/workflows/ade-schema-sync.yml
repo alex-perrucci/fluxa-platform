@@ -1,0 +1,49 @@
+name: ADE schema sync
+
+on:
+  push:
+    branches:
+      - agent/ade-fiscal-phase-c-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ade-fiscal-phase-c-foundation
+      - name: Sync fiscal enum declarations
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('libs/database/src/schema.ts')
+          content = path.read_text()
+          replacements = {
+              "export const fiscalProvider = pgEnum('fiscal_provider', [\n  'MOCK',\n  'ACUBE_SMART_RECEIPTS',\n  'OPENAPI_SMART_RECEIPTS',\n]);":
+              "export const fiscalProvider = pgEnum('fiscal_provider', [\n  'MOCK',\n  'ACUBE_SMART_RECEIPTS',\n  'OPENAPI_SMART_RECEIPTS',\n  'ADE_WEB',\n]);",
+              "export const fiscalDocumentStatus = pgEnum('fiscal_document_status', [\n  'QUEUED',\n  'PROCESSING',\n  'ISSUED',\n  'RETRY',\n  'REJECTED',\n  'VOIDED',\n  'CANCELLED',\n]);":
+              "export const fiscalDocumentStatus = pgEnum('fiscal_document_status', [\n  'QUEUED',\n  'PROCESSING',\n  'ISSUED',\n  'RETRY',\n  'REJECTED',\n  'UNKNOWN',\n  'AUTH_REQUIRED',\n  'VOIDED',\n  'CANCELLED',\n]);",
+              "export const fiscalAttemptOutcome = pgEnum('fiscal_attempt_outcome', [\n  'STARTED',\n  'SUCCEEDED',\n  'RETRY',\n  'REJECTED',\n]);":
+              "export const fiscalAttemptOutcome = pgEnum('fiscal_attempt_outcome', [\n  'STARTED',\n  'SUCCEEDED',\n  'RETRY',\n  'REJECTED',\n  'UNKNOWN',\n  'AUTH_REQUIRED',\n]);",
+          }
+
+          for old, new in replacements.items():
+              if old not in content:
+                  raise SystemExit(f'Expected schema block not found: {old.splitlines()[0]}')
+              content = content.replace(old, new, 1)
+
+          path.write_text(content)
+      - name: Commit schema and remove helper workflow
+        shell: bash
+        run: |
+          rm .github/workflows/ade-schema-sync.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add libs/database/src/schema.ts .github/workflows/ade-schema-sync.yml
+          git commit -m 'chore(db): sync ADE fiscal enum schema'
+          git push origin HEAD:agent/ade-fiscal-phase-c-foundation
