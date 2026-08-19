@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 20_000;
 const MIN_NAVIGATION_TIMEOUT_MS = 1_000;
 const MAX_NAVIGATION_TIMEOUT_MS = 60_000;
+const MIN_INTERNAL_TOKEN_LENGTH = 32;
 
 export interface AdeRuntimeConfig {
   dryRunEnabled: boolean;
@@ -48,6 +49,11 @@ export class AdeRuntimeConfigService {
       ),
       navigationTimeoutMs: parseTimeout(process.env.ADE_NAVIGATION_TIMEOUT_MS),
     };
+  }
+
+  validatedInternalToken(): string | null {
+    const token = this.read().internalToken;
+    return token && token.length >= MIN_INTERNAL_TOKEN_LENGTH ? token : null;
   }
 
   validatedEntryUrl(): URL | null {
