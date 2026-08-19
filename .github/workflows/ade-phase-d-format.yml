@@ -1,0 +1,32 @@
+name: ADE Phase D format
+
+on:
+  push:
+    branches:
+      - agent/ade-fiscal-phase-d-playwright-dry-run
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ade-fiscal-phase-d-playwright-dry-run
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Format ADE Phase D TypeScript
+        run: npx prettier --write "apps/ade-fiscal-worker/src/**/*.ts"
+      - name: Commit formatting and remove helper workflow
+        run: |
+          rm .github/workflows/ade-phase-d-format.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/ade-fiscal-worker/src .github/workflows/ade-phase-d-format.yml
+          git commit -m 'style(ade): format phase D worker'
+          git push origin HEAD:agent/ade-fiscal-phase-d-playwright-dry-run
