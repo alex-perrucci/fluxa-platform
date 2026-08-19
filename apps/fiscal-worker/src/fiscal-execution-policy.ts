@@ -42,6 +42,12 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown fiscal error';
 }
 
+function effectiveMaxAttempts(input: ClassifyFailureInput): number {
+  return input.provider === 'OPENAPI_SMART_RECEIPTS'
+    ? Math.max(input.maxAttempts, 10)
+    : input.maxAttempts;
+}
+
 export function classifyFiscalFailure(
   input: ClassifyFailureInput,
 ): FiscalFailureDecision {
@@ -55,12 +61,8 @@ export function classifyFiscalFailure(
   }
 
   if (input.error instanceof FiscalProviderError) {
-    const effectiveMaxAttempts =
-      input.provider === 'OPENAPI_SMART_RECEIPTS'
-        ? Math.max(input.maxAttempts, 10)
-        : input.maxAttempts;
     const retryable =
-      input.error.retryable && input.attempts < effectiveMaxAttempts;
+      input.error.retryable && input.attempts < effectiveMaxAttempts(input);
 
     return {
       status: retryable ? 'RETRY' : 'REJECTED',
@@ -88,7 +90,7 @@ export function classifyFiscalFailure(
   // Preserve the historical behavior for existing API providers. Their
   // provider-specific code is already responsible for declaring known
   // non-retryable failures with FiscalProviderError.
-  const retryable = input.attempts < input.maxAttempts;
+  const retryable = input.attempts < effectiveMaxAttempts(input);
   return {
     status: retryable ? 'RETRY' : 'REJECTED',
     attemptOutcome: retryable ? 'RETRY' : 'REJECTED',
