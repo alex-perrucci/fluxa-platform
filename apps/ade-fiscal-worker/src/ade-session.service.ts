@@ -1,4 +1,4 @@
-import { lstatSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { Injectable } from '@nestjs/common';
 import { AdeAutomationError } from './ade-automation-error';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
@@ -41,6 +41,7 @@ export class AdeSessionService {
   readiness(): AdeSessionReadiness {
     const path = this.config.read().storageStatePath;
     if (!path) return { status: 'missing', reason: 'path_not_configured' };
+    if (!existsSync(path)) return { status: 'missing', reason: 'file_missing' };
     try {
       parseStorageState(path);
       return { status: 'ready' };
@@ -51,7 +52,7 @@ export class AdeSessionService {
 
   storageStatePathForUse(): string {
     const path = this.config.read().storageStatePath;
-    if (!path) {
+    if (!path || !existsSync(path)) {
       throw new AdeAutomationError(
         'La sessione Agenzia delle Entrate non è configurata.',
         'ADE_SESSION_REQUIRED',
