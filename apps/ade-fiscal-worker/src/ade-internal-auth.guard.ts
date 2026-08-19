@@ -21,7 +21,7 @@ export class AdeInternalAuthGuard implements CanActivate {
   constructor(private readonly config: AdeRuntimeConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const expected = this.config.read().internalToken;
+    const expected = this.config.validatedInternalToken();
     if (!expected) {
       throw new ServiceUnavailableException({
         code: 'ADE_INTERNAL_AUTH_REQUIRED',
