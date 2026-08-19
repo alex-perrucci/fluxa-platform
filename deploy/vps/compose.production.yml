@@ -179,13 +179,16 @@ services:
       - fiscal
 
   ade-fiscal-worker:
-    <<: *backend-common
     image: fluxa-backend:${RELEASE_SHA}
+    restart: unless-stopped
     environment:
       FLUXA_APP: ade-fiscal-worker
       ADE_WORKER_PORT: '3010'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     expose:
       - '3010'
+    networks:
+      - app
     healthcheck:
       test:
         - CMD-SHELL
@@ -197,6 +200,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
     profiles:
       - ade-fiscal
 
