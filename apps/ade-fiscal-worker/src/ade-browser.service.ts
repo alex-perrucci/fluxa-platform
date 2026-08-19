@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { Injectable, OnApplicationShutdown } from '@nestjs/common';
-import { chromium, type Browser } from 'playwright';
+import { chromium, type Browser, type BrowserContext } from 'playwright';
 import { AdeAutomationError } from './ade-automation-error';
 import type { AdeSelectorProfile } from './ade-selector-profile.service';
 
@@ -39,9 +39,20 @@ export class AdeBrowserService implements OnApplicationShutdown {
     timeoutMs: number;
   }): Promise<AdeReadOnlyNavigationResult> {
     const browser = await this.browser();
-    const context = await browser.newContext({
-      storageState: input.storageStatePath,
-    });
+    let context: BrowserContext;
+    try {
+      context = await browser.newContext({
+        storageState: input.storageStatePath,
+      });
+    } catch {
+      throw new AdeAutomationError(
+        'Impossibile caricare la sessione browser Agenzia delle Entrate.',
+        'ADE_SESSION_INVALID',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+
     try {
       const page = await context.newPage();
       try {
@@ -81,17 +92,19 @@ export class AdeBrowserService implements OnApplicationShutdown {
         markersChecked,
       };
     } finally {
-      await context.close();
+      await context.close().catch(() => undefined);
     }
   }
 
   async onApplicationShutdown(): Promise<void> {
-    if (!this.browserPromise) return;
+    const browserPromise = this.browserPromise;
+    this.browserPromise = null;
+    if (!browserPromise) return;
     try {
-      const browser = await this.browserPromise;
-      await browser.close();
-    } finally {
-      this.browserPromise = null;
+      const browser = await browserPromise;
+      await browser.close().catch(() => undefined);
+    } catch {
+      // A failed launch has already been classified for the caller.
     }
   }
 
