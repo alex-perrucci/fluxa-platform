@@ -23,10 +23,11 @@ function configuredService(): AdeDryRunService {
     loadForUse: () => null,
   } as unknown as AdeSelectorProfileService;
   const browser = {
-    navigateReadOnly: async () => ({
-      finalUrl: 'https://example.invalid/ade',
-      markersChecked: [] as Array<'authenticated' | 'receipt_area'>,
-    }),
+    navigateReadOnly: () =>
+      Promise.resolve({
+        finalUrl: 'https://example.invalid/ade',
+        markersChecked: [] as Array<'authenticated' | 'receipt_area'>,
+      }),
   } as unknown as AdeBrowserService;
 
   return new AdeDryRunService(config, session, selectors, browser);
