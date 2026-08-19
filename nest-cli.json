@@ -28,6 +28,15 @@
         "tsConfigPath": "apps/fiscal-worker/tsconfig.app.json"
       }
     },
+    "ade-fiscal-worker": {
+      "type": "application",
+      "root": "apps/ade-fiscal-worker",
+      "entryFile": "main",
+      "sourceRoot": "apps/ade-fiscal-worker/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/ade-fiscal-worker/tsconfig.app.json"
+      }
+    },
     "background-worker": {
       "type": "application",
       "root": "apps/background-worker",
