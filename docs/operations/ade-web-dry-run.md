@@ -32,6 +32,8 @@ ADE_RUNTIME_DIR=/opt/fluxa/runtime/ade
 ADE_NAVIGATION_TIMEOUT_MS=20000
 ```
 
+`ADE_WORKER_INTERNAL_TOKEN` must be at least 32 characters and must be generated as a random secret. Shorter values are treated as not configured.
+
 `ADE_WEB_ENTRY_URL` has no repository default and must use HTTPS.
 
 ## Storage state
@@ -47,7 +49,7 @@ ADE_NAVIGATION_TIMEOUT_MS=20000
 
 Phase D does not implement login or create this file. The session is supplied and rotated operationally outside the repository.
 
-Symlinked, malformed or unreadable storage-state files are rejected.
+Symlinked, malformed or unreadable storage-state files are rejected. A configured path whose file has not been mounted yet is treated as a missing session, not as a corrupt one.
 
 ## Selector profile
 
@@ -60,6 +62,8 @@ Selectors are runtime configuration and are not committed in this phase. The onl
 ```
 
 Optional runtime keys are `authenticatedMarker` and `receiptAreaMarker`.
+
+The selector file itself is optional. If it is absent, the dry-run can still validate browser startup, session loading and navigation without checking page markers.
 
 Any other key, including a submit/click selector, makes the profile invalid. The worker only waits for configured markers to become visible; it never clicks or fills them.
 
