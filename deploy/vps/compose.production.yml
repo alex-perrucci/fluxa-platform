@@ -178,6 +178,28 @@ services:
     profiles:
       - fiscal
 
+  ade-fiscal-worker:
+    <<: *backend-common
+    image: fluxa-backend:${RELEASE_SHA}
+    environment:
+      FLUXA_APP: ade-fiscal-worker
+      ADE_WORKER_PORT: '3010'
+    expose:
+      - '3010'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://127.0.0.1:3010/health')
+          .then((response) => process.exit(response.ok ? 0 : 1))
+          .catch(() => process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    profiles:
+      - ade-fiscal
+
   web:
     image: fluxa-web:${RELEASE_SHA}
     build:
