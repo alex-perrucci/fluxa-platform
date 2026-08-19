@@ -45,7 +45,9 @@ export class AdeWebFiscalService {
         ? 'configured'
         : 'invalid'
       : 'missing';
-    const internalAuth = config.internalToken ? 'configured' : 'missing';
+    const internalAuth = this.config.validatedInternalToken()
+      ? 'configured'
+      : 'missing';
     const dryRun = !config.dryRunEnabled
       ? 'disabled'
       : browser === 'ready' &&
