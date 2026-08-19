@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import {
   FiscalProviderSafetyError,
   type FiscalProviderAdapter,
-  type FiscalProviderExecutionInput,
   type FiscalProviderExecutionResult,
   type FiscalProviderName,
 } from './fiscal-provider';
@@ -13,9 +12,7 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
     return provider === 'ADE_WEB';
   }
 
-  execute(
-    _input: FiscalProviderExecutionInput,
-  ): Promise<FiscalProviderExecutionResult> {
+  execute(): Promise<FiscalProviderExecutionResult> {
     // Phase C is deliberately non-operational. No browser, selector, AdE URL or
     // submit action exists here. If ADE_WEB is enabled prematurely, stop in a
     // terminal state instead of retrying or falling through to another provider.
