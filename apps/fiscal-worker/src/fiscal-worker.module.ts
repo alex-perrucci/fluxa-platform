@@ -7,6 +7,9 @@ import { QueueModule } from '@fluxa/queue';
 import { FiscalExecutionService } from './fiscal-execution.service';
 import { FiscalProcessor } from './fiscal.processor';
 import { FiscalProviderService } from './fiscal-provider.service';
+import { AdeWebFiscalProvider } from './providers/ade-web-fiscal.provider';
+import { FiscalProviderRegistry } from './providers/fiscal-provider.registry';
+import { LegacyFiscalProviderAdapter } from './providers/legacy-fiscal.provider';
 
 @Module({
   imports: [
@@ -21,6 +24,13 @@ import { FiscalProviderService } from './fiscal-provider.service';
     DatabaseModule,
     QueueModule,
   ],
-  providers: [FiscalProcessor, FiscalExecutionService, FiscalProviderService],
+  providers: [
+    FiscalProcessor,
+    FiscalExecutionService,
+    FiscalProviderService,
+    LegacyFiscalProviderAdapter,
+    AdeWebFiscalProvider,
+    FiscalProviderRegistry,
+  ],
 })
 export class FiscalWorkerModule {}

@@ -174,6 +174,7 @@ export const fiscalProvider = pgEnum('fiscal_provider', [
   'MOCK',
   'ACUBE_SMART_RECEIPTS',
   'OPENAPI_SMART_RECEIPTS',
+  'ADE_WEB',
 ]);
 
 export const fiscalEnvironment = pgEnum('fiscal_environment', [
@@ -192,6 +193,8 @@ export const fiscalDocumentStatus = pgEnum('fiscal_document_status', [
   'ISSUED',
   'RETRY',
   'REJECTED',
+  'UNKNOWN',
+  'AUTH_REQUIRED',
   'VOIDED',
   'CANCELLED',
 ]);
@@ -201,6 +204,8 @@ export const fiscalAttemptOutcome = pgEnum('fiscal_attempt_outcome', [
   'SUCCEEDED',
   'RETRY',
   'REJECTED',
+  'UNKNOWN',
+  'AUTH_REQUIRED',
 ]);
 
 // PHASE_2_EVENTS_RESERVATIONS_ENUMS_START
