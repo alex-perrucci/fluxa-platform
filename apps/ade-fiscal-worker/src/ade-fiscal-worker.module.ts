@@ -13,7 +13,13 @@ import { AdeWebFiscalService } from './ade-web-fiscal.service';
 @Module({
   imports: [
     LoggerModule.forRoot({
-      pinoHttp: { level: process.env.LOG_LEVEL ?? 'info' },
+      pinoHttp: {
+        level: process.env.LOG_LEVEL ?? 'info',
+        redact: {
+          paths: ['req.headers', 'res.headers'],
+          censor: '[Redacted]',
+        },
+      },
     }),
   ],
   controllers: [AdeHealthController, AdeDryRunController],
