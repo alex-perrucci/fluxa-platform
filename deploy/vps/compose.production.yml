@@ -179,12 +179,25 @@ services:
       - fiscal
 
   ade-fiscal-worker:
-    image: fluxa-backend:${RELEASE_SHA}
+    image: fluxa-ade-fiscal-worker:${RELEASE_SHA}
+    build:
+      context: ../..
+      dockerfile: Dockerfile.ade-fiscal-worker
+      target: runtime
     restart: unless-stopped
+    init: true
+    shm_size: 1gb
     environment:
-      FLUXA_APP: ade-fiscal-worker
       ADE_WORKER_PORT: '3010'
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      ADE_DRY_RUN_ENABLED: ${ADE_DRY_RUN_ENABLED:-false}
+      ADE_WORKER_INTERNAL_TOKEN: ${ADE_WORKER_INTERNAL_TOKEN:-}
+      ADE_WEB_ENTRY_URL: ${ADE_WEB_ENTRY_URL:-}
+      ADE_STORAGE_STATE_PATH: /run/fluxa-ade/storage-state.json
+      ADE_SELECTOR_PROFILE_PATH: /run/fluxa-ade/selectors.json
+      ADE_NAVIGATION_TIMEOUT_MS: ${ADE_NAVIGATION_TIMEOUT_MS:-20000}
+    volumes:
+      - ${ADE_RUNTIME_DIR:-/opt/fluxa/runtime/ade}:/run/fluxa-ade:ro
     expose:
       - '3010'
     networks:
@@ -199,7 +212,7 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 20s
     logging:
       driver: json-file
       options:
