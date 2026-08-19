@@ -1,0 +1,74 @@
+name: ADE Phase D Docker smoke
+
+on:
+  push:
+    branches:
+      - agent/ade-fiscal-phase-d-playwright-dry-run
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ade-fiscal-phase-d-playwright-dry-run
+      - name: Build dedicated ADE worker image
+        run: docker build -f Dockerfile.ade-fiscal-worker -t fluxa-ade-phase-d .
+      - name: Start worker in blocked dry-run mode
+        run: |
+          docker run -d --name fluxa-ade-phase-d \
+            -p 127.0.0.1:3010:3010 \
+            -e ADE_DRY_RUN_ENABLED=true \
+            -e ADE_WORKER_INTERNAL_TOKEN=0123456789abcdef0123456789abcdef \
+            -e ADE_WEB_ENTRY_URL=https://example.invalid/ade \
+            -e ADE_STORAGE_STATE_PATH=/run/fluxa-ade/storage-state.json \
+            fluxa-ade-phase-d
+      - name: Verify health and fail-closed dry run
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3010/health > /tmp/health.json; then
+              break
+            fi
+            sleep 2
+          done
+          cat /tmp/health.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/health.json', 'utf8'));
+          if (health.phase !== 'dry_run') throw new Error('unexpected phase');
+          if (health.browser !== 'ready') throw new Error(`browser not ready: ${health.browser}`);
+          if (health.adeSession !== 'missing') throw new Error(`unexpected session: ${health.adeSession}`);
+          if (health.dryRun !== 'blocked') throw new Error(`unexpected dry run state: ${health.dryRun}`);
+          if (health.operational !== false || health.canSubmit !== false) {
+            throw new Error('worker unexpectedly reports submit capability');
+          }
+          NODE
+          status=$(curl --silent --output /tmp/dry-run.json --write-out '%{http_code}' \
+            -X POST \
+            -H 'x-fluxa-internal-token: 0123456789abcdef0123456789abcdef' \
+            http://127.0.0.1:3010/internal/dry-run)
+          cat /tmp/dry-run.json
+          test "$status" = '412'
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const result = JSON.parse(fs.readFileSync('/tmp/dry-run.json', 'utf8'));
+          if (result.code !== 'ADE_SESSION_REQUIRED') throw new Error(`unexpected code: ${result.code}`);
+          if (result.submitAttempted !== false || result.canSubmit !== false) {
+            throw new Error('dry run unexpectedly reports submit capability');
+          }
+          NODE
+      - name: Stop worker
+        if: always()
+        run: docker rm -f fluxa-ade-phase-d || true
+      - name: Remove smoke workflow after success
+        run: |
+          rm .github/workflows/ade-phase-d-docker-smoke.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/ade-phase-d-docker-smoke.yml
+          git commit -m 'chore(ade): remove phase D Docker smoke workflow'
+          git push origin HEAD:agent/ade-fiscal-phase-d-playwright-dry-run
