@@ -1,0 +1,31 @@
+name: ADE Phase D lock resync
+
+on:
+  push:
+    branches:
+      - agent/ade-fiscal-phase-d-playwright-dry-run
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ade-fiscal-phase-d-playwright-dry-run
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Resync lockfile without lifecycle scripts
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit lockfile and remove helper workflow
+        run: |
+          rm .github/workflows/ade-phase-d-lock-resync.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json .github/workflows/ade-phase-d-lock-resync.yml
+          git commit -m 'chore(ade): preserve lockfile dependencies'
+          git push origin HEAD:agent/ade-fiscal-phase-d-playwright-dry-run
