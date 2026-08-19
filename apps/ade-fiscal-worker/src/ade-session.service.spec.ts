@@ -42,7 +42,7 @@ describe('AdeSessionService', () => {
     }
   });
 
-  it('fails closed when the session file is missing', () => {
+  it('fails closed when the session path is not configured', () => {
     withEnv(undefined, () => {
       const service = new AdeSessionService(new AdeRuntimeConfigService());
       expect(service.readiness().status).toBe('missing');
@@ -50,6 +50,26 @@ describe('AdeSessionService', () => {
         'La sessione Agenzia delle Entrate non è configurata.',
       );
     });
+  });
+
+  it('treats an absent mounted session file as missing, not corrupt', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fluxa-ade-session-'));
+    const path = join(dir, 'storage-state.json');
+
+    try {
+      withEnv(path, () => {
+        const service = new AdeSessionService(new AdeRuntimeConfigService());
+        expect(service.readiness()).toEqual({
+          status: 'missing',
+          reason: 'file_missing',
+        });
+        expect(() => service.storageStatePathForUse()).toThrow(
+          'La sessione Agenzia delle Entrate non è configurata.',
+        );
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('fails closed when storage state is malformed', () => {
