@@ -3,16 +3,21 @@ import { Injectable } from '@nestjs/common';
 import type { PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import {
-  FiscalProviderError,
-  FiscalProviderService,
-} from './fiscal-provider.service';
+  classifyFiscalFailure,
+  type FiscalFailureDecision,
+} from './fiscal-execution-policy';
+import type {
+  FiscalProviderExecutionResult,
+  FiscalProviderName,
+} from './providers/fiscal-provider';
+import { FiscalProviderRegistry } from './providers/fiscal-provider.registry';
 
 interface DocumentRow extends QueryResultRow {
   id: string;
   organizationId: string;
   type: 'SALE' | 'VOID';
   status: string;
-  provider: 'MOCK' | 'ACUBE_SMART_RECEIPTS' | 'OPENAPI_SMART_RECEIPTS';
+  provider: FiscalProviderName;
   environment: 'SANDBOX' | 'PRODUCTION';
   payload: Record<string, unknown>;
   externalId: string | null;
@@ -24,14 +29,15 @@ interface DocumentRow extends QueryResultRow {
 export class FiscalExecutionService {
   constructor(
     private readonly database: DatabaseService,
-    private readonly provider: FiscalProviderService,
+    private readonly providers: FiscalProviderRegistry,
   ) {}
 
   async execute(documentId: string): Promise<Record<string, unknown>> {
     const document = await this.claim(documentId);
     if (!document) return { skipped: true, documentId };
+
     try {
-      const result = await this.provider.execute({
+      const result = await this.providers.execute({
         documentId,
         type: document.type,
         provider: document.provider,
@@ -46,23 +52,25 @@ export class FiscalExecutionService {
         externalId: result.externalId,
       };
     } catch (error) {
-      const providerError =
-        error instanceof FiscalProviderError
+      const failure = classifyFiscalFailure({
+        provider: document.provider,
+        attempts: document.attempts,
+        maxAttempts: document.maxAttempts,
+        error,
+      });
+      await this.fail(document, failure);
+
+      if (failure.retryable) {
+        throw error instanceof Error
           ? error
-          : new FiscalProviderError(
-              error instanceof Error ? error.message : 'Unknown fiscal error',
-              true,
-              'FISCAL_UNKNOWN_ERROR',
-            );
-      const maxAttempts =
-        document.provider === 'OPENAPI_SMART_RECEIPTS'
-          ? Math.max(document.maxAttempts, 10)
-          : document.maxAttempts;
-      const retryable =
-        providerError.retryable && document.attempts < maxAttempts;
-      await this.fail(document, providerError, retryable);
-      if (retryable) throw providerError;
-      return { documentId, status: 'REJECTED', errorCode: providerError.code };
+          : new Error(failure.error.message);
+      }
+
+      return {
+        documentId,
+        status: failure.status,
+        errorCode: failure.error.code,
+      };
     }
   }
 
@@ -75,8 +83,10 @@ export class FiscalExecutionService {
         [documentId],
       );
       const document = result.rows[0];
-      if (!document || !['QUEUED', 'RETRY'].includes(document.status))
+      if (!document || !['QUEUED', 'RETRY'].includes(document.status)) {
         return null;
+      }
+
       const nextAttempt = document.attempts + 1;
       await client.query(
         `UPDATE fiscal_documents SET status='PROCESSING', attempts=$2, updated_at=NOW() WHERE id=$1`,
@@ -92,13 +102,7 @@ export class FiscalExecutionService {
 
   private async succeed(
     document: DocumentRow,
-    result: {
-      externalId: string;
-      externalStatus: string;
-      documentNumber: string | null;
-      documentDate: string | null;
-      response: Record<string, unknown>;
-    },
+    result: FiscalProviderExecutionResult,
   ) {
     await this.withTransaction(async (client) => {
       const status = document.type === 'SALE' ? 'ISSUED' : 'VOIDED';
@@ -128,39 +132,38 @@ export class FiscalExecutionService {
           documentNumber: result.documentNumber,
         },
       );
-      if (document.type === 'VOID')
+      if (document.type === 'VOID') {
         await client.query(
           `UPDATE fiscal_documents SET external_status='voided', updated_at=NOW() WHERE id=(SELECT parent_document_id FROM fiscal_documents WHERE id=$1)`,
           [document.id],
         );
+      }
     });
   }
 
   private async fail(
     document: DocumentRow,
-    error: FiscalProviderError,
-    retryable: boolean,
+    failure: FiscalFailureDecision,
   ) {
     await this.withTransaction(async (client) => {
-      const status = retryable ? 'RETRY' : 'REJECTED';
       const delaySeconds = Math.min(
         300,
         5 * 2 ** Math.min(document.attempts - 1, 6),
       );
       await client.query(
         `UPDATE fiscal_documents SET status=$2::fiscal_document_status, error_code=$3, error_message=$4,
-          provider_response=$5::jsonb, next_attempt_at=NOW()+($6::text || ' seconds')::interval,
+          provider_response=$5::jsonb, next_attempt_at=CASE WHEN $2::fiscal_document_status='RETRY'::fiscal_document_status THEN NOW()+($6::text || ' seconds')::interval ELSE next_attempt_at END,
           external_id=COALESCE($7, external_id), external_status=COALESCE($8, external_status),
           version=version+1, updated_at=NOW() WHERE id=$1`,
         [
           document.id,
-          status,
-          error.code,
-          error.message.slice(0, 1000),
-          JSON.stringify(error.response ?? {}),
+          failure.status,
+          failure.error.code,
+          failure.error.message.slice(0, 1000),
+          JSON.stringify(failure.error.response ?? {}),
           delaySeconds,
-          error.externalId ?? null,
-          error.externalStatus ?? null,
+          failure.error.externalId ?? null,
+          failure.error.externalStatus ?? null,
         ],
       );
       await client.query(
@@ -168,22 +171,25 @@ export class FiscalExecutionService {
         [
           document.id,
           document.attempts,
-          retryable ? 'RETRY' : 'REJECTED',
-          error.code,
-          error.message.slice(0, 1000),
-          JSON.stringify(error.response ?? {}),
+          failure.attemptOutcome,
+          failure.error.code,
+          failure.error.message.slice(0, 1000),
+          JSON.stringify(failure.error.response ?? {}),
         ],
       );
       await this.events(
         client,
         document,
-        retryable ? 'fiscal.document.retry' : 'fiscal.document.rejected',
+        `fiscal.document.${failure.status.toLowerCase()}`,
         {
-          errorCode: error.code,
-          errorMessage: error.message,
-          ...(error.externalId ? { externalId: error.externalId } : {}),
-          ...(error.externalStatus
-            ? { externalStatus: error.externalStatus }
+          errorCode: failure.error.code,
+          errorMessage: failure.error.message,
+          retryable: failure.retryable,
+          ...(failure.error.externalId
+            ? { externalId: failure.error.externalId }
+            : {}),
+          ...(failure.error.externalStatus
+            ? { externalStatus: failure.error.externalStatus }
             : {}),
         },
       );
