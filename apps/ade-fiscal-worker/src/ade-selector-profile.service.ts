@@ -1,4 +1,4 @@
-import { lstatSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { Injectable } from '@nestjs/common';
 import { AdeAutomationError } from './ade-automation-error';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
@@ -57,7 +57,7 @@ export class AdeSelectorProfileService {
 
   readiness(): AdeSelectorProfileStatus {
     const path = this.config.read().selectorProfilePath;
-    if (!path) return 'empty';
+    if (!path || !existsSync(path)) return 'empty';
     try {
       readProfile(path);
       return 'configured';
@@ -68,7 +68,7 @@ export class AdeSelectorProfileService {
 
   loadForUse(): AdeSelectorProfile | null {
     const path = this.config.read().selectorProfilePath;
-    if (!path) return null;
+    if (!path || !existsSync(path)) return null;
     try {
       return readProfile(path);
     } catch {
