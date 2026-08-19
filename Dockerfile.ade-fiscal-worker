@@ -1,0 +1,22 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build:ade-fiscal-worker
+
+FROM mcr.microsoft.com/playwright:v1.62.0-noble AS runtime
+WORKDIR /app
+ENV NODE_ENV=production \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/dist/apps/ade-fiscal-worker ./dist/apps/ade-fiscal-worker
+
+RUN mkdir -p /run/fluxa-ade && chown -R pwuser:pwuser /app /run/fluxa-ade
+USER pwuser
+
+STOPSIGNAL SIGTERM
+CMD ["node", "dist/apps/ade-fiscal-worker/main.js"]

@@ -10,6 +10,7 @@ const requiredFiles = [
   '.env.production.example',
   'apps/web/.env.production.example',
   'Dockerfile',
+  'Dockerfile.ade-fiscal-worker',
   'Dockerfile.web',
   'SECURITY.md',
   'docs/architecture/system-overview.md',
@@ -17,6 +18,7 @@ const requiredFiles = [
   'docs/operations/backup-restore.md',
   'docs/operations/release-checklist.md',
   'docs/operations/observability.md',
+  'docs/operations/ade-web-dry-run.md',
   'scripts/e2e-release-candidate.mjs',
   'scripts/verify-migrations.mjs',
   'scripts/backup-postgres.mjs',
@@ -72,6 +74,11 @@ for (const script of [
   );
 }
 assert.ok(webPackage.scripts?.verify, 'Web verify script is missing.');
+assert.equal(
+  rootPackage.dependencies?.playwright,
+  '1.62.0',
+  'ADE worker Playwright dependency must stay pinned to 1.62.0.',
+);
 
 const workflow = fs.readFileSync(
   path.join(root, '.github/workflows/ci.yml'),
@@ -101,6 +108,22 @@ for (const name of [
   assert.ok(
     productionEnvironment.includes(`${name}=`),
     `Production example is missing ${name}.`,
+  );
+}
+
+const adeDockerfile = fs.readFileSync(
+  path.join(root, 'Dockerfile.ade-fiscal-worker'),
+  'utf8',
+);
+for (const marker of [
+  'mcr.microsoft.com/playwright:v1.62.0-noble',
+  'npm run build:ade-fiscal-worker',
+  'npm ci --omit=dev',
+  'USER pwuser',
+]) {
+  assert.ok(
+    adeDockerfile.includes(marker),
+    `Dockerfile.ade-fiscal-worker marker missing: ${marker}`,
   );
 }
 

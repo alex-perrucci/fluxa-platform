@@ -48,6 +48,9 @@ fluxa_compose() {
   if [[ "${ACUBE_ENABLED:-false}" == "true" || "${OPENAPI_ENABLED:-false}" == "true" ]]; then
     profile_args+=(--profile fiscal)
   fi
+  if [[ "${ADE_DRY_RUN_ENABLED:-false}" == "true" ]]; then
+    profile_args+=(--profile ade-fiscal)
+  fi
   compose_base "${profile_args[@]}" "$@"
 }
 

@@ -8,6 +8,7 @@ const requiredFiles = [
   'deploy/vps/compose.production.yml',
   'deploy/vps/Caddyfile',
   'deploy/vps/.env.example',
+  'Dockerfile.ade-fiscal-worker',
   'deploy/vps/systemd/fluxa-backup.service',
   'deploy/vps/systemd/fluxa-backup.timer',
   'scripts/vps/install.sh',
@@ -39,6 +40,7 @@ for (const service of [
   'api',
   'background-worker',
   'fiscal-worker',
+  'ade-fiscal-worker',
   'web',
   'caddy',
 ]) {
@@ -80,6 +82,34 @@ assert.ok(
   'Compose health dependencies are missing.',
 );
 
+const adeWorker = serviceBlock('ade-fiscal-worker');
+for (const marker of [
+  'Dockerfile.ade-fiscal-worker',
+  'ADE_DRY_RUN_ENABLED:',
+  'ADE_WORKER_INTERNAL_TOKEN:',
+  'ADE_STORAGE_STATE_PATH: /run/fluxa-ade/storage-state.json',
+  'ADE_SELECTOR_PROFILE_PATH: /run/fluxa-ade/selectors.json',
+  ':/run/fluxa-ade:ro',
+  '- ade-fiscal',
+]) {
+  assert.ok(
+    adeWorker.includes(marker),
+    `ADE worker deployment marker missing: ${marker}`,
+  );
+}
+assert.ok(
+  !adeWorker.includes('\n    ports:'),
+  'ADE worker must not publish a host port.',
+);
+assert.ok(
+  !adeWorker.includes('\n      - data'),
+  'ADE worker must not join the PostgreSQL/Redis data network.',
+);
+assert.ok(
+  adeWorker.includes('\n      - app'),
+  'ADE worker must only be reachable on the application network.',
+);
+
 const caddy = fs.readFileSync(path.join(root, 'deploy/vps/Caddyfile'), 'utf8');
 for (const marker of [
   '{$WEB_DOMAIN}',
@@ -90,6 +120,10 @@ for (const marker of [
 ]) {
   assert.ok(caddy.includes(marker), `Caddy marker missing: ${marker}`);
 }
+assert.ok(
+  !caddy.includes('ade-fiscal-worker'),
+  'ADE worker must not be exposed through Caddy.',
+);
 
 for (const script of [
   'install.sh',
@@ -109,6 +143,12 @@ for (const script of [
     `${script} must use strict Bash mode.`,
   );
 }
+
+const lib = fs.readFileSync(path.join(root, 'scripts/vps/lib.sh'), 'utf8');
+assert.ok(
+  lib.includes('ADE_DRY_RUN_ENABLED') && lib.includes('--profile ade-fiscal'),
+  'VPS helper must enable the ADE profile only from the explicit dry-run flag.',
+);
 
 const provision = fs.readFileSync(
   path.join(root, 'scripts/vps/provision.sh'),
@@ -145,6 +185,9 @@ for (const marker of [
   'OPENAPI_ENABLED=false',
   'OPENAPI_BEARER_TOKEN=',
   'OPENAPI_SANDBOX_BEARER_TOKEN=',
+  'ADE_DRY_RUN_ENABLED=false',
+  'ADE_WORKER_INTERNAL_TOKEN=',
+  'ADE_RUNTIME_DIR=/opt/fluxa/runtime/ade',
 ]) {
   assert.ok(
     environment.includes(marker),
