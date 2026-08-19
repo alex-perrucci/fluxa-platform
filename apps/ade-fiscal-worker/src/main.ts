@@ -14,7 +14,7 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(port, '0.0.0.0');
   Logger.log(
-    `ADE fiscal worker foundation started on port ${port}; browser automation is disabled.`,
+    `ADE fiscal worker dry-run phase started on port ${port}; fiscal submit is not implemented.`,
     'AdeFiscalWorker',
   );
 }
