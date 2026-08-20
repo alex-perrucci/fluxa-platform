@@ -70,17 +70,29 @@ void main() {
     expect(route, isNull);
   });
 
-  test('only active receipt or generic printers can receive payment receipts', () {
-    expect(canReceivePaymentReceipts(_printer(PrinterPurpose.receipt)), isTrue);
-    expect(canReceivePaymentReceipts(_printer(PrinterPurpose.generic)), isTrue);
-    expect(canReceivePaymentReceipts(_printer(PrinterPurpose.kitchen)), isFalse);
-    expect(
-      canReceivePaymentReceipts(
-        _printer(PrinterPurpose.receipt, status: PrinterStatus.disabled),
-      ),
-      isFalse,
-    );
-  });
+  test(
+    'only active receipt or generic printers can receive payment receipts',
+    () {
+      expect(
+        canReceivePaymentReceipts(_printer(PrinterPurpose.receipt)),
+        isTrue,
+      );
+      expect(
+        canReceivePaymentReceipts(_printer(PrinterPurpose.generic)),
+        isTrue,
+      );
+      expect(
+        canReceivePaymentReceipts(_printer(PrinterPurpose.kitchen)),
+        isFalse,
+      );
+      expect(
+        canReceivePaymentReceipts(
+          _printer(PrinterPurpose.receipt, status: PrinterStatus.disabled),
+        ),
+        isFalse,
+      );
+    },
+  );
 }
 
 PrinterDevice _printer(

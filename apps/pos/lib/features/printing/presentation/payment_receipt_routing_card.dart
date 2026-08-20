@@ -7,6 +7,54 @@ import '../../../core/network/backend_error.dart';
 import '../domain/payment_receipt_route.dart';
 import '../domain/printing_models.dart';
 
+class PaymentReceiptRoutingAction extends ConsumerWidget {
+  const PaymentReceiptRoutingAction({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider).state;
+    final printing = ref.watch(printingControllerProvider);
+    final location = auth.deviceAssignment?.location;
+    final session = auth.session;
+    if (location == null || session == null) {
+      return const SizedBox.shrink();
+    }
+
+    final canManage = _canManageReceiptRouting(session.role);
+    return FilledButton.tonalIcon(
+      key: const Key('payment-receipt-routing-open'),
+      onPressed: () => showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Ricevute automatiche'),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 680,
+              maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.72,
+            ),
+            child: SingleChildScrollView(
+              child: PaymentReceiptRoutingCard(
+                locationId: location.id,
+                locationName: location.name,
+                printers: printing.printers,
+                canManage: canManage,
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Chiudi'),
+            ),
+          ],
+        ),
+      ),
+      icon: const Icon(Icons.receipt_long_outlined),
+      label: const Text('Ricevute automatiche'),
+    );
+  }
+}
+
 class PaymentReceiptRoutingCard extends ConsumerStatefulWidget {
   const PaymentReceiptRoutingCard({
     required this.locationId,
@@ -258,7 +306,9 @@ class _PaymentReceiptRoutingCardState
                     ],
                     onChanged: !widget.canManage || _saving
                         ? null
-                        : (value) => setState(() => _selectedPrinterId = value),
+                        : (value) => setState(
+                            () => _selectedPrinterId = value,
+                          ),
                   );
                   final save = FilledButton.icon(
                     key: const Key('payment-receipt-routing-save'),
@@ -326,3 +376,6 @@ class _PaymentReceiptRoutingCardState
     );
   }
 }
+
+bool _canManageReceiptRouting(String? role) =>
+    role == 'OWNER' || role == 'ADMIN' || role == 'MANAGER';

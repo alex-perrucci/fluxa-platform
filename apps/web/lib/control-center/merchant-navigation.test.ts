@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   merchantLegacyDetailRoutes,
+  merchantMergedLegacyRoutes,
   merchantNavigation,
 } from './merchant-navigation';
 
@@ -33,5 +34,20 @@ describe('merchantNavigation', () => {
       '/merchant/sales',
       '/merchant/settings',
     ]);
+  });
+
+  it('merges duplicate configuration pages into the merchant mental model', () => {
+    expect(merchantMergedLegacyRoutes).toEqual({
+      '/merchant/location': '/merchant/venue',
+      '/merchant/floor-plan': '/merchant/venue?view=map',
+      '/merchant/kitchen-configuration': '/merchant/operations?view=printing',
+      '/merchant/pos-configuration': '/merchant/operations',
+      '/merchant/fiscal-configuration': '/merchant/settings',
+    });
+
+    const canonicalRoots = new Set(merchantNavigation.map((item) => item.href));
+    for (const target of Object.values(merchantMergedLegacyRoutes)) {
+      expect(canonicalRoots.has(target.split('?')[0] as (typeof merchantNavigation)[number]['href'])).toBe(true);
+    }
   });
 });

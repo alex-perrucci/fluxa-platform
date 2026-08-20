@@ -7,6 +7,14 @@ export const merchantNavigation = [
   { href: '/merchant/settings', label: 'Impostazioni', icon: 'shield' },
 ] as const;
 
+export const merchantMergedLegacyRoutes = {
+  '/merchant/location': '/merchant/venue',
+  '/merchant/floor-plan': '/merchant/venue?view=map',
+  '/merchant/kitchen-configuration': '/merchant/operations?view=printing',
+  '/merchant/pos-configuration': '/merchant/operations',
+  '/merchant/fiscal-configuration': '/merchant/settings',
+} as const;
+
 export const merchantLegacyDetailRoutes = [
   '/merchant/location',
   '/merchant/floor-plan',
