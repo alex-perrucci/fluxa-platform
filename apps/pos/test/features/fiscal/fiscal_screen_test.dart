@@ -6,38 +6,26 @@ import 'package:fluxa_pos/features/fiscal/data/fiscal_api.dart';
 import 'package:fluxa_pos/features/fiscal/domain/fiscal_models.dart';
 import 'package:fluxa_pos/features/fiscal/presentation/fiscal_controller.dart';
 import 'package:fluxa_pos/features/fiscal/presentation/fiscal_screen.dart';
+import 'package:fluxa_pos/features/health/data/health_api.dart';
+import 'package:fluxa_pos/features/health/domain/health_models.dart';
 import 'package:fluxa_pos/features/orders/data/orders_api.dart';
 import 'package:fluxa_pos/features/orders/domain/order_models.dart';
 
 void main() {
-  testWidgets('shows A-Cube sandbox and paid order pending fiscalization', (
-    tester,
-  ) async {
-    final controller = FiscalController(_FiscalGateway(), _OrdersGateway());
+  testWidgets('shows A-Cube sandbox from operational runtime', (tester) async {
+    final controller = _controller(provider: FiscalProvider.acubeSmartReceipts);
     addTearDown(controller.dispose);
     await controller.bindLocation('location-1');
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: FiscalView(
-            controller: controller,
-            locationName: 'Parma',
-            role: 'OWNER',
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
+    await _pumpFiscalView(tester, controller);
 
     expect(find.text('A-Cube Smart Receipts · Sandbox'), findsOneWidget);
-    expect(find.text('Ordini pagati da fiscalizzare'), findsOneWidget);
+    expect(find.text('Stato fiscale della sede'), findsOneWidget);
+    expect(find.byKey(const Key('configure-acube-sandbox-button')), findsNothing);
     expect(
-      find.byKey(const Key('fiscal-pending-order-order-1')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const Key('configure-acube-sandbox-button')),
+      find.text(
+        'Le impostazioni tecniche del provider sono gestite dal Platform Control Center.',
+      ),
       findsOneWidget,
     );
   });
@@ -45,92 +33,80 @@ void main() {
   testWidgets('keeps OpenAPI configuration managed by the platform', (
     tester,
   ) async {
-    final controller = FiscalController(
-      _FiscalGateway(provider: FiscalProvider.openapiSmartReceipts),
-      _OrdersGateway(),
-    );
+    final controller = _controller(provider: FiscalProvider.openapiSmartReceipts);
     addTearDown(controller.dispose);
     await controller.bindLocation('location-1');
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: FiscalView(
-            controller: controller,
-            locationName: 'Bar Latino',
-            role: 'OWNER',
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
+    await _pumpFiscalView(tester, controller);
 
     expect(find.text('OpenAPI Smart Receipts · Sandbox'), findsOneWidget);
-    expect(
-      find.text('Configurazione OpenAPI gestita dal Platform Control Center.'),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const Key('configure-acube-sandbox-button')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('configure-acube-sandbox-button')), findsNothing);
   });
 
-  testWidgets('renders ADE_WEB production profile without A-Cube controls', (
+  testWidgets('renders ADE_WEB production runtime without technical controls', (
     tester,
   ) async {
-    final controller = FiscalController(
-      _FiscalGateway(provider: FiscalProvider.adeWeb),
-      _OrdersGateway(),
+    final controller = _controller(
+      provider: FiscalProvider.adeWeb,
+      environment: FiscalEnvironment.production,
+      autoIssueOnPaid: true,
     );
     addTearDown(controller.dispose);
     await controller.bindLocation('location-1');
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: FiscalView(
-            controller: controller,
-            locationName: 'Punto vendita',
-            role: 'OWNER',
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
+    await _pumpFiscalView(tester, controller);
 
     expect(find.text('Agenzia delle Entrate · Produzione'), findsOneWidget);
-    expect(
-      find.byKey(const Key('configure-acube-sandbox-button')),
-      findsNothing,
-    );
+    expect(find.text('Emissione automatica al pagamento: attiva'), findsOneWidget);
+    expect(find.textContaining('Partita IVA'), findsNothing);
+    expect(find.byKey(const Key('configure-acube-sandbox-button')), findsNothing);
   });
 }
 
-class _FiscalGateway implements FiscalGateway {
-  _FiscalGateway({this.provider = FiscalProvider.acubeSmartReceipts});
+Future<void> _pumpFiscalView(
+  WidgetTester tester,
+  FiscalController controller,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: FiscalView(
+          controller: controller,
+          locationName: 'Bar Latino',
+          role: 'OWNER',
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+}
 
-  final FiscalProvider provider;
+FiscalController _controller({
+  FiscalProvider provider = FiscalProvider.acubeSmartReceipts,
+  FiscalEnvironment environment = FiscalEnvironment.sandbox,
+  bool autoIssueOnPaid = false,
+}) => FiscalController(
+  _FiscalGateway(),
+  _OrdersGateway(),
+  _HealthGateway(
+    _health(
+      provider: provider,
+      environment: environment,
+      autoIssueOnPaid: autoIssueOnPaid,
+    ),
+  ),
+);
+
+class _HealthGateway implements HealthGateway {
+  _HealthGateway(this.health);
+  final OperationalHealth health;
 
   @override
-  Future<FiscalProfile?> getProfile(String locationId) async => FiscalProfile(
-    id: 'p1',
-    organizationId: 'o1',
-    locationId: locationId,
-    provider: provider,
-    environment: provider == FiscalProvider.adeWeb
-        ? FiscalEnvironment.production
-        : FiscalEnvironment.sandbox,
-    fiscalId: '12345678901',
-    enabled: true,
-    autoIssueOnPaid: provider == FiscalProvider.adeWeb,
-    receiptEmail: null,
-    displayName: null,
-    version: 1,
-    createdAt: DateTime.utc(2026),
-    updatedAt: DateTime.utc(2026),
-  );
+  Future<OperationalHealth> operational({required String locationId}) async =>
+      health;
+}
 
+class _FiscalGateway implements FiscalGateway {
   @override
   Future<FiscalDocumentPage> listDocuments({
     required String locationId,
@@ -140,18 +116,6 @@ class _FiscalGateway implements FiscalGateway {
     int pageSize = 100,
   }) async =>
       FiscalDocumentPage(page: 1, pageSize: 100, total: 0, items: const []);
-
-  @override
-  Future<FiscalProfile> upsertProfile({
-    required String locationId,
-    required FiscalProvider provider,
-    required FiscalEnvironment environment,
-    required String fiscalId,
-    required bool enabled,
-    required bool autoIssueOnPaid,
-    String? receiptEmail,
-    String? displayName,
-  }) => throw UnimplementedError();
 
   @override
   Future<FiscalDocument> getDocument(String documentId) =>
@@ -194,37 +158,11 @@ class _OrdersGateway implements OrdersGateway {
     OrderStatus? status,
     int page = 1,
     int pageSize = 30,
-  }) async => OrderListPage(
+  }) async => const OrderListPage(
     page: 1,
     pageSize: 100,
-    total: 1,
-    items: [
-      OrderHeader(
-        id: 'order-1',
-        organizationId: 'o1',
-        locationId: locationId,
-        deviceId: 'd1',
-        createdByUserId: 'u1',
-        clientOrderId: 'c1',
-        number: '20260722-000001',
-        businessDate: '2026-07-22',
-        status: OrderStatus.paid,
-        serviceMode: OrderServiceMode.counter,
-        customerNote: null,
-        currency: 'EUR',
-        version: 1,
-        subtotalCents: 1000,
-        discountCents: 0,
-        totalCents: 1000,
-        netTotalCents: 820,
-        taxTotalCents: 180,
-        heldAt: null,
-        cancelledAt: null,
-        cancelReason: null,
-        createdAt: DateTime.utc(2026),
-        updatedAt: DateTime.utc(2026),
-      ),
-    ],
+    total: 0,
+    items: [],
   );
 
   @override
@@ -301,3 +239,29 @@ class _OrdersGateway implements OrdersGateway {
     required int expectedVersion,
   }) => throw UnimplementedError();
 }
+
+OperationalHealth _health({
+  required FiscalProvider provider,
+  required FiscalEnvironment environment,
+  required bool autoIssueOnPaid,
+}) => OperationalHealth(
+  generatedAt: DateTime.utc(2026, 8, 20),
+  overallStatus: HealthStatus.ok,
+  apiStatus: HealthStatus.ok,
+  apiLatencyMs: 10,
+  printerStatus: HealthStatus.ok,
+  printerCount: 1,
+  fiscalStatus: HealthStatus.ok,
+  fiscalProvider: provider.wireValue,
+  fiscalEnvironment: environment.wireValue,
+  fiscalEnabled: true,
+  fiscalAutoIssueOnPaid: autoIssueOnPaid,
+  fiscalLastDocumentStatus: 'ISSUED',
+  fiscalErrorCode: null,
+  fiscalErrorMessage: null,
+  paymentStatus: HealthStatus.ok,
+  paymentProvider: 'MANUAL_TERMINAL',
+  lastPrintJob: null,
+  suggestions: const [],
+  raw: const {},
+);
