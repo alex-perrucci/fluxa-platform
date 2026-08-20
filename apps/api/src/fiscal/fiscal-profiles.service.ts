@@ -224,7 +224,8 @@ export class FiscalProfilesService {
     if (location.lifecycleStatus === 'ARCHIVED') {
       throw new BadRequestException({
         code: 'LOCATION_ARCHIVED',
-        message: 'La configurazione fiscale non è modificabile su una sede archiviata.',
+        message:
+          'La configurazione fiscale non è modificabile su una sede archiviata.',
       });
     }
     return location;
