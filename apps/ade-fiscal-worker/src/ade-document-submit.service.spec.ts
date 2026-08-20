@@ -108,15 +108,17 @@ describe('AdeDocumentSubmitService', () => {
   });
 
   it('never refreshes or retries an ambiguous error after Procedi', async () => {
-    const submit = jest.fn().mockRejectedValue(
-      new AdeAutomationError(
-        'Esito non verificabile.',
-        'ADE_DOCUMENT_SUBMIT_UNKNOWN',
-        'SUBMIT_UNKNOWN',
-        false,
-        true,
-      ),
-    );
+    const submit = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'Esito non verificabile.',
+          'ADE_DOCUMENT_SUBMIT_UNKNOWN',
+          'SUBMIT_UNKNOWN',
+          false,
+          true,
+        ),
+      );
     const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
     const refresh = jest.fn();
     const auth = { refresh } as unknown as AdeAuthService;
@@ -133,15 +135,17 @@ describe('AdeDocumentSubmitService', () => {
   });
 
   it('blocks the same operationId after an ambiguous post-submit attempt', async () => {
-    const submit = jest.fn().mockRejectedValue(
-      new AdeAutomationError(
-        'Esito non verificabile.',
-        'ADE_DOCUMENT_SUBMIT_UNKNOWN',
-        'SUBMIT_UNKNOWN',
-        false,
-        true,
-      ),
-    );
+    const submit = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'Esito non verificabile.',
+          'ADE_DOCUMENT_SUBMIT_UNKNOWN',
+          'SUBMIT_UNKNOWN',
+          false,
+          true,
+        ),
+      );
     const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
     const service = serviceWithDependencies({ browser });
 
