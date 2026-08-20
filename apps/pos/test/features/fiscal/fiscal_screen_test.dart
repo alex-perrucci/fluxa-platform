@@ -75,6 +75,36 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('renders ADE_WEB production profile without A-Cube controls', (
+    tester,
+  ) async {
+    final controller = FiscalController(
+      _FiscalGateway(provider: FiscalProvider.adeWeb),
+      _OrdersGateway(),
+    );
+    addTearDown(controller.dispose);
+    await controller.bindLocation('location-1');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FiscalView(
+            controller: controller,
+            locationName: 'Punto vendita',
+            role: 'OWNER',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Agenzia delle Entrate · Produzione'), findsOneWidget);
+    expect(
+      find.byKey(const Key('configure-acube-sandbox-button')),
+      findsNothing,
+    );
+  });
 }
 
 class _FiscalGateway implements FiscalGateway {
@@ -88,10 +118,12 @@ class _FiscalGateway implements FiscalGateway {
     organizationId: 'o1',
     locationId: locationId,
     provider: provider,
-    environment: FiscalEnvironment.sandbox,
+    environment: provider == FiscalProvider.adeWeb
+        ? FiscalEnvironment.production
+        : FiscalEnvironment.sandbox,
     fiscalId: '12345678901',
     enabled: true,
-    autoIssueOnPaid: false,
+    autoIssueOnPaid: provider == FiscalProvider.adeWeb,
     receiptEmail: null,
     displayName: null,
     version: 1,
