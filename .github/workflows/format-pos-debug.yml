@@ -1,0 +1,52 @@
+name: Format POS debug
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  format-pos:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.32.5
+          channel: stable
+          cache: true
+      - name: Format changed POS files
+        run: >-
+          dart format
+          lib/core/workflow/pos_workflow_coordinator.dart
+          lib/features/fiscal/presentation/fiscal_controller.dart
+          lib/features/fiscal/presentation/operator_fiscal_screen.dart
+          lib/features/settings/presentation/operator_diagnostics_screen.dart
+          test/features/fiscal/fiscal_controller_test.dart
+          test/features/fiscal/fiscal_runtime_test.dart
+          test/features/fiscal/fiscal_screen_test.dart
+          test/features/fiscal/operator_fiscal_screen_test.dart
+          test/features/health/diagnostics_fiscal_runtime_test.dart
+      - name: Upload exact formatted files
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-pos-files
+          path: |
+            apps/pos/lib/core/workflow/pos_workflow_coordinator.dart
+            apps/pos/lib/features/fiscal/presentation/fiscal_controller.dart
+            apps/pos/lib/features/fiscal/presentation/operator_fiscal_screen.dart
+            apps/pos/lib/features/settings/presentation/operator_diagnostics_screen.dart
+            apps/pos/test/features/fiscal/fiscal_controller_test.dart
+            apps/pos/test/features/fiscal/fiscal_runtime_test.dart
+            apps/pos/test/features/fiscal/fiscal_screen_test.dart
+            apps/pos/test/features/fiscal/operator_fiscal_screen_test.dart
+            apps/pos/test/features/health/diagnostics_fiscal_runtime_test.dart
+          if-no-files-found: error
