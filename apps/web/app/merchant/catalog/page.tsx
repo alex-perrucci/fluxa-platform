@@ -37,9 +37,9 @@ export default async function MerchantCatalogPage() {
   return (
     <>
       <section className="glass-panel panel-padding">
-        <SectionHeading eyebrow="Venue configuration" title="Catalogo e prezzi" />
-        <p className="muted">
-          Categorie, aliquote IVA, prodotti e listini sono configurati qui e diventano la fonte autorevole per tutti i POS.
+        <SectionHeading eyebrow="Menu" title="Cosa vendi" />
+        <p className="muted max-w-3xl">
+          Prodotti, categorie e prezzi in un solo posto. Nel caso normale bastano nome, prezzo e categoria; le impostazioni tecniche restano disponibili solo quando servono.
         </p>
       </section>
       <div className="mt-5">
