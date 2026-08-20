@@ -15,7 +15,15 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist/apps/ade-fiscal-worker ./dist/apps/ade-fiscal-worker
 
-RUN mkdir -p /run/fluxa-ade && chown -R pwuser:pwuser /app /run/fluxa-ade
+RUN mkdir -p \
+      /run/fluxa-ade \
+      /run/fluxa-ade-session \
+      /run/fluxa-ade-secrets \
+    && chown -R pwuser:pwuser \
+      /app \
+      /run/fluxa-ade \
+      /run/fluxa-ade-session \
+      /run/fluxa-ade-secrets
 USER pwuser
 
 STOPSIGNAL SIGTERM

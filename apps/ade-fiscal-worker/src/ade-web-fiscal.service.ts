@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { AdeAuthProfileService } from './ade-auth-profile.service';
+import { AdeAuthService, type AdeAuthStatus } from './ade-auth.service';
 import {
   AdeBrowserService,
   type AdeBrowserStatus,
 } from './ade-browser.service';
+import { AdeCieCredentialsService } from './ade-cie-credentials.service';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 import {
   AdeSelectorProfileService,
@@ -15,10 +18,14 @@ import {
 
 export interface AdeWorkerReadiness {
   service: 'ok';
-  phase: 'dry_run';
+  phase: 'cie_auth';
   browser: AdeBrowserStatus;
   adeSession: AdeSessionStatus;
   selectorProfile: AdeSelectorProfileStatus;
+  authProfile: 'missing' | 'invalid' | 'configured';
+  cieCredentials: 'missing' | 'invalid' | 'ready';
+  authEntryUrl: 'missing' | 'invalid' | 'configured';
+  authStatus: AdeAuthStatus;
   entryUrl: 'missing' | 'invalid' | 'configured';
   internalAuth: 'missing' | 'configured';
   dryRun: 'disabled' | 'blocked' | 'ready';
@@ -33,6 +40,9 @@ export class AdeWebFiscalService {
     private readonly browser: AdeBrowserService,
     private readonly session: AdeSessionService,
     private readonly selectors: AdeSelectorProfileService,
+    private readonly authProfileService: AdeAuthProfileService,
+    private readonly cieCredentialsService: AdeCieCredentialsService,
+    private readonly auth: AdeAuthService,
   ) {}
 
   readiness(): AdeWorkerReadiness {
@@ -40,8 +50,15 @@ export class AdeWebFiscalService {
     const browser = this.browser.readiness();
     const adeSession = this.session.readiness().status;
     const selectorProfile = this.selectors.readiness();
+    const authProfile = this.authProfileService.readiness();
+    const cieCredentials = this.cieCredentialsService.readiness();
     const entryUrl = config.entryUrl
       ? this.config.validatedEntryUrl()
+        ? 'configured'
+        : 'invalid'
+      : 'missing';
+    const authEntryUrl = config.authEntryUrl
+      ? this.config.validatedAuthEntryUrl()
         ? 'configured'
         : 'invalid'
       : 'missing';
@@ -60,10 +77,14 @@ export class AdeWebFiscalService {
 
     return {
       service: 'ok',
-      phase: 'dry_run',
+      phase: 'cie_auth',
       browser,
       adeSession,
       selectorProfile,
+      authProfile,
+      cieCredentials,
+      authEntryUrl,
+      authStatus: this.auth.status().status,
       entryUrl,
       internalAuth,
       dryRun,
