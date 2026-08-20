@@ -73,13 +73,13 @@ function sanitizedWorkerResponse(raw: unknown): AdeWorkerResponse {
     message: stringField(value.message) || undefined,
     operationId: stringField(value.operationId) || undefined,
     finalUrl: stringField(value.finalUrl) || undefined,
-    confirmationEvidence:
-      stringField(value.confirmationEvidence) || undefined,
+    confirmationEvidence: stringField(value.confirmationEvidence) || undefined,
     submitAttempted:
       typeof value.submitAttempted === 'boolean'
         ? value.submitAttempted
         : undefined,
-    retrySafe: typeof value.retrySafe === 'boolean' ? value.retrySafe : undefined,
+    retrySafe:
+      typeof value.retrySafe === 'boolean' ? value.retrySafe : undefined,
   };
 }
 
@@ -216,12 +216,7 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
       );
     }
 
-    throw new FiscalProviderError(
-      message,
-      false,
-      code,
-      recordField(worker),
-    );
+    throw new FiscalProviderError(message, false, code, recordField(worker));
   }
 
   private workerPayload(input: FiscalProviderExecutionInput) {
