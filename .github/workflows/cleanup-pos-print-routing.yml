@@ -39,36 +39,14 @@ jobs:
               raise SystemExit('import anchor not found')
           text = text.replace(old, new, 1)
 
-          old = """              _AgentCard(controller: controller),
-              const SizedBox(height: 12),
-              SizedBox(height: mobilePaneHeight, child: selectedPane),"""
-          new = """              _AgentCard(controller: controller),
-              const SizedBox(height: 12),
-              PaymentReceiptRoutingCard(
-                locationId: location.id,
-                locationName: location.name,
-                printers: controller.printers,
-                canManage: canManageJobs,
-              ),
-              const SizedBox(height: 12),
-              SizedBox(height: mobilePaneHeight, child: selectedPane),"""
+          old = "              _AgentCard(controller: controller),\n              const SizedBox(height: 12),\n              SizedBox(height: mobilePaneHeight, child: selectedPane),"
+          new = "              _AgentCard(controller: controller),\n              const SizedBox(height: 12),\n              PaymentReceiptRoutingCard(\n                locationId: location.id,\n                locationName: location.name,\n                printers: controller.printers,\n                canManage: canManageJobs,\n              ),\n              const SizedBox(height: 12),\n              SizedBox(height: mobilePaneHeight, child: selectedPane),"
           if old not in text:
               raise SystemExit('mobile anchor not found')
           text = text.replace(old, new, 1)
 
-          old = """              _AgentCard(controller: controller),
-              const SizedBox(height: 12),
-              Expanded("""
-          new = """              _AgentCard(controller: controller),
-              const SizedBox(height: 12),
-              PaymentReceiptRoutingCard(
-                locationId: location.id,
-                locationName: location.name,
-                printers: controller.printers,
-                canManage: canManageJobs,
-              ),
-              const SizedBox(height: 12),
-              Expanded("""
+          old = "              _AgentCard(controller: controller),\n              const SizedBox(height: 12),\n              Expanded("
+          new = "              _AgentCard(controller: controller),\n              const SizedBox(height: 12),\n              PaymentReceiptRoutingCard(\n                locationId: location.id,\n                locationName: location.name,\n                printers: controller.printers,\n                canManage: canManageJobs,\n              ),\n              const SizedBox(height: 12),\n              Expanded("
           if old not in text:
               raise SystemExit('desktop anchor not found')
           text = text.replace(old, new, 1)
