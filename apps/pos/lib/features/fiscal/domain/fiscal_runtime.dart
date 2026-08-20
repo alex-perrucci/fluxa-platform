@@ -44,7 +44,8 @@ class FiscalRuntimeConfiguration {
 
     final provider = FiscalProvider.fromWire(providerWire);
     final environment = FiscalEnvironment.fromWire(health.fiscalEnvironment);
-    final enabled = health.fiscalEnabled ??
+    final enabled =
+        health.fiscalEnabled ??
         health.fiscalStatus != HealthStatus.notConfigured;
     final lastDocumentStatus = _documentStatus(health.fiscalLastDocumentStatus);
 
@@ -52,7 +53,7 @@ class FiscalRuntimeConfiguration {
         ? FiscalRuntimeStatus.disabled
         : lastDocumentStatus == FiscalDocumentStatus.authRequired
         ? FiscalRuntimeStatus.authRequired
-        : lastDocumentStatus == FiscalDocumentStatus.unknown
+        : _requiresAttention(lastDocumentStatus)
         ? FiscalRuntimeStatus.attention
         : FiscalRuntimeStatus.ready;
 
@@ -114,6 +115,11 @@ class FiscalRuntimeConfiguration {
     FiscalRuntimeStatus.attention => 'Da verificare',
     FiscalRuntimeStatus.verificationError => 'Verifica non disponibile',
   };
+
+  static bool _requiresAttention(FiscalDocumentStatus? status) =>
+      status == FiscalDocumentStatus.unknown ||
+      status == FiscalDocumentStatus.rejected ||
+      status == FiscalDocumentStatus.cancelled;
 
   static FiscalDocumentStatus? _documentStatus(String? value) {
     if (value == null || value.isEmpty) return null;
