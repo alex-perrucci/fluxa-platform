@@ -139,7 +139,7 @@ void main() {
     test('ADE_WEB UNKNOWN does not trigger fiscal retry', () async {
       final trigger = AutomaticPaymentReceiptTrigger();
       var printCalls = 0;
-      var fiscalRetryCalls = 0;
+      const fiscalRetryCalls = 0;
 
       final outcome = await trigger.onCheckoutState(
         checkoutId: 'checkout-ade-unknown',
