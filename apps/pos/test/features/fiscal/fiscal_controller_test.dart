@@ -27,6 +27,23 @@ void main() {
     );
   });
 
+  test('blocks lottery code before an ADE_WEB emission starts', () async {
+    final fiscal = _FiscalGateway(provider: FiscalProvider.adeWeb);
+    final controller = FiscalController(fiscal, _OrdersGateway());
+    addTearDown(controller.dispose);
+
+    await controller.bindLocation('location-1');
+    final success = await controller.issueOrder(
+      'order-1',
+      lotteryCode: 'ABCD1234',
+    );
+
+    expect(success, isFalse);
+    expect(fiscal.issueCalls, 0);
+    expect(controller.errorMessage, contains('codice lotteria'));
+    expect(controller.errorMessage, contains('non è stata avviata'));
+  });
+
   test(
     'reloads authoritative fiscal document after version conflict',
     () async {
@@ -49,13 +66,18 @@ void main() {
 }
 
 class _FiscalGateway implements FiscalGateway {
-  _FiscalGateway({this.versionConflict = false});
+  _FiscalGateway({
+    this.versionConflict = false,
+    this.provider = FiscalProvider.acubeSmartReceipts,
+  });
   final bool versionConflict;
+  final FiscalProvider provider;
   int issueCalls = 0;
   List<FiscalDocument> documents = [];
 
   @override
-  Future<FiscalProfile?> getProfile(String locationId) async => _profile();
+  Future<FiscalProfile?> getProfile(String locationId) async =>
+      _profile(provider: provider);
 
   @override
   Future<FiscalProfile> upsertProfile({
@@ -67,7 +89,7 @@ class _FiscalGateway implements FiscalGateway {
     required bool autoIssueOnPaid,
     String? receiptEmail,
     String? displayName,
-  }) async => _profile();
+  }) async => _profile(provider: provider);
 
   @override
   Future<FiscalDocumentPage> listDocuments({
@@ -226,15 +248,19 @@ class _OrdersGateway implements OrdersGateway {
   }) => throw UnimplementedError();
 }
 
-FiscalProfile _profile() => FiscalProfile(
+FiscalProfile _profile({
+  FiscalProvider provider = FiscalProvider.acubeSmartReceipts,
+}) => FiscalProfile(
   id: 'profile-1',
   organizationId: 'org-1',
   locationId: 'location-1',
-  provider: FiscalProvider.acubeSmartReceipts,
-  environment: FiscalEnvironment.sandbox,
+  provider: provider,
+  environment: provider == FiscalProvider.adeWeb
+      ? FiscalEnvironment.production
+      : FiscalEnvironment.sandbox,
   fiscalId: '12345678901',
   enabled: true,
-  autoIssueOnPaid: false,
+  autoIssueOnPaid: provider == FiscalProvider.adeWeb,
   receiptEmail: null,
   displayName: 'Demo',
   version: 1,
