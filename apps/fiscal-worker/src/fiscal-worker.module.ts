@@ -4,6 +4,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { validateEnvironment } from '@fluxa/config';
 import { DatabaseModule } from '@fluxa/database';
 import { QueueModule } from '@fluxa/queue';
+import { AdeProcessingRecoveryService } from './ade-processing-recovery.service';
 import { FiscalExecutionService } from './fiscal-execution.service';
 import { FiscalProcessor } from './fiscal.processor';
 import { FiscalProviderService } from './fiscal-provider.service';
@@ -31,6 +32,7 @@ import { LegacyFiscalProviderAdapter } from './providers/legacy-fiscal.provider'
     LegacyFiscalProviderAdapter,
     AdeWebFiscalProvider,
     FiscalProviderRegistry,
+    AdeProcessingRecoveryService,
   ],
 })
 export class FiscalWorkerModule {}
