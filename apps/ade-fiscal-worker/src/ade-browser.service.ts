@@ -284,7 +284,10 @@ export class AdeBrowserService implements OnApplicationShutdown {
     timeoutMs: number,
   ): Promise<void> {
     try {
-      const search = this.profileLocator(page, profile.serviceSearchSelector).first();
+      const search = this.profileLocator(
+        page,
+        profile.serviceSearchSelector,
+      ).first();
       await search.waitFor({ state: 'visible', timeout: timeoutMs });
       await search.fill('fatture');
     } catch {
@@ -354,7 +357,10 @@ export class AdeBrowserService implements OnApplicationShutdown {
       selected = true;
     } catch {
       // Compatibility fallback for an alternate accessible-radio rendering.
-      const radio = this.profileLocator(page, profile.workProfileRadioSelector).first();
+      const radio = this.profileLocator(
+        page,
+        profile.workProfileRadioSelector,
+      ).first();
       if (await radio.isVisible().catch(() => false)) {
         await radio.check();
         selected = true;
@@ -578,15 +584,19 @@ export class AdeBrowserService implements OnApplicationShutdown {
 
   private async browser(): Promise<Browser> {
     if (!this.browserPromise) {
-      this.browserPromise = chromium.launch({ headless: true }).catch((error) => {
-        this.browserPromise = null;
-        throw new AdeAutomationError(
-          error instanceof Error ? error.message : 'Chromium non disponibile.',
-          'ADE_BROWSER_UNAVAILABLE',
-          'BROWSER',
-          true,
-        );
-      });
+      this.browserPromise = chromium
+        .launch({ headless: true })
+        .catch((error) => {
+          this.browserPromise = null;
+          throw new AdeAutomationError(
+            error instanceof Error
+              ? error.message
+              : 'Chromium non disponibile.',
+            'ADE_BROWSER_UNAVAILABLE',
+            'BROWSER',
+            true,
+          );
+        });
     }
 
     const browser = await this.browserPromise;
