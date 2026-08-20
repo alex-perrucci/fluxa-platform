@@ -1,0 +1,30 @@
+name: POS format debug
+
+on:
+  push:
+    branches:
+      - fix/pos-auto-receipt-after-payment
+
+permissions:
+  contents: read
+
+jobs:
+  format-debug:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.32.5
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Show formatter diff
+        shell: bash
+        run: |
+          dart format .
+          git diff -- test/core/workflow/automatic_payment_receipt_trigger_test.dart
+          git diff --exit-code
