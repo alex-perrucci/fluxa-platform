@@ -44,10 +44,11 @@ class PaymentReceiptRoute {
   final bool active;
 }
 
-PaymentReceiptRoute? paymentReceiptRouteFromPayload(Object? payload) {
+List<PaymentReceiptRoute> paymentReceiptRoutesFromPayload(Object? payload) {
   if (payload is! List) {
     throw const FormatException('Elenco configurazioni stampante non valido.');
   }
+  final routes = <PaymentReceiptRoute>[];
   for (final raw in payload) {
     if (raw is! Map) {
       continue;
@@ -60,9 +61,14 @@ PaymentReceiptRoute? paymentReceiptRouteFromPayload(Object? payload) {
     if (json['kitchenStationId'] != null || json['active'] == false) {
       continue;
     }
-    return PaymentReceiptRoute.fromJson(json);
+    routes.add(PaymentReceiptRoute.fromJson(json));
   }
-  return null;
+  return List<PaymentReceiptRoute>.unmodifiable(routes);
+}
+
+PaymentReceiptRoute? paymentReceiptRouteFromPayload(Object? payload) {
+  final routes = paymentReceiptRoutesFromPayload(payload);
+  return routes.isEmpty ? null : routes.first;
 }
 
 bool canReceivePaymentReceipts(PrinterDevice printer) =>
