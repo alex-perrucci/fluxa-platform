@@ -27,6 +27,12 @@ class OperationalHealth {
     required this.printerCount,
     required this.fiscalStatus,
     required this.fiscalProvider,
+    required this.fiscalEnvironment,
+    required this.fiscalEnabled,
+    required this.fiscalAutoIssueOnPaid,
+    required this.fiscalLastDocumentStatus,
+    required this.fiscalErrorCode,
+    required this.fiscalErrorMessage,
     required this.paymentStatus,
     required this.paymentProvider,
     required this.lastPrintJob,
@@ -53,6 +59,12 @@ class OperationalHealth {
       printerCount: rawItems.length,
       fiscalStatus: HealthStatus.fromWire(fiscal['status']),
       fiscalProvider: fiscal['provider']?.toString(),
+      fiscalEnvironment: fiscal['environment']?.toString(),
+      fiscalEnabled: fiscal['enabled'] is bool ? fiscal['enabled'] as bool : null,
+      fiscalAutoIssueOnPaid: fiscal['autoIssueOnPaid'] == true,
+      fiscalLastDocumentStatus: fiscal['lastDocumentStatus']?.toString(),
+      fiscalErrorCode: fiscal['errorCode']?.toString(),
+      fiscalErrorMessage: fiscal['errorMessage']?.toString(),
       paymentStatus: HealthStatus.fromWire(payment['status']),
       paymentProvider: payment['provider']?.toString(),
       lastPrintJob: lastJob is Map
@@ -71,6 +83,12 @@ class OperationalHealth {
   final int printerCount;
   final HealthStatus fiscalStatus;
   final String? fiscalProvider;
+  final String? fiscalEnvironment;
+  final bool? fiscalEnabled;
+  final bool fiscalAutoIssueOnPaid;
+  final String? fiscalLastDocumentStatus;
+  final String? fiscalErrorCode;
+  final String? fiscalErrorMessage;
   final HealthStatus paymentStatus;
   final String? paymentProvider;
   final Map<String, Object?>? lastPrintJob;
