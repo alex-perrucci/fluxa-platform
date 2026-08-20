@@ -1,0 +1,384 @@
+import { Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { chromium, type Browser, type Locator, type Page } from 'playwright';
+import { AdeAutomationError } from './ade-automation-error';
+
+export interface AdeDocumentItemInput {
+  description: string;
+  quantity: number;
+  grossUnitPriceCents: number;
+  vatRate: number;
+}
+
+export interface AdeDocumentPaymentInput {
+  cashCents: number;
+  electronicCents: number;
+}
+
+export interface AdeDocumentBrowserInput {
+  entryUrl: string;
+  storageStatePath: string;
+  items: AdeDocumentItemInput[];
+  payment: AdeDocumentPaymentInput;
+  expectedGrossTotalCents: number;
+  timeoutMs: number;
+}
+
+export interface AdeDocumentBrowserResult {
+  finalUrl: string;
+  confirmationBoundarySeen: true;
+  cancelledAtBoundary: true;
+  itemCount: number;
+  grossTotalCents: number;
+  paymentTotalCents: number;
+  submitAttempted: false;
+  canSubmit: false;
+}
+
+function safeUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return 'unavailable';
+  }
+}
+
+function formatEuroInput(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+function parseEuroInputToCents(value: string): number | null {
+  const normalized = value.trim().replace(/\s/g, '').replace(',', '.');
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.round(parsed * 100);
+}
+
+function containsEuroAmount(text: string, cents: number): boolean {
+  const fixed = (cents / 100).toFixed(2);
+  const comma = fixed.replace('.', ',');
+  const compact = text.replace(/\u00a0/g, ' ');
+  return compact.includes(fixed) || compact.includes(comma);
+}
+
+@Injectable()
+export class AdeDocumentBrowserService implements OnApplicationShutdown {
+  private browserPromise: Promise<Browser> | null = null;
+
+  async dryRun(input: AdeDocumentBrowserInput): Promise<AdeDocumentBrowserResult> {
+    const browser = await this.browser();
+    let context;
+    try {
+      context = await browser.newContext({ storageState: input.storageStatePath });
+    } catch {
+      throw new AdeAutomationError(
+        'Impossibile caricare la sessione browser Agenzia delle Entrate.',
+        'ADE_SESSION_INVALID',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+
+    try {
+      const page = await context.newPage();
+      await this.goto(page, input.entryUrl, input.timeoutMs);
+
+      await this.clickRequired(
+        page.getByRole('link', { name: 'Documento Commerciale on', exact: false }),
+        input.timeoutMs,
+        'Documento Commerciale on line non disponibile.',
+      );
+      await this.clickRequired(
+        page.getByRole('link', { name: 'Genera il tuo documento', exact: false }),
+        input.timeoutMs,
+        'Generazione documento commerciale non disponibile.',
+      );
+
+      for (let index = 0; index < input.items.length; index += 1) {
+        await this.fillItem(page, index + 1, input.items[index], input.timeoutMs);
+        await this.clickRequired(
+          page.getByRole('button', { name: 'Aggiungi riga', exact: false }),
+          input.timeoutMs,
+          `Impossibile aggiungere la riga ${index + 1} al documento commerciale.`,
+        );
+      }
+
+      await this.fillAndVerifyPayment(page, input.payment, input.timeoutMs);
+
+      await this.clickRequired(
+        page.getByRole('button', { name: 'Vai a Verifica dati', exact: false }),
+        input.timeoutMs,
+        'Passaggio a Verifica dati non disponibile.',
+      );
+
+      await this.verifySummary(
+        page,
+        input.items,
+        input.expectedGrossTotalCents,
+        input.timeoutMs,
+      );
+
+      await this.clickRequired(
+        page.getByRole('button', {
+          name: 'Vai a Conferma e stampa',
+          exact: false,
+        }),
+        input.timeoutMs,
+        'Passaggio a Conferma e stampa non disponibile.',
+      );
+
+      await this.clickRequired(
+        page.getByRole('button', { name: 'Conferma', exact: true }),
+        input.timeoutMs,
+        'Conferma preliminare del documento non disponibile.',
+      );
+
+      const proceed = page
+        .getByRole('button', { name: 'Procedi', exact: false })
+        .first();
+      const cancel = page
+        .getByRole('button', { name: 'Annulla', exact: false })
+        .first();
+
+      try {
+        await proceed.waitFor({ state: 'visible', timeout: input.timeoutMs });
+        await cancel.waitFor({ state: 'visible', timeout: input.timeoutMs });
+      } catch {
+        throw new AdeAutomationError(
+          'Boundary finale Procedi/Annulla non trovato.',
+          'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND',
+          'SELECTOR_MISMATCH',
+          false,
+        );
+      }
+
+      // Safety invariant: the dry-run never clicks "Procedi". The only action
+      // allowed at the irreversible boundary is closing it with "Annulla".
+      await cancel.click();
+
+      return {
+        finalUrl: safeUrl(page.url()),
+        confirmationBoundarySeen: true,
+        cancelledAtBoundary: true,
+        itemCount: input.items.length,
+        grossTotalCents: input.expectedGrossTotalCents,
+        paymentTotalCents:
+          input.payment.cashCents + input.payment.electronicCents,
+        submitAttempted: false,
+        canSubmit: false,
+      };
+    } finally {
+      await context.close().catch(() => undefined);
+    }
+  }
+
+  async onApplicationShutdown(): Promise<void> {
+    const browserPromise = this.browserPromise;
+    this.browserPromise = null;
+    if (!browserPromise) return;
+
+    try {
+      const browser = await browserPromise;
+      await browser.close().catch(() => undefined);
+    } catch {
+      // Browser launch failures are classified for the request that observed them.
+    }
+  }
+
+  private async fillItem(
+    page: Page,
+    row: number,
+    item: AdeDocumentItemInput,
+    timeoutMs: number,
+  ): Promise<void> {
+    const quantity = page
+      .getByRole('textbox', { name: `Q.tà riga ${row}:*`, exact: false })
+      .first();
+    const description = page
+      .getByRole('textbox', {
+        name: `Descrizione prodotto/servizio riga ${row}:*`,
+        exact: false,
+      })
+      .first();
+    const price = page
+      .getByRole('textbox', {
+        name: `Prezzo lordo € riga ${row}:*`,
+        exact: false,
+      })
+      .first();
+    const vat = page
+      .getByLabel(`Aliquota IVA riga ${row}:*`, { exact: false })
+      .first();
+
+    try {
+      await quantity.waitFor({ state: 'visible', timeout: timeoutMs });
+      await quantity.fill(String(item.quantity));
+      await description.fill(item.description);
+      await price.fill(formatEuroInput(item.grossUnitPriceCents));
+      await vat.selectOption(String(item.vatRate));
+
+      const quantityValue = Number(await quantity.inputValue());
+      const descriptionValue = (await description.inputValue()).trim();
+      const priceValue = parseEuroInputToCents(await price.inputValue());
+      const vatValue = await vat.inputValue();
+
+      if (
+        quantityValue !== item.quantity ||
+        descriptionValue !== item.description ||
+        priceValue !== item.grossUnitPriceCents ||
+        vatValue !== String(item.vatRate)
+      ) {
+        throw new Error('row verification mismatch');
+      }
+    } catch {
+      throw new AdeAutomationError(
+        `Compilazione o verifica della riga ${row} non riuscita.`,
+        'ADE_DOCUMENT_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
+  }
+
+  private async fillAndVerifyPayment(
+    page: Page,
+    payment: AdeDocumentPaymentInput,
+    timeoutMs: number,
+  ): Promise<void> {
+    const cash = page
+      .getByRole('textbox', { name: 'Pagamento in contanti €:', exact: false })
+      .first();
+    const electronic = page
+      .getByRole('textbox', {
+        name: 'Pagamento con strumenti',
+        exact: false,
+      })
+      .first();
+
+    try {
+      await cash.waitFor({ state: 'visible', timeout: timeoutMs });
+      await electronic.waitFor({ state: 'visible', timeout: timeoutMs });
+
+      await cash.fill(
+        payment.cashCents > 0 ? formatEuroInput(payment.cashCents) : '',
+      );
+      await electronic.fill(
+        payment.electronicCents > 0
+          ? formatEuroInput(payment.electronicCents)
+          : '',
+      );
+
+      const cashValue = parseEuroInputToCents(await cash.inputValue());
+      const electronicValue = parseEuroInputToCents(await electronic.inputValue());
+      if (
+        cashValue !== payment.cashCents ||
+        electronicValue !== payment.electronicCents
+      ) {
+        throw new Error('payment verification mismatch');
+      }
+    } catch {
+      throw new AdeAutomationError(
+        'Compilazione o verifica dei pagamenti non riuscita.',
+        'ADE_DOCUMENT_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
+  }
+
+  private async verifySummary(
+    page: Page,
+    items: AdeDocumentItemInput[],
+    grossTotalCents: number,
+    timeoutMs: number,
+  ): Promise<void> {
+    try {
+      await page
+        .getByRole('button', { name: 'Vai a Conferma e stampa', exact: false })
+        .first()
+        .waitFor({ state: 'visible', timeout: timeoutMs });
+
+      const bodyText = await page.locator('body').innerText();
+      const normalized = bodyText.toLocaleLowerCase('it-IT');
+
+      for (const item of items) {
+        if (!normalized.includes(item.description.toLocaleLowerCase('it-IT'))) {
+          throw new Error('missing item description');
+        }
+      }
+
+      if (!normalized.includes('iva') || !normalized.includes('totale')) {
+        throw new Error('summary markers missing');
+      }
+      if (!containsEuroAmount(bodyText, grossTotalCents)) {
+        throw new Error('gross total missing');
+      }
+    } catch (error) {
+      if (error instanceof AdeAutomationError) throw error;
+      throw new AdeAutomationError(
+        'I dati mostrati nella schermata Verifica dati non corrispondono al documento atteso.',
+        'ADE_DOCUMENT_VERIFY_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
+  }
+
+  private async clickRequired(
+    locator: Locator,
+    timeoutMs: number,
+    message: string,
+  ): Promise<void> {
+    try {
+      const target = locator.first();
+      await target.waitFor({ state: 'visible', timeout: timeoutMs });
+      await target.click();
+    } catch {
+      throw new AdeAutomationError(
+        message,
+        'ADE_DOCUMENT_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
+  }
+
+  private async goto(page: Page, url: string, timeoutMs: number): Promise<void> {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+    } catch (error) {
+      throw new AdeAutomationError(
+        error instanceof Error ? error.message : 'Navigazione AdE fallita.',
+        'ADE_NAVIGATION_FAILED',
+        'NAVIGATION',
+        true,
+      );
+    }
+  }
+
+  private async browser(): Promise<Browser> {
+    if (!this.browserPromise) {
+      this.browserPromise = chromium.launch({ headless: true }).catch((error) => {
+        this.browserPromise = null;
+        throw new AdeAutomationError(
+          error instanceof Error ? error.message : 'Chromium non disponibile.',
+          'ADE_BROWSER_UNAVAILABLE',
+          'BROWSER',
+          true,
+        );
+      });
+    }
+
+    const browser = await this.browserPromise;
+    if (!browser.isConnected()) {
+      this.browserPromise = null;
+      return this.browser();
+    }
+    return browser;
+  }
+}
