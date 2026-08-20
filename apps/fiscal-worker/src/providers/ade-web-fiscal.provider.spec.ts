@@ -18,6 +18,7 @@ function input() {
           description: 'Caffe',
           unit_price: '1.30',
           vat_rate_code: '10',
+          discount: undefined as string | undefined,
         },
       ],
       cash_payment_amount: '1.30',
@@ -39,7 +40,8 @@ describe('AdeWebFiscalProvider', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
-    if (previousToken === undefined) delete process.env.ADE_WORKER_INTERNAL_TOKEN;
+    if (previousToken === undefined)
+      delete process.env.ADE_WORKER_INTERNAL_TOKEN;
     else process.env.ADE_WORKER_INTERNAL_TOKEN = previousToken;
     if (previousCf === undefined) delete process.env.ADE_INCARICANTE_CF;
     else process.env.ADE_INCARICANTE_CF = previousCf;
@@ -80,9 +82,9 @@ describe('AdeWebFiscalProvider', () => {
   it('turns a transport failure into terminal UNKNOWN', async () => {
     jest.spyOn(global, 'fetch').mockRejectedValue(new Error('connection lost'));
 
-    await expect(new AdeWebFiscalProvider().execute(input())).rejects.toMatchObject<
-      Partial<FiscalProviderSafetyError>
-    >({
+    await expect(
+      new AdeWebFiscalProvider().execute(input()),
+    ).rejects.toMatchObject<Partial<FiscalProviderSafetyError>>({
       code: 'ADE_WEB_TRANSPORT_UNKNOWN',
       terminalStatus: 'UNKNOWN',
     });
@@ -101,9 +103,9 @@ describe('AdeWebFiscalProvider', () => {
       ),
     );
 
-    await expect(new AdeWebFiscalProvider().execute(input())).rejects.toMatchObject<
-      Partial<FiscalProviderSafetyError>
-    >({
+    await expect(
+      new AdeWebFiscalProvider().execute(input()),
+    ).rejects.toMatchObject<Partial<FiscalProviderSafetyError>>({
       code: 'ADE_DOCUMENT_SUBMIT_UNKNOWN',
       terminalStatus: 'UNKNOWN',
     });
@@ -111,13 +113,13 @@ describe('AdeWebFiscalProvider', () => {
 
   it('rejects unsupported discounts before calling the worker', async () => {
     const request = input();
-    request.payload.items[0] = {
-      ...request.payload.items[0],
-      discount: '0.10',
-    } as (typeof request.payload.items)[number];
+    request.payload.items[0].discount = '0.10';
 
-    await expect(new AdeWebFiscalProvider().execute(request)).rejects.toMatchObject<
-      Partial<FiscalProviderError>
-    >({ code: 'ADE_WEB_DISCOUNT_NOT_SUPPORTED', retryable: false });
+    await expect(
+      new AdeWebFiscalProvider().execute(request),
+    ).rejects.toMatchObject<Partial<FiscalProviderError>>({
+      code: 'ADE_WEB_DISCOUNT_NOT_SUPPORTED',
+      retryable: false,
+    });
   });
 });
