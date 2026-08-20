@@ -6,20 +6,12 @@ import { requireMerchantSession } from '@/lib/auth/session';
 export const dynamic = 'force-dynamic';
 
 const nav = [
-  { href: '/merchant', label: 'Panoramica', icon: 'dashboard' as const },
-  { href: '/merchant/location', label: 'Sedi', icon: 'building' as const },
-  { href: '/merchant/floor-plan', label: 'Piantina', icon: 'location' as const },
+  { href: '/merchant', label: 'Home', icon: 'dashboard' as const },
   { href: '/merchant/catalog', label: 'Menu', icon: 'money' as const },
-  { href: '/merchant/kitchen-configuration', label: 'Stampanti e cucina', icon: 'activity' as const },
-  { href: '/merchant/pos-configuration', label: 'Dispositivi POS', icon: 'activity' as const },
-  { href: '/merchant/fiscal-configuration', label: 'Fiscalizzazione', icon: 'building' as const },
-  { href: '/merchant/events', label: 'Eventi', icon: 'calendar' as const },
-  { href: '/merchant/reservations', label: 'Prenotazioni', icon: 'ticket' as const },
+  { href: '/merchant/venue', label: 'Locale', icon: 'building' as const },
+  { href: '/merchant/operations', label: 'Operatività', icon: 'activity' as const },
   { href: '/merchant/sales', label: 'Vendite', icon: 'money' as const },
-  { href: '/merchant/payments', label: 'Pagamenti', icon: 'money' as const },
-  { href: '/merchant/fiscal-documents', label: 'Documenti fiscali', icon: 'building' as const },
-  { href: '/merchant/reports', label: 'Report', icon: 'dashboard' as const },
-  { href: '/merchant/health', label: 'Assistenza', icon: 'activity' as const },
+  { href: '/merchant/settings', label: 'Impostazioni', icon: 'shield' as const },
 ];
 
 export default async function MerchantLayout({
