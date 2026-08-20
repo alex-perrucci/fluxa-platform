@@ -1,6 +1,7 @@
 name: POS format debug
 
 on:
+  pull_request:
   push:
     branches:
       - fix/pos-auto-receipt-after-payment
