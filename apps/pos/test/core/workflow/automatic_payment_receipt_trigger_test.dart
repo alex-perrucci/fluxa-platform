@@ -57,10 +57,7 @@ void main() {
         enqueueReceipt: print,
       );
 
-      expect(
-        rebuild,
-        AutomaticPaymentReceiptOutcome.skippedAlreadyAttempted,
-      );
+      expect(rebuild, AutomaticPaymentReceiptOutcome.skippedAlreadyAttempted);
       expect(printCalls, 1);
     });
 
@@ -84,10 +81,7 @@ void main() {
         enqueueReceipt: print,
       );
 
-      expect(
-        refresh,
-        AutomaticPaymentReceiptOutcome.skippedAlreadyAttempted,
-      );
+      expect(refresh, AutomaticPaymentReceiptOutcome.skippedAlreadyAttempted);
       expect(printCalls, 1);
     });
 
@@ -112,10 +106,7 @@ void main() {
       );
 
       expect(failed, AutomaticPaymentReceiptOutcome.failed);
-      expect(
-        duplicate,
-        AutomaticPaymentReceiptOutcome.skippedAlreadyAttempted,
-      );
+      expect(duplicate, AutomaticPaymentReceiptOutcome.skippedAlreadyAttempted);
       expect(printCalls, 1);
     });
 
