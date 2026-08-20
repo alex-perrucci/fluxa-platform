@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/di/providers.dart';
-import '../../health/data/health_api.dart';
+import '../../fiscal/domain/fiscal_runtime.dart';
+import '../../fiscal/presentation/fiscal_controller.dart';
 import '../../health/domain/health_models.dart';
 
 class OperatorDiagnosticsScreen extends ConsumerStatefulWidget {
@@ -25,6 +26,7 @@ class _OperatorDiagnosticsScreenState
   Widget build(BuildContext context) {
     final authController = ref.watch(authControllerProvider);
     final auth = authController.state;
+    final fiscal = ref.watch(fiscalControllerProvider);
     final location = auth.deviceAssignment?.location;
     final session = auth.session;
 
@@ -34,13 +36,14 @@ class _OperatorDiagnosticsScreenState
       );
     }
 
-    _scheduleLoad(location.id);
+    _scheduleLoad(location.id, fiscal);
     final health = _health;
+    final fiscalStatus = diagnosticFiscalStatus(fiscal.runtime);
     final ready =
         health != null &&
         health.apiStatus == HealthStatus.ok &&
         health.printerStatus == HealthStatus.ok &&
-        health.fiscalStatus == HealthStatus.ok;
+        fiscalStatus == HealthStatus.ok;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -87,9 +90,10 @@ class _OperatorDiagnosticsScreenState
           _HumanStatusRow(
             icon: Icons.receipt_long_outlined,
             title: 'Scontrini fiscali',
-            value: _fiscalLabel(health),
-            status: health.fiscalStatus,
-            detail: _providerLabel(health.fiscalProvider),
+            value: diagnosticFiscalLabel(fiscal.runtime),
+            status: fiscalStatus,
+            detail: fiscal.runtime?.provider?.label ??
+                'Nessun provider configurato',
           ),
           _HumanStatusRow(
             icon: Icons.credit_card,
@@ -113,15 +117,13 @@ class _OperatorDiagnosticsScreenState
           ),
         const SizedBox(height: 14),
         FilledButton.tonalIcon(
-          onPressed: _loading ? null : () => _load(location.id),
+          onPressed: _loading ? null : () => _refreshChecks(location.id),
           icon: const Icon(Icons.refresh),
           label: const Text('CONTROLLA ADESSO'),
         ),
         const SizedBox(height: 8),
         TextButton.icon(
-          onPressed: auth.busy
-              ? null
-              : authController.refreshOperationalContext,
+          onPressed: auth.busy ? null : _reloadConfiguration,
           icon: const Icon(Icons.sync),
           label: const Text('Ricarica configurazione della postazione'),
         ),
@@ -129,10 +131,56 @@ class _OperatorDiagnosticsScreenState
     );
   }
 
-  void _scheduleLoad(String locationId) {
+  void _scheduleLoad(String locationId, FiscalController fiscal) {
     if (_scheduledLocationId == locationId) return;
     _scheduledLocationId = locationId;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load(locationId));
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (fiscal.locationId == locationId) {
+        await fiscal.refresh(silent: true);
+      } else {
+        await fiscal.bindLocation(locationId);
+      }
+      if (!mounted) return;
+      await _load(locationId);
+    });
+  }
+
+  Future<void> _refreshChecks(String locationId) async {
+    final fiscal = ref.read(fiscalControllerProvider);
+    if (fiscal.locationId == locationId) {
+      await fiscal.refresh(silent: true);
+    } else {
+      await fiscal.bindLocation(locationId);
+    }
+    if (!mounted) return;
+    await _load(locationId);
+  }
+
+  Future<void> _reloadConfiguration() async {
+    final auth = ref.read(authControllerProvider);
+    await auth.refreshOperationalContext();
+    if (!mounted) return;
+
+    final fiscal = ref.read(fiscalControllerProvider);
+    final location = auth.state.deviceAssignment?.location;
+    if (location == null) {
+      fiscal.clearContext();
+      setState(() {
+        _health = null;
+        _error = 'Postazione non associata a una sede operativa.';
+        _scheduledLocationId = null;
+      });
+      return;
+    }
+
+    _scheduledLocationId = location.id;
+    if (fiscal.locationId == location.id) {
+      await fiscal.refresh(silent: true);
+    } else {
+      await fiscal.bindLocation(location.id);
+    }
+    if (!mounted) return;
+    await _load(location.id);
   }
 
   Future<void> _load(String locationId) async {
@@ -142,9 +190,9 @@ class _OperatorDiagnosticsScreenState
       _error = null;
     });
     try {
-      final health = await HealthApi(
-        ref.read(apiClientProvider).dio,
-      ).operational(locationId: locationId);
+      final health = await ref
+          .read(healthApiProvider)
+          .operational(locationId: locationId);
       if (!mounted) return;
       setState(() => _health = health);
     } catch (_) {
@@ -170,17 +218,6 @@ class _OperatorDiagnosticsScreenState
     if (health.printerCount == 0) return 'Non configurate';
     return _humanStatus(health.printerStatus);
   }
-
-  String _fiscalLabel(OperationalHealth health) =>
-      _humanStatus(health.fiscalStatus);
-
-  String _providerLabel(String? provider) => switch (provider) {
-    'OPENAPI_SMART_RECEIPTS' => 'OpenAPI Smart Receipts',
-    'ACUBE_SMART_RECEIPTS' => 'A-Cube Smart Receipts',
-    'MOCK' => 'Ambiente di test',
-    null => 'Nessun provider configurato',
-    _ => provider,
-  };
 
   HealthStatus _paymentDisplayStatus(OperationalHealth health) {
     if (health.paymentProvider == null ||
@@ -212,6 +249,27 @@ class _OperatorDiagnosticsScreenState
     return provider;
   }
 }
+
+HealthStatus diagnosticFiscalStatus(FiscalRuntimeConfiguration? runtime) =>
+    switch (runtime?.status) {
+      FiscalRuntimeStatus.ready => HealthStatus.ok,
+      FiscalRuntimeStatus.notConfigured => HealthStatus.notConfigured,
+      FiscalRuntimeStatus.disabled => HealthStatus.notConfigured,
+      FiscalRuntimeStatus.authRequired => HealthStatus.down,
+      FiscalRuntimeStatus.attention => HealthStatus.degraded,
+      FiscalRuntimeStatus.verificationError || null => HealthStatus.unknown,
+    };
+
+String diagnosticFiscalLabel(FiscalRuntimeConfiguration? runtime) =>
+    switch (runtime?.status) {
+      FiscalRuntimeStatus.ready => 'Pronto',
+      FiscalRuntimeStatus.notConfigured => 'Non configurato',
+      FiscalRuntimeStatus.disabled => 'Disabilitato',
+      FiscalRuntimeStatus.authRequired => 'Accesso richiesto',
+      FiscalRuntimeStatus.attention => 'Da controllare',
+      FiscalRuntimeStatus.verificationError => 'Verifica non disponibile',
+      null => 'Controllo in corso',
+    };
 
 class _OverallCard extends StatelessWidget {
   const _OverallCard({
