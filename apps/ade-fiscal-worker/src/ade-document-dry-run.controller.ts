@@ -41,11 +41,12 @@ function publicMessage(error: AdeAutomationError): string {
     case 'ADE_SESSION_INVALID':
       return 'Sessione AdE non valida.';
     case 'ADE_DOCUMENT_FLOW_MISMATCH':
-      return 'Il flusso Documento Commerciale AdE non corrisponde al profilo atteso.';
     case 'ADE_DOCUMENT_VERIFY_MISMATCH':
-      return 'La schermata Verifica dati non corrisponde al documento atteso.';
     case 'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND':
-      return 'Boundary finale Procedi/Annulla non trovato.';
+      // Document-browser messages are static, step-specific strings and do not
+      // contain credentials, cookies, selectors or page content. Returning them
+      // here makes live selector debugging possible without exposing secrets.
+      return error.message;
     case 'ADE_DRY_RUN_DISABLED':
       return 'Dry-run AdE disabilitato.';
     case 'ADE_CONFIGURATION_INVALID':
