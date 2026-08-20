@@ -1,6 +1,11 @@
 import { existsSync } from 'node:fs';
 import { Injectable, OnApplicationShutdown } from '@nestjs/common';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from 'playwright';
 import {
   AdeAutomationError,
   type AdeAutomationErrorCategory,
@@ -202,7 +207,9 @@ export class AdeBrowserService implements OnApplicationShutdown {
         return;
       }
       if (profile.postMfaContinueSelector && !postMfaClicked) {
-        const continueButton = page.locator(profile.postMfaContinueSelector).first();
+        const continueButton = page
+          .locator(profile.postMfaContinueSelector)
+          .first();
         if (await continueButton.isVisible().catch(() => false)) {
           await continueButton.click();
           postMfaClicked = true;
@@ -219,9 +226,16 @@ export class AdeBrowserService implements OnApplicationShutdown {
     );
   }
 
-  private async goto(page: Page, url: string, timeoutMs: number): Promise<void> {
+  private async goto(
+    page: Page,
+    url: string,
+    timeoutMs: number,
+  ): Promise<void> {
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+      await page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: timeoutMs,
+      });
     } catch (error) {
       throw new AdeAutomationError(
         error instanceof Error ? error.message : 'Navigazione AdE fallita.',
