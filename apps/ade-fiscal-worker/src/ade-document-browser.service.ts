@@ -142,13 +142,10 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
         input.timeoutMs,
       );
 
-      await this.clickRequired(
-        page.getByRole('button', {
-          name: 'Vai a Conferma e stampa',
-          exact: false,
-        }),
+      await this.advanceToConfirmation(
+        page,
+        input.payment,
         input.timeoutMs,
-        'Passaggio a Conferma e stampa non disponibile.',
       );
 
       await this.clickRequired(
@@ -398,6 +395,56 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
         false,
       );
     }
+  }
+
+  private async advanceToConfirmation(
+    page: Page,
+    payment: AdeDocumentPaymentInput,
+    timeoutMs: number,
+  ): Promise<void> {
+    const next = page
+      .getByRole('button', { name: 'Vai a Conferma e stampa', exact: false })
+      .first();
+
+    await this.clickRequired(
+      next,
+      timeoutMs,
+      'Passaggio a Conferma e stampa non disponibile.',
+    );
+
+    if (payment.electronicCents <= 0) return;
+
+    // When an electronic payment is present, AdE can intercept the first
+    // transition with an informational modal. Acknowledging "Ho capito" is
+    // not a fiscal submit; after closing it the transition must be requested
+    // again. The irreversible "Procedi" boundary remains untouched.
+    const acknowledge = page
+      .getByRole('button', { name: 'Ho capito', exact: true })
+      .first();
+
+    try {
+      await acknowledge.waitFor({
+        state: 'visible',
+        timeout: Math.min(timeoutMs, 5_000),
+      });
+    } catch {
+      // The notice can be absent if already acknowledged for this portal state.
+      return;
+    }
+
+    try {
+      await acknowledge.click();
+    } catch {
+      throw documentFlowError(
+        'Informativa pagamento elettronico non chiudibile.',
+      );
+    }
+
+    await this.clickRequired(
+      next,
+      timeoutMs,
+      'Passaggio a Conferma e stampa non disponibile dopo informativa pagamento elettronico.',
+    );
   }
 
   private async clickRequired(
