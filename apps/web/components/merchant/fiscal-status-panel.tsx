@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export interface MerchantFiscalStatus {
   locationId: string;
@@ -84,12 +84,6 @@ export function FiscalStatusPanel({
   const [error, setError] = useState<string | null>(initialError);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    setLocationId(initialLocationId ?? '');
-    setStatus(initialStatus);
-    setError(initialError);
-  }, [initialError, initialLocationId, initialStatus]);
-
   async function load(nextLocationId: string) {
     setLocationId(nextLocationId);
     setError(null);
@@ -148,15 +142,24 @@ export function FiscalStatusPanel({
 
       {!loading && status?.state === 'NOT_CONFIGURED' ? (
         <div className="rounded-2xl border bg-white p-6">
-          <h2 className="text-lg font-semibold">Fiscalizzazione non ancora configurata</h2>
-          <p className="muted mt-2">Contatta Fluxa per completare l’attivazione.</p>
+          <h2 className="text-lg font-semibold">
+            Fiscalizzazione non ancora configurata
+          </h2>
+          <p className="muted mt-2">
+            Contatta Fluxa per completare l’attivazione.
+          </p>
         </div>
       ) : null}
 
       {!loading && status?.state === 'INACTIVE' ? (
         <div className="rounded-2xl border bg-white p-6">
-          <h2 className="text-lg font-semibold">Fiscalizzazione non operativa</h2>
-          <p className="muted mt-2">La configurazione esiste ma non è attiva. Contatta l’assistenza Fluxa.</p>
+          <h2 className="text-lg font-semibold">
+            Fiscalizzazione non operativa
+          </h2>
+          <p className="muted mt-2">
+            La configurazione esiste ma non è attiva. Contatta l’assistenza
+            Fluxa.
+          </p>
         </div>
       ) : null}
 
@@ -195,11 +198,15 @@ export function FiscalStatusPanel({
             {lastDocument ? (
               <div className="mt-3 space-y-1 text-sm">
                 <p>{lastDocumentDate}</p>
-                <p className="text-lg font-semibold">{euro(lastDocument.totalCents)}</p>
+                <p className="text-lg font-semibold">
+                  {euro(lastDocument.totalCents)}
+                </p>
                 <p className="muted">{documentCopy(lastDocument.status)}</p>
               </div>
             ) : (
-              <p className="muted mt-2">Nessun documento fiscale emesso per questa sede.</p>
+              <p className="muted mt-2">
+                Nessun documento fiscale emesso per questa sede.
+              </p>
             )}
           </div>
 
