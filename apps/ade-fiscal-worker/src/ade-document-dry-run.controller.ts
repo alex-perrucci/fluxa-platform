@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { AdeAutomationError } from './ade-automation-error';
 import { AdeDocumentDryRunService } from './ade-document-dry-run.service';
+import { AdeDocumentOperationLockService } from './ade-document-operation-lock.service';
 import { AdeInternalAuthGuard } from './ade-internal-auth.guard';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 
@@ -44,9 +45,6 @@ function publicMessage(error: AdeAutomationError): string {
     case 'ADE_DOCUMENT_FLOW_MISMATCH':
     case 'ADE_DOCUMENT_VERIFY_MISMATCH':
     case 'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND':
-      // Document-browser messages are static, step-specific strings and do not
-      // contain credentials, cookies, selectors or page content. Returning them
-      // here makes live selector debugging possible without exposing secrets.
       return error.message;
     case 'ADE_DRY_RUN_DISABLED':
       return 'Dry-run AdE disabilitato.';
@@ -67,20 +65,17 @@ export class AdeDocumentDryRunController {
   constructor(
     private readonly dryRun: AdeDocumentDryRunService,
     private readonly config: AdeRuntimeConfigService,
+    private readonly operationLock: AdeDocumentOperationLockService,
   ) {}
 
   @Post('dry-run')
-  async run(@Body() body: unknown) {
-    try {
-      return await this.dryRun.run(body);
-    } catch (error) {
-      this.rethrow(error);
-    }
+  run(@Body() body: unknown) {
+    return this.withOperationLock(() => this.dryRun.run(body));
   }
 
   @Post('submit-preflight')
-  async submitPreflight(@Body() body: unknown) {
-    try {
+  submitPreflight(@Body() body: unknown) {
+    return this.withOperationLock(async () => {
       const result = await this.dryRun.run(body);
       return {
         status: 'SUBMIT_PREFLIGHT_READY' as const,
@@ -95,8 +90,31 @@ export class AdeDocumentDryRunController {
         submitAttempted: false as const,
         canSubmit: false as const,
       };
+    });
+  }
+
+  private async withOperationLock<T>(fn: () => Promise<T>): Promise<T> {
+    const release = this.operationLock.tryAcquire();
+    if (!release) {
+      throw new HttpException(
+        {
+          code: 'ADE_DOCUMENT_DRY_RUN_BUSY',
+          category: 'CONFIGURATION',
+          message: 'Un’altra operazione documento AdE è già in corso.',
+          retrySafe: true,
+          submitAttempted: false,
+          canSubmit: false,
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    try {
+      return await fn();
     } catch (error) {
       this.rethrow(error);
+    } finally {
+      release();
     }
   }
 
