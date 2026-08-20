@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AdeAutomationError } from './ade-automation-error';
+import { AdeAuthService } from './ade-auth.service';
 import {
   AdeDocumentBrowserService,
   type AdeDocumentItemInput,
@@ -13,6 +14,8 @@ const MAX_ITEMS = 50;
 const MAX_DESCRIPTION_LENGTH = 200;
 const MAX_QUANTITY = 999;
 const MAX_UNIT_PRICE_CENTS = 100_000_000;
+const DCO_ENTRY_UNAVAILABLE_MESSAGE =
+  'Documento Commerciale on line non disponibile.';
 
 export interface AdeDocumentDryRunResult {
   status: 'DOCUMENT_READY_NOT_SUBMITTED';
@@ -107,9 +110,7 @@ function normalizeInput(raw: unknown): NormalizedDocumentInput {
   let grossTotalCents = 0;
   for (const item of items) {
     const lineTotal = item.quantity * item.grossUnitPriceCents;
-    if (!Number.isSafeInteger(lineTotal)) {
-      invalid('Totale riga fuori intervallo.');
-    }
+    if (!Number.isSafeInteger(lineTotal)) invalid('Totale riga fuori intervallo.');
     grossTotalCents += lineTotal;
     if (!Number.isSafeInteger(grossTotalCents)) {
       invalid('Totale documento fuori intervallo.');
@@ -133,6 +134,17 @@ function normalizeInput(raw: unknown): NormalizedDocumentInput {
   };
 }
 
+function shouldRefreshSession(error: unknown): boolean {
+  if (!(error instanceof AdeAutomationError)) return false;
+  if (error.code === 'ADE_SESSION_REQUIRED') return true;
+  if (error.code === 'ADE_SESSION_INVALID') return true;
+
+  return (
+    error.code === 'ADE_DOCUMENT_FLOW_MISMATCH' &&
+    error.message === DCO_ENTRY_UNAVAILABLE_MESSAGE
+  );
+}
+
 @Injectable()
 export class AdeDocumentDryRunService {
   private inFlight = false;
@@ -141,6 +153,7 @@ export class AdeDocumentDryRunService {
     private readonly config: AdeRuntimeConfigService,
     private readonly session: AdeSessionService,
     private readonly browser: AdeDocumentBrowserService,
+    private readonly auth: AdeAuthService,
   ) {}
 
   async run(raw: unknown): Promise<AdeDocumentDryRunResult> {
@@ -176,29 +189,56 @@ export class AdeDocumentDryRunService {
 
     this.inFlight = true;
     try {
-      const storageStatePath = this.session.storageStatePathForUse();
-      const result = await this.browser.dryRun({
-        entryUrl: entryUrl.toString(),
-        storageStatePath,
-        items: input.items,
-        payment: input.payment,
-        expectedGrossTotalCents: input.grossTotalCents,
-        timeoutMs: config.navigationTimeoutMs,
-      });
+      try {
+        return await this.runBrowser(
+          entryUrl.toString(),
+          input,
+          config.navigationTimeoutMs,
+        );
+      } catch (error) {
+        if (!shouldRefreshSession(error)) throw error;
 
-      return {
-        status: 'DOCUMENT_READY_NOT_SUBMITTED',
-        finalUrl: result.finalUrl,
-        confirmationBoundarySeen: result.confirmationBoundarySeen,
-        cancelledAtBoundary: result.cancelledAtBoundary,
-        itemCount: result.itemCount,
-        grossTotalCents: result.grossTotalCents,
-        paymentTotalCents: result.paymentTotalCents,
-        submitAttempted: false,
-        canSubmit: false,
-      };
+        // A session refresh can require the official CieID push. The MFA
+        // approval remains manual; this only starts one refresh attempt and
+        // retries the document flow once after a successful SESSION_READY.
+        await this.auth.refresh();
+
+        return await this.runBrowser(
+          entryUrl.toString(),
+          input,
+          config.navigationTimeoutMs,
+        );
+      }
     } finally {
       this.inFlight = false;
     }
+  }
+
+  private async runBrowser(
+    entryUrl: string,
+    input: NormalizedDocumentInput,
+    timeoutMs: number,
+  ): Promise<AdeDocumentDryRunResult> {
+    const storageStatePath = this.session.storageStatePathForUse();
+    const result = await this.browser.dryRun({
+      entryUrl,
+      storageStatePath,
+      items: input.items,
+      payment: input.payment,
+      expectedGrossTotalCents: input.grossTotalCents,
+      timeoutMs,
+    });
+
+    return {
+      status: 'DOCUMENT_READY_NOT_SUBMITTED',
+      finalUrl: result.finalUrl,
+      confirmationBoundarySeen: result.confirmationBoundarySeen,
+      cancelledAtBoundary: result.cancelledAtBoundary,
+      itemCount: result.itemCount,
+      grossTotalCents: result.grossTotalCents,
+      paymentTotalCents: result.paymentTotalCents,
+      submitAttempted: false,
+      canSubmit: false,
+    };
   }
 }
