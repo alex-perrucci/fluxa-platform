@@ -28,11 +28,13 @@ class PaymentReceiptRoutingCard extends ConsumerStatefulWidget {
 
 class _PaymentReceiptRoutingCardState
     extends ConsumerState<PaymentReceiptRoutingCard> {
-  PaymentReceiptRoute? _route;
+  List<PaymentReceiptRoute> _routes = const [];
   String? _selectedPrinterId;
   String? _errorMessage;
   bool _loading = true;
   bool _saving = false;
+
+  PaymentReceiptRoute? get _route => _routes.isEmpty ? null : _routes.first;
 
   @override
   void initState() {
@@ -63,10 +65,11 @@ class _PaymentReceiptRoutingCardState
         'print-routes',
         queryParameters: {'locationId': widget.locationId},
       );
-      final route = paymentReceiptRouteFromPayload(response.data);
+      final routes = paymentReceiptRoutesFromPayload(response.data);
+      final route = routes.isEmpty ? null : routes.first;
       if (!mounted) return;
       setState(() {
-        _route = route;
+        _routes = routes;
         _selectedPrinterId = _availablePrinters.any(
           (printer) => printer.id == route?.printerId,
         )
@@ -106,9 +109,8 @@ class _PaymentReceiptRoutingCardState
       final printerId = _selectedPrinterId;
       PaymentReceiptRoute? nextRoute;
       if (printerId == null) {
-        final currentRoute = _route;
-        if (currentRoute != null) {
-          await dio.delete<Object?>('print-routes/${currentRoute.id}');
+        for (final route in _routes) {
+          await dio.delete<Object?>('print-routes/${route.id}');
         }
       } else {
         final response = await dio.put<Map<String, Object?>>(
@@ -126,10 +128,15 @@ class _PaymentReceiptRoutingCardState
           throw const FormatException('Configurazione stampante vuota.');
         }
         nextRoute = PaymentReceiptRoute.fromJson(data);
+        for (final route in _routes) {
+          if (route.id != nextRoute.id) {
+            await dio.delete<Object?>('print-routes/${route.id}');
+          }
+        }
       }
       if (!mounted) return;
       setState(() {
-        _route = nextRoute;
+        _routes = nextRoute == null ? const [] : [nextRoute];
         _selectedPrinterId = nextRoute?.printerId;
         _saving = false;
       });
@@ -164,13 +171,15 @@ class _PaymentReceiptRoutingCardState
   @override
   Widget build(BuildContext context) {
     final printers = _availablePrinters;
-    final routeMissingFromList = _route != null &&
-        !printers.any((printer) => printer.id == _route!.printerId);
+    final route = _route;
+    final routeMissingFromList = route != null &&
+        !printers.any((printer) => printer.id == route.printerId);
     return Card(
       key: const Key('payment-receipt-routing-card'),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -281,6 +290,12 @@ class _PaymentReceiptRoutingCardState
                   );
                 },
               ),
+            if (_routes.length > 1) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Sono state trovate più stampanti per le ricevute. Salva una scelta per usarne una sola.',
+              ),
+            ],
             if (routeMissingFromList) ...[
               const SizedBox(height: 8),
               const Text(
@@ -296,9 +311,9 @@ class _PaymentReceiptRoutingCardState
             ] else if (!_loading && printers.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                _route == null
+                route == null
                     ? 'Adesso le ricevute non vengono stampate automaticamente.'
-                    : 'Adesso le ricevute dei pagamenti escono su ${_route!.printerName}.',
+                    : 'Adesso le ricevute dei pagamenti escono su ${route.printerName}.',
               ),
             ],
             if (!widget.canManage) ...[
