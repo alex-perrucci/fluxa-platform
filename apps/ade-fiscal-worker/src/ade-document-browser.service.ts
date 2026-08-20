@@ -1,5 +1,11 @@
 import { Injectable, OnApplicationShutdown } from '@nestjs/common';
-import { chromium, type Browser, type Locator, type Page } from 'playwright';
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from 'playwright';
 import { AdeAutomationError } from './ade-automation-error';
 
 export interface AdeDocumentItemInput {
@@ -72,7 +78,7 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
 
   async dryRun(input: AdeDocumentBrowserInput): Promise<AdeDocumentBrowserResult> {
     const browser = await this.browser();
-    let context;
+    let context: BrowserContext;
     try {
       context = await browser.newContext({ storageState: input.storageStatePath });
     } catch {
@@ -89,7 +95,10 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
       await this.goto(page, input.entryUrl, input.timeoutMs);
 
       await this.clickRequired(
-        page.getByRole('link', { name: 'Documento Commerciale on', exact: false }),
+        page.getByRole('link', {
+          name: 'Documento Commerciale on',
+          exact: false,
+        }),
         input.timeoutMs,
         'Documento Commerciale on line non disponibile.',
       );
