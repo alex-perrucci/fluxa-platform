@@ -20,22 +20,25 @@ void main() {
       expect(printCalls, 1);
     });
 
-    test('electronic payment completed enqueues receipt exactly once', () async {
-      final trigger = AutomaticPaymentReceiptTrigger();
-      var printCalls = 0;
+    test(
+      'electronic payment completed enqueues receipt exactly once',
+      () async {
+        final trigger = AutomaticPaymentReceiptTrigger();
+        var printCalls = 0;
 
-      final first = await trigger.onCheckoutState(
-        checkoutId: 'checkout-card',
-        completed: true,
-        enqueueReceipt: () async {
-          printCalls += 1;
-          return true;
-        },
-      );
+        final first = await trigger.onCheckoutState(
+          checkoutId: 'checkout-card',
+          completed: true,
+          enqueueReceipt: () async {
+            printCalls += 1;
+            return true;
+          },
+        );
 
-      expect(first, AutomaticPaymentReceiptOutcome.enqueued);
-      expect(printCalls, 1);
-    });
+        expect(first, AutomaticPaymentReceiptOutcome.enqueued);
+        expect(printCalls, 1);
+      },
+    );
 
     test('UI rebuild cannot enqueue a second receipt', () async {
       final trigger = AutomaticPaymentReceiptTrigger();
@@ -145,26 +148,29 @@ void main() {
       expect(manualCalls, 1);
     });
 
-    test('ADE_WEB UNKNOWN does not cause fiscal retry from receipt printing', () async {
-      final trigger = AutomaticPaymentReceiptTrigger();
-      var printCalls = 0;
-      var fiscalRetryCalls = 0;
+    test(
+      'ADE_WEB UNKNOWN does not cause fiscal retry from receipt printing',
+      () async {
+        final trigger = AutomaticPaymentReceiptTrigger();
+        var printCalls = 0;
+        var fiscalRetryCalls = 0;
 
-      final outcome = await trigger.onCheckoutState(
-        checkoutId: 'checkout-ade-unknown',
-        completed: true,
-        enqueueReceipt: () async {
-          printCalls += 1;
-          return true;
-        },
-      );
+        final outcome = await trigger.onCheckoutState(
+          checkoutId: 'checkout-ade-unknown',
+          completed: true,
+          enqueueReceipt: () async {
+            printCalls += 1;
+            return true;
+          },
+        );
 
-      // Fiscal state/retry is intentionally not part of the receipt trigger.
-      // An ADE_WEB UNKNOWN state therefore cannot be retried by this path.
-      expect(fiscalRetryCalls, 0);
-      expect(outcome, AutomaticPaymentReceiptOutcome.enqueued);
-      expect(printCalls, 1);
-    });
+        // Fiscal state/retry is intentionally not part of the receipt trigger.
+        // An ADE_WEB UNKNOWN state therefore cannot be retried by this path.
+        expect(fiscalRetryCalls, 0);
+        expect(outcome, AutomaticPaymentReceiptOutcome.enqueued);
+        expect(printCalls, 1);
+      },
+    );
 
     test('checkout not completed does not enqueue receipt', () async {
       final trigger = AutomaticPaymentReceiptTrigger();
