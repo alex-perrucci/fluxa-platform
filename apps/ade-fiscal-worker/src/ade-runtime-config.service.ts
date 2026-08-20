@@ -18,6 +18,7 @@ export interface AdeRuntimeConfig {
   authProfilePath: string | null;
   cieUsernameFile: string | null;
   ciePasswordFile: string | null;
+  incaricanteCf: string | null;
   navigationTimeoutMs: number;
   mfaTimeoutMs: number;
 }
@@ -39,8 +40,9 @@ function parseBoundedInt(
 ): number {
   if (!value) return fallback;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min || parsed > max)
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
     return fallback;
+  }
   return parsed;
 }
 
@@ -59,6 +61,7 @@ export class AdeRuntimeConfigService {
       authProfilePath: optionalString(process.env.ADE_AUTH_PROFILE_PATH),
       cieUsernameFile: optionalString(process.env.ADE_CIE_USERNAME_FILE),
       ciePasswordFile: optionalString(process.env.ADE_CIE_PASSWORD_FILE),
+      incaricanteCf: optionalString(process.env.ADE_INCARICANTE_CF),
       navigationTimeoutMs: parseBoundedInt(
         process.env.ADE_NAVIGATION_TIMEOUT_MS,
         DEFAULT_NAVIGATION_TIMEOUT_MS,
