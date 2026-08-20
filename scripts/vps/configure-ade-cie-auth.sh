@@ -10,8 +10,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ADE_RUNTIME_DIR="${ADE_RUNTIME_DIR:-/opt/fluxa/runtime/ade}"
 ADE_SESSION_DIR="${ADE_SESSION_DIR:-/opt/fluxa/runtime/ade-session}"
 ADE_SECRET_DIR="${ADE_SECRET_DIR:-/opt/fluxa/runtime/ade-secrets}"
-PW_UID="${ADE_PLAYWRIGHT_UID:-1000}"
-PW_GID="${ADE_PLAYWRIGHT_GID:-1000}"
+# Playwright's pwuser is uid/gid 1001 in the runtime image used by Fluxa.
+# Keep these overridable in case the base image changes in the future.
+PW_UID="${ADE_PLAYWRIGHT_UID:-1001}"
+PW_GID="${ADE_PLAYWRIGHT_GID:-1001}"
 
 read -r -p "CIE username / codice fiscale: " cie_username
 read -r -s -p "CIE password: " cie_password
