@@ -122,6 +122,13 @@ export class AdeBrowserService implements OnApplicationShutdown {
         input.navigationTimeoutMs,
         'ADE_PORTAL_FLOW_MISMATCH',
       );
+
+      await this.ensureWorkProfileChooser(
+        page,
+        input.profile.workProfileRadioSelector,
+        input.profile.changeUserText ?? 'Cambia utenza',
+        input.navigationTimeoutMs,
+      );
       await this.checkRequired(
         page,
         input.profile.workProfileRadioSelector,
@@ -234,6 +241,51 @@ export class AdeBrowserService implements OnApplicationShutdown {
       await browser.close().catch(() => undefined);
     } catch {
       // A failed launch has already been classified for the caller.
+    }
+  }
+
+  private async ensureWorkProfileChooser(
+    page: Page,
+    workProfileRadioSelector: string,
+    changeUserText: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    const radio = this.profileLocator(page, workProfileRadioSelector).first();
+    if (await radio.isVisible().catch(() => false)) return;
+
+    const candidates = [
+      page.getByRole('button', { name: changeUserText, exact: false }).first(),
+      page.getByRole('link', { name: changeUserText, exact: false }).first(),
+      page.getByText(changeUserText, { exact: false }).first(),
+    ];
+
+    let clicked = false;
+    for (const candidate of candidates) {
+      if (await candidate.isVisible().catch(() => false)) {
+        await candidate.click();
+        clicked = true;
+        break;
+      }
+    }
+
+    if (!clicked) {
+      throw new AdeAutomationError(
+        'Comando Cambia utenza non disponibile nel portale AdE.',
+        'ADE_PORTAL_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
+
+    try {
+      await radio.waitFor({ state: 'visible', timeout: timeoutMs });
+    } catch {
+      throw new AdeAutomationError(
+        'Selezione profilo incaricato non disponibile dopo Cambia utenza.',
+        'ADE_PORTAL_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
     }
   }
 
