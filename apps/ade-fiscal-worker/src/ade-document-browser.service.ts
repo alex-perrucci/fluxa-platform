@@ -1,4 +1,9 @@
-import { Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { statSync } from 'node:fs';
+import {
+  Injectable,
+  OnApplicationBootstrap,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import {
   chromium,
   type Browser,
@@ -7,6 +12,11 @@ import {
   type Page,
 } from 'playwright';
 import { AdeAutomationError } from './ade-automation-error';
+
+const DCO_DIRECT_URL =
+  'https://ivaservizi.agenziaentrate.gov.it/ser/documenticommercialionline/';
+const DIRECT_DCO_DISCOVERY_TIMEOUT_MS = 2_000;
+const ELECTRONIC_TRANSITION_TIMEOUT_MS = 5_000;
 
 export interface AdeDocumentItemInput {
   description: string;
@@ -86,46 +96,30 @@ function documentFlowError(message: string): AdeAutomationError {
 }
 
 @Injectable()
-export class AdeDocumentBrowserService implements OnApplicationShutdown {
+export class AdeDocumentBrowserService
+  implements OnApplicationBootstrap, OnApplicationShutdown
+{
   private browserPromise: Promise<Browser> | null = null;
+  private reusableContext: BrowserContext | null = null;
+  private reusablePage: Page | null = null;
+  private reusableSessionFingerprint: string | null = null;
+
+  onApplicationBootstrap(): void {
+    // Best-effort Chromium pre-warm. A launch failure is still reported by the
+    // first real request, but a healthy worker avoids paying launch cost there.
+    void this.browser().catch(() => undefined);
+  }
 
   async dryRun(
     input: AdeDocumentBrowserInput,
   ): Promise<AdeDocumentBrowserResult> {
-    const browser = await this.browser();
-    let context: BrowserContext;
-    try {
-      context = await browser.newContext({
-        storageState: input.storageStatePath,
-      });
-    } catch {
-      throw new AdeAutomationError(
-        'Impossibile caricare la sessione browser Agenzia delle Entrate.',
-        'ADE_SESSION_INVALID',
-        'AUTH_REQUIRED',
-        false,
-      );
-    }
+    const page = await this.pageForSession(input.storageStatePath);
 
     try {
-      const page = await context.newPage();
-      await this.goto(page, input.entryUrl, input.timeoutMs);
-
-      await this.clickRequired(
-        page.getByRole('link', {
-          name: 'Documento Commerciale on',
-          exact: false,
-        }),
+      await this.openDocumentGenerator(
+        page,
+        input.entryUrl,
         input.timeoutMs,
-        'Documento Commerciale on line non disponibile.',
-      );
-      await this.clickRequired(
-        page.getByRole('link', {
-          name: 'Genera il tuo documento',
-          exact: false,
-        }),
-        input.timeoutMs,
-        'Generazione documento commerciale non disponibile.',
       );
 
       for (let index = 0; index < input.items.length; index += 1) {
@@ -199,12 +193,20 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
         submitAttempted: false,
         canSubmit: false,
       };
-    } finally {
-      await context.close().catch(() => undefined);
+    } catch (error) {
+      if (
+        error instanceof AdeAutomationError &&
+        (error.category === 'BROWSER' || error.category === 'NAVIGATION')
+      ) {
+        await this.resetReusableSession();
+      }
+      throw error;
     }
   }
 
   async onApplicationShutdown(): Promise<void> {
+    await this.resetReusableSession();
+
     const browserPromise = this.browserPromise;
     this.browserPromise = null;
     if (!browserPromise) return;
@@ -215,6 +217,119 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
     } catch {
       // Browser launch failures are classified for the request that observed them.
     }
+  }
+
+  private async pageForSession(storageStatePath: string): Promise<Page> {
+    const fingerprint = this.sessionFingerprint(storageStatePath);
+
+    if (
+      this.reusableContext &&
+      this.reusableSessionFingerprint === fingerprint
+    ) {
+      if (this.reusablePage && !this.reusablePage.isClosed()) {
+        return this.reusablePage;
+      }
+
+      try {
+        const page = await this.reusableContext.newPage();
+        this.reusablePage = page;
+        return page;
+      } catch {
+        await this.resetReusableSession();
+      }
+    } else if (this.reusableContext) {
+      // auth/refresh rewrites storage-state.json. Recreate the context so the
+      // new official AdE cookies are loaded before the one allowed retry.
+      await this.resetReusableSession();
+    }
+
+    const browser = await this.browser();
+    try {
+      const context = await browser.newContext({
+        storageState: storageStatePath,
+      });
+      const page = await context.newPage();
+      this.reusableContext = context;
+      this.reusablePage = page;
+      this.reusableSessionFingerprint = fingerprint;
+      return page;
+    } catch {
+      await this.resetReusableSession();
+      throw new AdeAutomationError(
+        'Impossibile caricare la sessione browser Agenzia delle Entrate.',
+        'ADE_SESSION_INVALID',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+  }
+
+  private sessionFingerprint(storageStatePath: string): string {
+    try {
+      const stat = statSync(storageStatePath);
+      return `${storageStatePath}:${stat.size}:${stat.mtimeMs}`;
+    } catch {
+      throw new AdeAutomationError(
+        'Impossibile leggere la sessione browser Agenzia delle Entrate.',
+        'ADE_SESSION_INVALID',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+  }
+
+  private async resetReusableSession(): Promise<void> {
+    const page = this.reusablePage;
+    const context = this.reusableContext;
+    this.reusablePage = null;
+    this.reusableContext = null;
+    this.reusableSessionFingerprint = null;
+
+    await page?.close().catch(() => undefined);
+    await context?.close().catch(() => undefined);
+  }
+
+  private async openDocumentGenerator(
+    page: Page,
+    entryUrl: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    const generate = page
+      .getByRole('link', {
+        name: 'Genera il tuo documento',
+        exact: false,
+      })
+      .first();
+
+    // Fast path: an authenticated session can enter DCO directly, avoiding the
+    // Instradamento home and the extra "Documento Commerciale on line" click.
+    try {
+      await this.goto(page, DCO_DIRECT_URL, timeoutMs);
+      await generate.waitFor({
+        state: 'visible',
+        timeout: Math.min(timeoutMs, DIRECT_DCO_DISCOVERY_TIMEOUT_MS),
+      });
+      await generate.click();
+      return;
+    } catch {
+      // Keep the proven home flow as fallback. In particular, an expired
+      // session still reaches the exact DCO-entry error used by auto-refresh.
+    }
+
+    await this.goto(page, entryUrl, timeoutMs);
+    await this.clickRequired(
+      page.getByRole('link', {
+        name: 'Documento Commerciale on',
+        exact: false,
+      }),
+      timeoutMs,
+      'Documento Commerciale on line non disponibile.',
+    );
+    await this.clickRequired(
+      generate,
+      timeoutMs,
+      'Generazione documento commerciale non disponibile.',
+    );
   }
 
   private async fillItem(
@@ -434,28 +549,37 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
 
     if (payment.electronicCents <= 0) return;
 
-    // With electronic payments AdE can interrupt wizard3 with an informational
-    // modal. "Ho capito" only acknowledges that notice and is never a fiscal
-    // submit. Depending on portal state, dismissing it may either complete the
-    // transition to wizard4 or leave the user on wizard3, so handle both paths.
+    // Electronic payments can either show the informational modal or navigate
+    // directly to wizard4. Wait for whichever state actually appears instead
+    // of paying the modal timeout when confirmation is already ready.
     const acknowledge = page
       .getByRole('button', { name: 'Ho capito', exact: true })
       .first();
+    const transitionTimeout = Math.min(
+      timeoutMs,
+      ELECTRONIC_TRANSITION_TIMEOUT_MS,
+    );
 
+    let transition: 'ACKNOWLEDGE' | 'CONFIRMATION' | 'UNKNOWN';
     try {
-      await acknowledge.waitFor({
-        state: 'visible',
-        timeout: Math.min(timeoutMs, 5_000),
-      });
+      transition = await Promise.any([
+        acknowledge
+          .waitFor({ state: 'visible', timeout: transitionTimeout })
+          .then(() => 'ACKNOWLEDGE' as const),
+        confirmation
+          .waitFor({ state: 'visible', timeout: transitionTimeout })
+          .then(() => 'CONFIRMATION' as const),
+      ]);
     } catch {
-      // The notice can be absent if already acknowledged for this portal state.
-      return;
+      transition = 'UNKNOWN';
     }
+
+    if (transition === 'CONFIRMATION' || transition === 'UNKNOWN') return;
 
     try {
       await acknowledge.click();
       await acknowledge
-        .waitFor({ state: 'hidden', timeout: Math.min(timeoutMs, 5_000) })
+        .waitFor({ state: 'hidden', timeout: transitionTimeout })
         .catch(() => undefined);
     } catch {
       throw documentFlowError(
@@ -543,6 +667,7 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
 
     const browser = await this.browserPromise;
     if (!browser.isConnected()) {
+      await this.resetReusableSession();
       this.browserPromise = null;
       return this.browser();
     }
