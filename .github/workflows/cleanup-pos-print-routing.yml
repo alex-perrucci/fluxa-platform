@@ -1,0 +1,96 @@
+name: Clean POS print routing diff
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    if: github.head_ref == 'feat/pos-friendly-print-routing'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/pos-friendly-print-routing
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.32.5
+          channel: stable
+          cache: true
+      - name: Apply small patch to original advanced screen
+        shell: python
+        run: |
+          from pathlib import Path
+
+          root = Path('apps/pos/lib/features/printing/presentation')
+          source = root / 'printing_screen_advanced_base.dart'
+          target = root / 'printing_screen.dart'
+          target.write_text(source.read_text(encoding='utf-8'), encoding='utf-8')
+
+          text = target.read_text(encoding='utf-8')
+          old = "import '../platform/local_printer_backend_contract.dart';\nimport 'printing_controller.dart';"
+          new = "import '../platform/local_printer_backend_contract.dart';\nimport 'payment_receipt_routing_card.dart';\nimport 'printing_controller.dart';"
+          if old not in text:
+              raise SystemExit('import anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = """              _AgentCard(controller: controller),
+              const SizedBox(height: 12),
+              SizedBox(height: mobilePaneHeight, child: selectedPane),"""
+          new = """              _AgentCard(controller: controller),
+              const SizedBox(height: 12),
+              PaymentReceiptRoutingCard(
+                locationId: location.id,
+                locationName: location.name,
+                printers: controller.printers,
+                canManage: canManageJobs,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(height: mobilePaneHeight, child: selectedPane),"""
+          if old not in text:
+              raise SystemExit('mobile anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = """              _AgentCard(controller: controller),
+              const SizedBox(height: 12),
+              Expanded("""
+          new = """              _AgentCard(controller: controller),
+              const SizedBox(height: 12),
+              PaymentReceiptRoutingCard(
+                locationId: location.id,
+                locationName: location.name,
+                printers: controller.printers,
+                canManage: canManageJobs,
+              ),
+              const SizedBox(height: 12),
+              Expanded("""
+          if old not in text:
+              raise SystemExit('desktop anchor not found')
+          text = text.replace(old, new, 1)
+          target.write_text(text, encoding='utf-8')
+          source.unlink()
+      - name: Format, analyze and test POS printing
+        working-directory: apps/pos
+        shell: bash
+        run: |
+          flutter pub get
+          dart format lib/features/printing/domain/payment_receipt_route.dart \
+            lib/features/printing/presentation/payment_receipt_routing_card.dart \
+            lib/features/printing/presentation/printing_screen.dart \
+            test/features/printing/payment_receipt_route_test.dart
+          flutter analyze
+          flutter test test/features/printing
+      - name: Commit clean implementation
+        shell: bash
+        run: |
+          rm .github/workflows/cleanup-pos-print-routing.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/pos .github/workflows/cleanup-pos-print-routing.yml
+          git commit -m 'refactor(pos): keep print routing diff focused'
+          git push origin HEAD:feat/pos-friendly-print-routing
