@@ -58,7 +58,9 @@ function parseDecimalCents(value: unknown, field: string): number {
 
 function timeoutMs(): number {
   const configured = Number(process.env.ADE_PROVIDER_TIMEOUT_MS);
-  return Number.isInteger(configured) && configured >= 30_000 && configured <= 600_000
+  return Number.isInteger(configured) &&
+    configured >= 30_000 &&
+    configured <= 600_000
     ? configured
     : DEFAULT_ADE_PROVIDER_TIMEOUT_MS;
 }
@@ -71,7 +73,8 @@ function sanitizedWorkerResponse(raw: unknown): AdeWorkerResponse {
     message: stringField(value.message) || undefined,
     operationId: stringField(value.operationId) || undefined,
     finalUrl: stringField(value.finalUrl) || undefined,
-    confirmationEvidence: stringField(value.confirmationEvidence) || undefined,
+    confirmationEvidence:
+      stringField(value.confirmationEvidence) || undefined,
     submitAttempted:
       typeof value.submitAttempted === 'boolean'
         ? value.submitAttempted
@@ -193,7 +196,7 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
         message,
         code,
         'UNKNOWN',
-        worker as Record<string, unknown>,
+        recordField(worker),
         `ADE-WEB:${input.documentId}`,
         'unknown',
       );
@@ -209,7 +212,7 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
         message,
         code,
         'AUTH_REQUIRED',
-        worker as Record<string, unknown>,
+        recordField(worker),
       );
     }
 
@@ -217,7 +220,7 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
       message,
       false,
       code,
-      worker as Record<string, unknown>,
+      recordField(worker),
     );
   }
 
@@ -258,7 +261,12 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
           ? 0
           : parseDecimalCents(item.discount, `items[${index}].discount`);
 
-      if (!description || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
+      if (
+        !description ||
+        !Number.isInteger(quantity) ||
+        quantity < 1 ||
+        quantity > 999
+      ) {
         throw new FiscalProviderError(
           `ADE_WEB unsupported quantity/description at item ${index}.`,
           false,
