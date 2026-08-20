@@ -10,6 +10,7 @@ const MIN_INTERNAL_TOKEN_LENGTH = 32;
 
 export interface AdeRuntimeConfig {
   dryRunEnabled: boolean;
+  submitEnabled: boolean;
   internalToken: string | null;
   entryUrl: string | null;
   authEntryUrl: string | null;
@@ -51,6 +52,7 @@ export class AdeRuntimeConfigService {
   read(): AdeRuntimeConfig {
     return {
       dryRunEnabled: parseBoolean(process.env.ADE_DRY_RUN_ENABLED),
+      submitEnabled: parseBoolean(process.env.ADE_SUBMIT_ENABLED),
       internalToken: optionalString(process.env.ADE_WORKER_INTERNAL_TOKEN),
       entryUrl: optionalString(process.env.ADE_WEB_ENTRY_URL),
       authEntryUrl: optionalString(process.env.ADE_AUTH_ENTRY_URL),
