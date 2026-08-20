@@ -59,10 +59,7 @@ const ALLOWED_KEYS = new Set<string>([
   ...OPTIONAL_KEYS,
 ]);
 
-function requiredString(
-  record: Record<string, unknown>,
-  key: string,
-): string {
+function requiredString(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`${key} must be a non-empty string`);
@@ -113,10 +110,7 @@ function readProfile(path: string): AdeAuthProfile {
       record,
       'credentialsSubmitSelector',
     ),
-    postMfaContinueSelector: requiredString(
-      record,
-      'postMfaContinueSelector',
-    ),
+    postMfaContinueSelector: requiredString(record, 'postMfaContinueSelector'),
     serviceSearchSelector: requiredString(record, 'serviceSearchSelector'),
     serviceLinkSelector: requiredString(record, 'serviceLinkSelector'),
     serviceAccessButtonSelector: requiredString(
