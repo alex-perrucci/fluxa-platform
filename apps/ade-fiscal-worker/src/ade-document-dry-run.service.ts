@@ -110,7 +110,9 @@ function normalizeInput(raw: unknown): NormalizedDocumentInput {
   let grossTotalCents = 0;
   for (const item of items) {
     const lineTotal = item.quantity * item.grossUnitPriceCents;
-    if (!Number.isSafeInteger(lineTotal)) invalid('Totale riga fuori intervallo.');
+    if (!Number.isSafeInteger(lineTotal)) {
+      invalid('Totale riga fuori intervallo.');
+    }
     grossTotalCents += lineTotal;
     if (!Number.isSafeInteger(grossTotalCents)) {
       invalid('Totale documento fuori intervallo.');
