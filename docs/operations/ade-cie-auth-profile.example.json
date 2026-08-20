@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "cieTabSelector": "role=tab[name=\"CIE\"]",
+  "enterWithCieSelector": "role=link[name=\"Entra con CIE\"]",
+  "usernameSelector": "role=textbox[name=\"Numero CIE o Codice fiscale o\"]",
+  "passwordSelector": "role=textbox[name=\"Password\"]",
+  "credentialsSubmitSelector": "role=button[name=\"Procedi\"]",
+  "postMfaContinueSelector": "role=button[name=\"Prosegui\"]",
+  "serviceSearchSelector": "role=combobox[name=\"Cerca il servizio\"]",
+  "serviceLinkSelector": "role=link[name=\"Vai al servizio\"]",
+  "serviceAccessButtonSelector": "role=button[name=\"Accedi\"]",
+  "workProfileRadioSelector": "role=radio[name=\"Incaricato Il soggetto\"]",
+  "workProfileProceedSelector": "button:has-text(\"Procedi\")",
+  "workProfileSelectLabel": "Codice fiscale del soggetto",
+  "workProfileConfirmSelector": "role=button[name=\"Conferma\"]"
+}
