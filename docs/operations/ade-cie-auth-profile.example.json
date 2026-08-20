@@ -9,6 +9,7 @@
   "serviceSearchSelector": "role=combobox[name=\"Cerca il servizio\"]",
   "serviceLinkSelector": "role=link[name=\"Vai al servizio\"]",
   "serviceAccessButtonSelector": "role=button[name=\"Accedi\"]",
+  "changeUserText": "Cambia utenza",
   "workProfileRadioSelector": "role=radio[name=\"Incaricato Il soggetto\"]",
   "workProfileProceedSelector": "button:has-text(\"Procedi\")",
   "workProfileSelectLabel": "Codice fiscale del soggetto",
