@@ -105,8 +105,6 @@ export class AdeBrowserService implements OnApplicationShutdown {
         input.mfaTimeoutMs,
       );
 
-      // After CIE login the portal initially operates as the natural person.
-      // Switch the working identity before opening Fatture e Corrispettivi.
       await this.switchToIncaricante(
         page,
         input.profile,
@@ -114,27 +112,13 @@ export class AdeBrowserService implements OnApplicationShutdown {
         input.navigationTimeoutMs,
       );
 
-      await this.fillAndPressEnter(
+      await this.openFattureService(
         page,
-        input.profile.serviceSearchSelector,
-        'fatture',
-        input.navigationTimeoutMs,
-      );
-      await this.clickRequired(
-        page,
-        input.profile.serviceLinkSelector,
-        input.navigationTimeoutMs,
-        'ADE_PORTAL_FLOW_MISMATCH',
-      );
-      await this.clickServiceAccess(
-        page,
-        input.profile.serviceAccessButtonSelector,
+        input.profile,
         input.navigationTimeoutMs,
       );
 
-      // Compatibility fallback: some AdE paths may still show the older
-      // multi-step work-profile chooser when the service is opened.
-      await this.completeLegacyWorkProfileIfPresent(
+      await this.completeServiceWorkProfile(
         page,
         input.profile,
         input.incaricanteCf,
@@ -234,23 +218,21 @@ export class AdeBrowserService implements OnApplicationShutdown {
     incaricanteCf: string,
     timeoutMs: number,
   ): Promise<void> {
-    const changeUserText = profile.changeUserText ?? 'Cambia utenza';
-    const candidates = [
-      page.getByRole('button', { name: changeUserText, exact: false }).first(),
-      page.getByRole('link', { name: changeUserText, exact: false }).first(),
-      page.getByText(changeUserText, { exact: false }).first(),
-    ];
+    const changeUser = profile.changeUserSelector
+      ? this.profileLocator(page, profile.changeUserSelector).first()
+      : page
+          .getByRole('link', {
+            name: profile.changeUserText ?? 'Cambia Utenza',
+            exact: false,
+          })
+          .first();
 
-    let clicked = false;
-    for (const candidate of candidates) {
-      if (await candidate.isVisible().catch(() => false)) {
-        await candidate.click();
-        clicked = true;
-        break;
-      }
-    }
-
-    if (!clicked) {
+    try {
+      // Important: after CIE "Prosegui" the portal redirects asynchronously.
+      // Do not use an immediate isVisible() check here; wait for the real link.
+      await changeUser.waitFor({ state: 'visible', timeout: timeoutMs });
+      await changeUser.click();
+    } catch {
       throw new AdeAutomationError(
         'Comando Cambia utenza non disponibile nel portale AdE.',
         'ADE_PORTAL_FLOW_MISMATCH',
@@ -259,29 +241,16 @@ export class AdeBrowserService implements OnApplicationShutdown {
       );
     }
 
-    const incaricatoRadio = page
-      .getByRole('radio', { name: 'Incaricato', exact: false })
-      .first();
     try {
-      await incaricatoRadio.waitFor({ state: 'visible', timeout: timeoutMs });
-      await incaricatoRadio.check();
-    } catch {
-      throw new AdeAutomationError(
-        'Opzione Incaricato non disponibile nella pagina Cambia utenza.',
-        'ADE_PORTAL_FLOW_MISMATCH',
-        'SELECTOR_MISMATCH',
-        false,
-      );
-    }
-
-    const select = page.getByRole('combobox').first();
-    try {
+      const select = page
+        .getByLabel(profile.changeUserSelectLabel ?? 'Scegli:')
+        .first();
       await select.waitFor({ state: 'visible', timeout: timeoutMs });
       await this.selectOptionByCf(select, incaricanteCf);
     } catch (error) {
       if (error instanceof AdeAutomationError) throw error;
       throw new AdeAutomationError(
-        'Selezione dell’utenza incaricante non disponibile.',
+        'Selezione dell’utenza incaricante non disponibile dopo Cambia utenza.',
         'ADE_INCARICANTE_NOT_FOUND',
         'AUTH_REQUIRED',
         false,
@@ -295,21 +264,112 @@ export class AdeBrowserService implements OnApplicationShutdown {
       'ADE_PORTAL_FLOW_MISMATCH',
     );
 
-    // Let the portal apply the new working identity before searching services.
-    await page.waitForTimeout(500);
+    try {
+      await this.profileLocator(page, profile.serviceSearchSelector)
+        .first()
+        .waitFor({ state: 'visible', timeout: timeoutMs });
+    } catch {
+      throw new AdeAutomationError(
+        'Cambio utenza confermato ma home servizi AdE non disponibile.',
+        'ADE_PORTAL_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
   }
 
-  private async completeLegacyWorkProfileIfPresent(
+  private async openFattureService(
+    page: Page,
+    profile: AdeAuthProfile,
+    timeoutMs: number,
+  ): Promise<void> {
+    try {
+      const search = this.profileLocator(page, profile.serviceSearchSelector).first();
+      await search.waitFor({ state: 'visible', timeout: timeoutMs });
+      await search.fill('fatture');
+    } catch {
+      throw new AdeAutomationError(
+        'Campo Cerca il servizio non disponibile.',
+        'ADE_PORTAL_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
+
+    const searchButtonSelector =
+      profile.serviceSearchButtonSelector ?? 'role=button[name="Cerca"]';
+    await this.clickRequired(
+      page,
+      searchButtonSelector,
+      timeoutMs,
+      'ADE_PORTAL_FLOW_MISMATCH',
+    );
+
+    if (profile.serviceResultText) {
+      try {
+        const result = page
+          .getByText(profile.serviceResultText, { exact: false })
+          .first();
+        await result.waitFor({ state: 'visible', timeout: timeoutMs });
+        await result.click();
+      } catch {
+        throw new AdeAutomationError(
+          'Risultato Fatturazione elettronica non disponibile.',
+          'ADE_PORTAL_FLOW_MISMATCH',
+          'SELECTOR_MISMATCH',
+          false,
+        );
+      }
+    }
+
+    await this.clickRequired(
+      page,
+      profile.serviceLinkSelector,
+      timeoutMs,
+      'ADE_PORTAL_FLOW_MISMATCH',
+    );
+    await this.clickRequired(
+      page,
+      profile.serviceAccessButtonSelector,
+      timeoutMs,
+      'ADE_PORTAL_FLOW_MISMATCH',
+    );
+  }
+
+  private async completeServiceWorkProfile(
     page: Page,
     profile: AdeAuthProfile,
     incaricanteCf: string,
     timeoutMs: number,
   ): Promise<void> {
-    const radio = this.profileLocator(page, profile.workProfileRadioSelector).first();
-    const visible = await radio.isVisible().catch(() => false);
-    if (!visible) return;
+    const cardSelector =
+      profile.legacyWorkProfileCardSelector ??
+      'div:nth-child(2) > .card > .card-input';
+    const card = page.locator(cardSelector).first();
 
-    await this.checkRequired(page, profile.workProfileRadioSelector, timeoutMs);
+    let selected = false;
+    try {
+      await card.waitFor({ state: 'visible', timeout: timeoutMs });
+      await card.click();
+      selected = true;
+    } catch {
+      // Compatibility fallback for an alternate accessible-radio rendering.
+      const radio = this.profileLocator(page, profile.workProfileRadioSelector).first();
+      if (await radio.isVisible().catch(() => false)) {
+        await radio.check();
+        selected = true;
+      }
+    }
+
+    if (!selected) {
+      throw new AdeAutomationError(
+        'Profilo Incaricato del servizio Fatture non selezionabile.',
+        'ADE_PORTAL_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
+
     await this.clickRequired(
       page,
       profile.workProfileProceedSelector,
@@ -331,30 +391,6 @@ export class AdeBrowserService implements OnApplicationShutdown {
     await this.clickRequired(
       page,
       profile.workProfileConfirmSelector,
-      timeoutMs,
-      'ADE_PORTAL_FLOW_MISMATCH',
-    );
-  }
-
-  private async clickServiceAccess(
-    page: Page,
-    fallbackSelector: string,
-    timeoutMs: number,
-  ): Promise<void> {
-    const codegenLocator = page
-      .getByRole('list')
-      .filter({ hasText: 'Accedi' })
-      .getByRole('button')
-      .first();
-
-    if (await codegenLocator.isVisible().catch(() => false)) {
-      await codegenLocator.click();
-      return;
-    }
-
-    await this.clickRequired(
-      page,
-      fallbackSelector,
       timeoutMs,
       'ADE_PORTAL_FLOW_MISMATCH',
     );
@@ -397,7 +433,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
           };
           if (payload.incaricante?.cf === cf) return option.value;
         } catch {
-          // Plain-value option, already checked above.
+          // Plain option value; exact text/value were already checked.
         }
       }
       return null;
@@ -428,49 +464,9 @@ export class AdeBrowserService implements OnApplicationShutdown {
     } catch (error) {
       if (error instanceof AdeAutomationError) throw error;
       throw new AdeAutomationError(
-        'Impossibile selezionare l’incaricante AdE.',
+        'Impossibile selezionare l’incaricante AdE nel servizio Fatture.',
         'ADE_INCARICANTE_NOT_FOUND',
         'AUTH_REQUIRED',
-        false,
-      );
-    }
-  }
-
-  private async fillAndPressEnter(
-    page: Page,
-    selector: string,
-    value: string,
-    timeoutMs: number,
-  ): Promise<void> {
-    try {
-      const locator = this.profileLocator(page, selector).first();
-      await locator.waitFor({ state: 'visible', timeout: timeoutMs });
-      await locator.fill(value);
-      await locator.press('Enter');
-    } catch {
-      throw new AdeAutomationError(
-        'Ricerca del servizio AdE non disponibile.',
-        'ADE_PORTAL_FLOW_MISMATCH',
-        'SELECTOR_MISMATCH',
-        false,
-      );
-    }
-  }
-
-  private async checkRequired(
-    page: Page,
-    selector: string,
-    timeoutMs: number,
-  ): Promise<void> {
-    try {
-      const locator = this.profileLocator(page, selector).first();
-      await locator.waitFor({ state: 'visible', timeout: timeoutMs });
-      await locator.check();
-    } catch {
-      throw new AdeAutomationError(
-        'Profilo incaricato AdE non selezionabile.',
-        'ADE_PORTAL_FLOW_MISMATCH',
-        'SELECTOR_MISMATCH',
         false,
       );
     }
