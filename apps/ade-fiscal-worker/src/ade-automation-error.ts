@@ -1,6 +1,7 @@
 export type AdeAutomationErrorCode =
   | 'ADE_DRY_RUN_DISABLED'
   | 'ADE_DRY_RUN_BUSY'
+  | 'ADE_SUBMIT_DISABLED'
   | 'ADE_INTERNAL_AUTH_REQUIRED'
   | 'ADE_CONFIGURATION_INVALID'
   | 'ADE_SESSION_REQUIRED'
@@ -27,16 +28,20 @@ export type AdeAutomationErrorCode =
   | 'ADE_INCARICANTE_NOT_FOUND'
   | 'ADE_DOCUMENT_INPUT_INVALID'
   | 'ADE_DOCUMENT_DRY_RUN_BUSY'
+  | 'ADE_DOCUMENT_SUBMIT_BUSY'
+  | 'ADE_DOCUMENT_SUBMIT_DUPLICATE_OPERATION'
   | 'ADE_DOCUMENT_FLOW_MISMATCH'
   | 'ADE_DOCUMENT_VERIFY_MISMATCH'
-  | 'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND';
+  | 'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND'
+  | 'ADE_DOCUMENT_SUBMIT_UNKNOWN';
 
 export type AdeAutomationErrorCategory =
   | 'CONFIGURATION'
   | 'AUTH_REQUIRED'
   | 'BROWSER'
   | 'NAVIGATION'
-  | 'SELECTOR_MISMATCH';
+  | 'SELECTOR_MISMATCH'
+  | 'SUBMIT_UNKNOWN';
 
 export class AdeAutomationError extends Error {
   constructor(
@@ -44,6 +49,7 @@ export class AdeAutomationError extends Error {
     readonly code: AdeAutomationErrorCode,
     readonly category: AdeAutomationErrorCategory,
     readonly retrySafe: boolean,
+    readonly submitAttempted = false,
   ) {
     super(message);
     this.name = 'AdeAutomationError';
