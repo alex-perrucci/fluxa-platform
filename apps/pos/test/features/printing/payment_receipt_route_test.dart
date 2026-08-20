@@ -29,6 +29,32 @@ void main() {
     expect(route.printerName, 'BANCO');
   });
 
+  test('returns every active payment receipt destination', () {
+    final routes = paymentReceiptRoutesFromPayload([
+      {
+        'id': 'receipt-route-1',
+        'documentType': 'PAYMENT_RECEIPT',
+        'kitchenStationId': null,
+        'printerId': 'receipt-printer-1',
+        'printerName': 'BANCO',
+        'copies': 1,
+        'active': true,
+      },
+      {
+        'id': 'receipt-route-2',
+        'documentType': 'PAYMENT_RECEIPT',
+        'kitchenStationId': null,
+        'printerId': 'receipt-printer-2',
+        'printerName': 'BANCO 2',
+        'copies': 1,
+        'active': true,
+      },
+    ]);
+
+    expect(routes, hasLength(2));
+    expect(routes.map((route) => route.printerName), ['BANCO', 'BANCO 2']);
+  });
+
   test('ignores disabled payment receipt routes', () {
     final route = paymentReceiptRouteFromPayload([
       {
