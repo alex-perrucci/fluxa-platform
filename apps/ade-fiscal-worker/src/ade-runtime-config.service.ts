@@ -39,7 +39,8 @@ function parseBoundedInt(
 ): number {
   if (!value) return fallback;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min || parsed > max) return fallback;
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max)
+    return fallback;
   return parsed;
 }
 
@@ -52,7 +53,9 @@ export class AdeRuntimeConfigService {
       entryUrl: optionalString(process.env.ADE_WEB_ENTRY_URL),
       authEntryUrl: optionalString(process.env.ADE_AUTH_ENTRY_URL),
       storageStatePath: optionalString(process.env.ADE_STORAGE_STATE_PATH),
-      selectorProfilePath: optionalString(process.env.ADE_SELECTOR_PROFILE_PATH),
+      selectorProfilePath: optionalString(
+        process.env.ADE_SELECTOR_PROFILE_PATH,
+      ),
       authProfilePath: optionalString(process.env.ADE_AUTH_PROFILE_PATH),
       cieUsernameFile: optionalString(process.env.ADE_CIE_USERNAME_FILE),
       ciePasswordFile: optionalString(process.env.ADE_CIE_PASSWORD_FILE),
