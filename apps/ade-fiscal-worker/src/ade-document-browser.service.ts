@@ -116,11 +116,7 @@ export class AdeDocumentBrowserService
     const page = await this.pageForSession(input.storageStatePath);
 
     try {
-      await this.openDocumentGenerator(
-        page,
-        input.entryUrl,
-        input.timeoutMs,
-      );
+      await this.openDocumentGenerator(page, input.entryUrl, input.timeoutMs);
 
       for (let index = 0; index < input.items.length; index += 1) {
         await this.fillItem(
