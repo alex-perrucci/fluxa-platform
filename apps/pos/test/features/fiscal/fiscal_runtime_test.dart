@@ -82,22 +82,25 @@ void main() {
     }
   });
 
-  test('verification error preserves known provider but is not configured state', () {
-    final previous = FiscalRuntimeConfiguration.fromOperationalHealth(
-      locationId: 'location-1',
-      health: _health(provider: FiscalProvider.adeWeb),
-    );
+  test(
+    'verification error preserves known provider but is not configured state',
+    () {
+      final previous = FiscalRuntimeConfiguration.fromOperationalHealth(
+        locationId: 'location-1',
+        health: _health(provider: FiscalProvider.adeWeb),
+      );
 
-    final runtime = FiscalRuntimeConfiguration.verificationError(
-      locationId: 'location-1',
-      message: 'Impossibile verificare.',
-      previous: previous,
-    );
+      final runtime = FiscalRuntimeConfiguration.verificationError(
+        locationId: 'location-1',
+        message: 'Impossibile verificare.',
+        previous: previous,
+      );
 
-    expect(runtime.status, FiscalRuntimeStatus.verificationError);
-    expect(runtime.provider, FiscalProvider.adeWeb);
-    expect(runtime.status, isNot(FiscalRuntimeStatus.notConfigured));
-  });
+      expect(runtime.status, FiscalRuntimeStatus.verificationError);
+      expect(runtime.provider, FiscalProvider.adeWeb);
+      expect(runtime.status, isNot(FiscalRuntimeStatus.notConfigured));
+    },
+  );
 }
 
 OperationalHealth _health({

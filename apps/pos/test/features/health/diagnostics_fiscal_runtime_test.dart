@@ -64,7 +64,8 @@ FiscalRuntimeConfiguration _runtime(
   status: status,
   provider: FiscalProvider.adeWeb,
   environment: FiscalEnvironment.production,
-  enabled: status != FiscalRuntimeStatus.disabled &&
+  enabled:
+      status != FiscalRuntimeStatus.disabled &&
       status != FiscalRuntimeStatus.notConfigured,
   autoIssueOnPaid: true,
   lastDocumentStatus: status == FiscalRuntimeStatus.authRequired

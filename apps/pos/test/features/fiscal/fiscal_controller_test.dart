@@ -62,30 +62,33 @@ void main() {
     expect(controller.errorMessage, contains('non è stata avviata'));
   });
 
-  test('reloads authoritative fiscal document after version conflict', () async {
-    final fiscal = _FiscalGateway(versionConflict: true);
-    final controller = FiscalController(
-      fiscal,
-      _OrdersGateway(),
-      _HealthGateway(current: _health()),
-    );
-    addTearDown(controller.dispose);
-    await controller.bindLocation('location-1');
-    fiscal.documents = [
-      _document(
-        locationId: 'location-1',
-        status: FiscalDocumentStatus.rejected,
-        version: 2,
-      ),
-    ];
-    await controller.refresh();
-    final selected = fiscal.documents.single;
+  test(
+    'reloads authoritative fiscal document after version conflict',
+    () async {
+      final fiscal = _FiscalGateway(versionConflict: true);
+      final controller = FiscalController(
+        fiscal,
+        _OrdersGateway(),
+        _HealthGateway(current: _health()),
+      );
+      addTearDown(controller.dispose);
+      await controller.bindLocation('location-1');
+      fiscal.documents = [
+        _document(
+          locationId: 'location-1',
+          status: FiscalDocumentStatus.rejected,
+          version: 2,
+        ),
+      ];
+      await controller.refresh();
+      final selected = fiscal.documents.single;
 
-    final success = await controller.retryDocument(selected);
-    expect(success, isFalse);
-    expect(controller.selectedDocument?.version, 3);
-    expect(controller.errorMessage, 'Versione non aggiornata.');
-  });
+      final success = await controller.retryDocument(selected);
+      expect(success, isFalse);
+      expect(controller.selectedDocument?.version, 3);
+      expect(controller.errorMessage, 'Versione non aggiornata.');
+    },
+  );
 
   test('real absence maps to NOT_CONFIGURED', () async {
     final controller = FiscalController(
@@ -106,23 +109,26 @@ void main() {
     const BackendError(message: 'timeout'),
     const BackendError(message: 'server error', statusCode: 500),
   ]) {
-    test('health failure ${failure.statusCode ?? 'timeout'} is verification error', () async {
-      final controller = FiscalController(
-        _FiscalGateway(),
-        _OrdersGateway(),
-        _HealthGateway(error: failure),
-      );
-      addTearDown(controller.dispose);
+    test(
+      'health failure ${failure.statusCode ?? 'timeout'} is verification error',
+      () async {
+        final controller = FiscalController(
+          _FiscalGateway(),
+          _OrdersGateway(),
+          _HealthGateway(error: failure),
+        );
+        addTearDown(controller.dispose);
 
-      await controller.bindLocation('location-1');
+        await controller.bindLocation('location-1');
 
-      expect(
-        controller.runtime?.status,
-        FiscalRuntimeStatus.verificationError,
-      );
-      expect(controller.errorMessage, contains('Impossibile verificare'));
-      expect(controller.errorMessage, isNot(contains('non è configurata')));
-    });
+        expect(
+          controller.runtime?.status,
+          FiscalRuntimeStatus.verificationError,
+        );
+        expect(controller.errorMessage, contains('Impossibile verificare'));
+        expect(controller.errorMessage, isNot(contains('non è configurata')));
+      },
+    );
   }
 
   test('AUTH_REQUIRED remains a distinct runtime state', () async {
@@ -182,15 +188,14 @@ void main() {
 
     expect(controller.locationId, 'location-2');
     expect(controller.runtime?.locationId, 'location-2');
-    expect(
-      controller.runtime?.provider,
-      FiscalProvider.openapiSmartReceipts,
-    );
+    expect(controller.runtime?.provider, FiscalProvider.openapiSmartReceipts);
     expect(health.locationIds, ['location-1', 'location-2']);
   });
 
   test('manual refresh replaces the shared runtime snapshot', () async {
-    final health = _HealthGateway(current: _health(provider: FiscalProvider.adeWeb));
+    final health = _HealthGateway(
+      current: _health(provider: FiscalProvider.adeWeb),
+    );
     final controller = FiscalController(
       _FiscalGateway(),
       _OrdersGateway(),

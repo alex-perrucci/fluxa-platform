@@ -92,7 +92,8 @@ class _OperatorDiagnosticsScreenState
             title: 'Scontrini fiscali',
             value: diagnosticFiscalLabel(fiscal.runtime),
             status: fiscalStatus,
-            detail: fiscal.runtime?.provider?.label ??
+            detail:
+                fiscal.runtime?.provider?.label ??
                 'Nessun provider configurato',
           ),
           _HumanStatusRow(

@@ -104,7 +104,9 @@ class FiscalController extends ChangeNotifier {
     bool preserveSelection = false,
   }) async {
     final selectedId = preserveSelection ? _selectedDocument?.id : null;
-    final previousRuntime = _runtime?.locationId == locationId ? _runtime : null;
+    final previousRuntime = _runtime?.locationId == locationId
+        ? _runtime
+        : null;
 
     late final FiscalRuntimeConfiguration runtime;
     try {

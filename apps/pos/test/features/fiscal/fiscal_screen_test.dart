@@ -21,7 +21,10 @@ void main() {
 
     expect(find.text('A-Cube Smart Receipts · Sandbox'), findsOneWidget);
     expect(find.text('Stato fiscale della sede'), findsOneWidget);
-    expect(find.byKey(const Key('configure-acube-sandbox-button')), findsNothing);
+    expect(
+      find.byKey(const Key('configure-acube-sandbox-button')),
+      findsNothing,
+    );
     expect(
       find.text(
         'Le impostazioni tecniche del provider sono gestite dal Platform Control Center.',
@@ -33,14 +36,19 @@ void main() {
   testWidgets('keeps OpenAPI configuration managed by the platform', (
     tester,
   ) async {
-    final controller = _controller(provider: FiscalProvider.openapiSmartReceipts);
+    final controller = _controller(
+      provider: FiscalProvider.openapiSmartReceipts,
+    );
     addTearDown(controller.dispose);
     await controller.bindLocation('location-1');
 
     await _pumpFiscalView(tester, controller);
 
     expect(find.text('OpenAPI Smart Receipts · Sandbox'), findsOneWidget);
-    expect(find.byKey(const Key('configure-acube-sandbox-button')), findsNothing);
+    expect(
+      find.byKey(const Key('configure-acube-sandbox-button')),
+      findsNothing,
+    );
   });
 
   testWidgets('renders ADE_WEB production runtime without technical controls', (
@@ -57,9 +65,15 @@ void main() {
     await _pumpFiscalView(tester, controller);
 
     expect(find.text('Agenzia delle Entrate · Produzione'), findsOneWidget);
-    expect(find.text('Emissione automatica al pagamento: attiva'), findsOneWidget);
+    expect(
+      find.text('Emissione automatica al pagamento: attiva'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Partita IVA'), findsNothing);
-    expect(find.byKey(const Key('configure-acube-sandbox-button')), findsNothing);
+    expect(
+      find.byKey(const Key('configure-acube-sandbox-button')),
+      findsNothing,
+    );
   });
 }
 
@@ -158,12 +172,7 @@ class _OrdersGateway implements OrdersGateway {
     OrderStatus? status,
     int page = 1,
     int pageSize = 30,
-  }) async => const OrderListPage(
-    page: 1,
-    pageSize: 100,
-    total: 0,
-    items: [],
-  );
+  }) async => const OrderListPage(page: 1, pageSize: 100, total: 0, items: []);
 
   @override
   Future<OrderDetail> getOrder(String orderId) => throw UnimplementedError();

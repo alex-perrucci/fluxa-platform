@@ -326,9 +326,7 @@ class PosWorkflowCoordinator extends ChangeNotifier {
     }
 
     var document = _fiscal.documentForOrder(orderId);
-    if (document == null &&
-        !runtime.autoIssueOnPaid &&
-        !allowManualIssue) {
+    if (document == null && !runtime.autoIssueOnPaid && !allowManualIssue) {
       _setAttention(
         'Vendita pagata. L’emissione automatica dello scontrino è disattivata per questa sede.',
       );

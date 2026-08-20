@@ -272,9 +272,10 @@ class OperatorFiscalSummary extends StatelessWidget {
         '$missingCount da recuperare · $problemCount con errore',
       FiscalRuntimeStatus.ready when pendingCount > 0 =>
         '$pendingCount scontrini stanno terminando automaticamente.',
-      FiscalRuntimeStatus.ready => runtime?.autoIssueOnPaid == true
-          ? 'La fiscalizzazione è attiva. Gli scontrini vengono emessi automaticamente al pagamento.'
-          : 'La fiscalizzazione è attiva. L’emissione automatica non è attiva.',
+      FiscalRuntimeStatus.ready =>
+        runtime?.autoIssueOnPaid == true
+            ? 'La fiscalizzazione è attiva. Gli scontrini vengono emessi automaticamente al pagamento.'
+            : 'La fiscalizzazione è attiva. L’emissione automatica non è attiva.',
       null => errorMessage ?? 'Verifica dello stato fiscale in corso.',
     };
 

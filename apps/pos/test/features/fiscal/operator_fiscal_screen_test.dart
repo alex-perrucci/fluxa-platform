@@ -54,7 +54,10 @@ void main() {
     await _pumpSummary(tester, runtime);
 
     expect(find.text('SERVE ATTENZIONE'), findsOneWidget);
-    expect(find.textContaining('ripristinare l’accesso fiscale'), findsOneWidget);
+    expect(
+      find.textContaining('ripristinare l’accesso fiscale'),
+      findsOneWidget,
+    );
     expect(find.textContaining('non è configurata'), findsNothing);
   });
 
@@ -125,7 +128,8 @@ FiscalRuntimeConfiguration _runtime({
   status: status,
   provider: provider,
   environment: environment,
-  enabled: status != FiscalRuntimeStatus.notConfigured &&
+  enabled:
+      status != FiscalRuntimeStatus.notConfigured &&
       status != FiscalRuntimeStatus.disabled,
   autoIssueOnPaid: autoIssueOnPaid,
   lastDocumentStatus: lastDocumentStatus,
