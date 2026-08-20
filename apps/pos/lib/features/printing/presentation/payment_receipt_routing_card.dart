@@ -1,3 +1,4 @@
+// dart format off
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -379,3 +380,4 @@ class _PaymentReceiptRoutingCardState
 
 bool _canManageReceiptRouting(String? role) =>
     role == 'OWNER' || role == 'ADMIN' || role == 'MANAGER';
+// dart format on
