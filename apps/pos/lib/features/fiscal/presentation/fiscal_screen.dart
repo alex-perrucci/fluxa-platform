@@ -9,6 +9,7 @@ import '../../../core/widgets/async_states.dart';
 import '../../orders/domain/order_models.dart';
 import '../data/fiscal_api.dart';
 import '../domain/fiscal_models.dart';
+import '../domain/fiscal_runtime.dart';
 import '../platform/fiscal_receipt_pdf_handler.dart';
 import 'fiscal_controller.dart';
 
@@ -99,7 +100,6 @@ class FiscalView extends StatelessWidget {
   bool get _canIssue => {'OWNER', 'ADMIN', 'MANAGER', 'CASHIER'}.contains(role);
   bool get _canRetry => {'OWNER', 'ADMIN', 'MANAGER'}.contains(role);
   bool get _canVoid => {'OWNER', 'ADMIN'}.contains(role);
-  bool get _canConfigure => {'OWNER', 'ADMIN'}.contains(role);
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -107,7 +107,7 @@ class FiscalView extends StatelessWidget {
     builder: (context, child) {
       if (controller.status == FiscalLoadStatus.loading &&
           controller.documents.isEmpty &&
-          controller.profile == null) {
+          controller.runtime == null) {
         return const FluxaLoadingView(label: 'Caricamento fiscalizzazione');
       }
       return ListView(
@@ -131,12 +131,7 @@ class FiscalView extends StatelessWidget {
           if (controller.errorMessage != null ||
               controller.noticeMessage != null)
             const SizedBox(height: 12),
-          _FiscalProfileCard(
-            profile: controller.profile,
-            canConfigure: _canConfigure,
-            busy: controller.busy,
-            onConfigure: () => _configureProfile(context),
-          ),
+          _FiscalRuntimeCard(runtime: controller.runtime),
           const SizedBox(height: 16),
           _OrdersToFiscalizeCard(
             orders: controller.ordersToFiscalize,
@@ -211,27 +206,6 @@ class FiscalView extends StatelessWidget {
       );
     }
   }
-
-  Future<void> _configureProfile(BuildContext context) async {
-    final values = await showAcubeSandboxDialog(context, controller.profile);
-    if (values == null || !context.mounted) return;
-    final success = await controller.configureAcubeSandbox(
-      fiscalId: values.fiscalId,
-      receiptEmail: values.receiptEmail,
-      displayName: values.displayName,
-    );
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? 'Profilo A-Cube sandbox salvato.'
-                : controller.errorMessage ?? 'Configurazione non riuscita.',
-          ),
-        ),
-      );
-    }
-  }
 }
 
 class _FiscalHeader extends StatelessWidget {
@@ -264,17 +238,9 @@ class _FiscalHeader extends StatelessWidget {
   );
 }
 
-class _FiscalProfileCard extends StatelessWidget {
-  const _FiscalProfileCard({
-    required this.profile,
-    required this.canConfigure,
-    required this.busy,
-    required this.onConfigure,
-  });
-  final FiscalProfile? profile;
-  final bool canConfigure;
-  final bool busy;
-  final VoidCallback onConfigure;
+class _FiscalRuntimeCard extends StatelessWidget {
+  const _FiscalRuntimeCard({required this.runtime});
+  final FiscalRuntimeConfiguration? runtime;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -289,41 +255,47 @@ class _FiscalProfileCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Profilo fiscale',
+                  'Stato fiscale della sede',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              if (profile != null)
-                Chip(label: Text(profile!.enabled ? 'Attivo' : 'Disabilitato')),
+              if (runtime != null)
+                Chip(label: Text(runtime!.operatorStatusLabel)),
             ],
           ),
           const SizedBox(height: 10),
-          if (profile == null)
-            const Text('Nessun profilo fiscale configurato per questa sede.')
+          if (runtime == null)
+            const Text('Verifica della configurazione fiscale in corso.')
+          else if (runtime!.status == FiscalRuntimeStatus.verificationError)
+            Text(
+              runtime!.errorMessage ??
+                  'Impossibile verificare lo stato fiscale. Riprova.',
+            )
+          else if (runtime!.status == FiscalRuntimeStatus.notConfigured)
+            const Text('Nessuna fiscalizzazione configurata per questa sede.')
           else ...[
-            Text('${profile!.provider.label} · ${profile!.environment.label}'),
-            Text('Partita IVA: ${profile!.maskedFiscalId}'),
-            if (profile!.displayName != null) Text(profile!.displayName!),
-            if (profile!.receiptEmail != null)
-              Text('Invio ricevute: ${profile!.receiptEmail}'),
-            if (profile!.provider == FiscalProvider.openapiSmartReceipts) ...[
-              const SizedBox(height: 12),
-              const Text(
-                'Configurazione OpenAPI gestita dal Platform Control Center.',
+            if (runtime!.provider != null && runtime!.environment != null)
+              Text(
+                '${runtime!.provider!.label} · ${runtime!.environment!.label}',
               ),
-            ],
-          ],
-          if (canConfigure &&
-              (profile == null ||
-                  profile!.provider == FiscalProvider.acubeSmartReceipts)) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              key: const Key('configure-acube-sandbox-button'),
-              onPressed: busy ? null : onConfigure,
-              icon: const Icon(Icons.settings_outlined),
-              label: const Text('Configura A-Cube sandbox'),
+            Text(
+              runtime!.autoIssueOnPaid
+                  ? 'Emissione automatica al pagamento: attiva'
+                  : 'Emissione automatica al pagamento: non attiva',
             ),
+            if (runtime!.status == FiscalRuntimeStatus.authRequired)
+              const Text(
+                'È necessario ripristinare l’accesso fiscale tramite Fluxa.',
+              ),
+            if (runtime!.status == FiscalRuntimeStatus.attention)
+              const Text(
+                'L’ultimo esito fiscale richiede una verifica. Gli esiti UNKNOWN non vanno ritentati automaticamente.',
+              ),
           ],
+          const SizedBox(height: 10),
+          const Text(
+            'Le impostazioni tecniche del provider sono gestite dal Platform Control Center.',
+          ),
         ],
       ),
     ),
