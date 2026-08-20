@@ -7,17 +7,19 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdeAutomationError } from './ade-automation-error';
-import { AdeDocumentDryRunService } from './ade-document-dry-run.service';
 import { AdeDocumentOperationLockService } from './ade-document-operation-lock.service';
+import { AdeDocumentSubmitService } from './ade-document-submit.service';
 import { AdeInternalAuthGuard } from './ade-internal-auth.guard';
-import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 
 function statusFor(error: AdeAutomationError): HttpStatus {
   switch (error.code) {
     case 'ADE_DOCUMENT_INPUT_INVALID':
       return HttpStatus.BAD_REQUEST;
-    case 'ADE_DOCUMENT_DRY_RUN_BUSY':
+    case 'ADE_DOCUMENT_SUBMIT_BUSY':
       return HttpStatus.CONFLICT;
+    case 'ADE_DOCUMENT_SUBMIT_DUPLICATE_OPERATION':
+      return HttpStatus.CONFLICT;
+    case 'ADE_SUBMIT_DISABLED':
     case 'ADE_SESSION_REQUIRED':
     case 'ADE_SESSION_INVALID':
       return HttpStatus.PRECONDITION_FAILED;
@@ -25,6 +27,7 @@ function statusFor(error: AdeAutomationError): HttpStatus {
     case 'ADE_DOCUMENT_VERIFY_MISMATCH':
     case 'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND':
       return HttpStatus.UNPROCESSABLE_ENTITY;
+    case 'ADE_DOCUMENT_SUBMIT_UNKNOWN':
     case 'ADE_NAVIGATION_FAILED':
       return HttpStatus.BAD_GATEWAY;
     default:
@@ -36,8 +39,12 @@ function publicMessage(error: AdeAutomationError): string {
   switch (error.code) {
     case 'ADE_DOCUMENT_INPUT_INVALID':
       return error.message;
-    case 'ADE_DOCUMENT_DRY_RUN_BUSY':
-      return 'Un document dry-run AdE è già in corso.';
+    case 'ADE_DOCUMENT_SUBMIT_BUSY':
+      return 'Un submit AdE è già in corso.';
+    case 'ADE_DOCUMENT_SUBMIT_DUPLICATE_OPERATION':
+      return 'Il documento risulta già tentato dal worker AdE.';
+    case 'ADE_SUBMIT_DISABLED':
+      return 'Submit fiscale AdE disabilitato.';
     case 'ADE_SESSION_REQUIRED':
       return 'Sessione AdE richiesta.';
     case 'ADE_SESSION_INVALID':
@@ -46,8 +53,8 @@ function publicMessage(error: AdeAutomationError): string {
     case 'ADE_DOCUMENT_VERIFY_MISMATCH':
     case 'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND':
       return error.message;
-    case 'ADE_DRY_RUN_DISABLED':
-      return 'Dry-run AdE disabilitato.';
+    case 'ADE_DOCUMENT_SUBMIT_UNKNOWN':
+      return 'Procedi può essere stato attivato, ma l’esito fiscale non è verificabile automaticamente.';
     case 'ADE_CONFIGURATION_INVALID':
       return 'Configurazione AdE incompleta o non valida.';
     case 'ADE_BROWSER_UNAVAILABLE':
@@ -55,50 +62,25 @@ function publicMessage(error: AdeAutomationError): string {
     case 'ADE_NAVIGATION_FAILED':
       return 'Navigazione AdE non riuscita.';
     default:
-      return 'Document dry-run AdE non riuscito.';
+      return 'Submit documento AdE non riuscito.';
   }
 }
 
 @Controller('internal/document')
 @UseGuards(AdeInternalAuthGuard)
-export class AdeDocumentDryRunController {
+export class AdeDocumentSubmitController {
   constructor(
-    private readonly dryRun: AdeDocumentDryRunService,
-    private readonly config: AdeRuntimeConfigService,
+    private readonly submit: AdeDocumentSubmitService,
     private readonly operationLock: AdeDocumentOperationLockService,
   ) {}
 
-  @Post('dry-run')
-  run(@Body() body: unknown) {
-    return this.withOperationLock(() => this.dryRun.run(body));
-  }
-
-  @Post('submit-preflight')
-  submitPreflight(@Body() body: unknown) {
-    return this.withOperationLock(async () => {
-      const result = await this.dryRun.run(body);
-      return {
-        status: 'SUBMIT_PREFLIGHT_READY' as const,
-        submitEnabled: this.config.read().submitEnabled,
-        finalUrl: result.finalUrl,
-        confirmationBoundarySeen: result.confirmationBoundarySeen,
-        cancelledAtBoundary: result.cancelledAtBoundary,
-        itemCount: result.itemCount,
-        grossTotalCents: result.grossTotalCents,
-        paymentTotalCents: result.paymentTotalCents,
-        readyForSubmit: true as const,
-        submitAttempted: false as const,
-        canSubmit: false as const,
-      };
-    });
-  }
-
-  private async withOperationLock<T>(fn: () => Promise<T>): Promise<T> {
+  @Post('submit')
+  async run(@Body() body: unknown) {
     const release = this.operationLock.tryAcquire();
     if (!release) {
       throw new HttpException(
         {
-          code: 'ADE_DOCUMENT_DRY_RUN_BUSY',
+          code: 'ADE_DOCUMENT_SUBMIT_BUSY',
           category: 'CONFIGURATION',
           message: 'Un’altra operazione documento AdE è già in corso.',
           retrySafe: true,
@@ -110,26 +92,22 @@ export class AdeDocumentDryRunController {
     }
 
     try {
-      return await fn();
+      return await this.submit.run(body);
     } catch (error) {
-      this.rethrow(error);
+      if (!(error instanceof AdeAutomationError)) throw error;
+      throw new HttpException(
+        {
+          code: error.code,
+          category: error.category,
+          message: publicMessage(error),
+          retrySafe: error.retrySafe,
+          submitAttempted: error.submitAttempted,
+          canSubmit: false,
+        },
+        statusFor(error),
+      );
     } finally {
       release();
     }
-  }
-
-  private rethrow(error: unknown): never {
-    if (!(error instanceof AdeAutomationError)) throw error;
-    throw new HttpException(
-      {
-        code: error.code,
-        category: error.category,
-        message: publicMessage(error),
-        retrySafe: error.retrySafe,
-        submitAttempted: false,
-        canSubmit: false,
-      },
-      statusFor(error),
-    );
   }
 }

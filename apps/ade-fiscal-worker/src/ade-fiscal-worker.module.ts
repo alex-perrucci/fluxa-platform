@@ -8,6 +8,10 @@ import { AdeCieCredentialsService } from './ade-cie-credentials.service';
 import { AdeDocumentBrowserService } from './ade-document-browser.service';
 import { AdeDocumentDryRunController } from './ade-document-dry-run.controller';
 import { AdeDocumentDryRunService } from './ade-document-dry-run.service';
+import { AdeDocumentOperationLockService } from './ade-document-operation-lock.service';
+import { AdeDocumentSubmitBrowserService } from './ade-document-submit-browser.service';
+import { AdeDocumentSubmitController } from './ade-document-submit.controller';
+import { AdeDocumentSubmitService } from './ade-document-submit.service';
 import { AdeDryRunController } from './ade-dry-run.controller';
 import { AdeDryRunService } from './ade-dry-run.service';
 import { AdeHealthController } from './ade-health.controller';
@@ -34,11 +38,14 @@ import { AdeWebFiscalService } from './ade-web-fiscal.service';
     AdeDryRunController,
     AdeAuthController,
     AdeDocumentDryRunController,
+    AdeDocumentSubmitController,
   ],
   providers: [
     AdeRuntimeConfigService,
     AdeBrowserService,
     AdeDocumentBrowserService,
+    AdeDocumentSubmitBrowserService,
+    AdeDocumentOperationLockService,
     AdeSessionService,
     AdeSelectorProfileService,
     AdeAuthProfileService,
@@ -46,6 +53,7 @@ import { AdeWebFiscalService } from './ade-web-fiscal.service';
     AdeInternalAuthGuard,
     AdeDryRunService,
     AdeDocumentDryRunService,
+    AdeDocumentSubmitService,
     AdeAuthService,
     AdeWebFiscalService,
   ],

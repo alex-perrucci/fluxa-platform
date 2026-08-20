@@ -162,6 +162,10 @@ services:
     image: fluxa-backend:${RELEASE_SHA}
     environment:
       FLUXA_APP: fiscal-worker
+      ADE_WORKER_BASE_URL: ${ADE_WORKER_BASE_URL:-http://ade-fiscal-worker:3010}
+      ADE_WORKER_INTERNAL_TOKEN: ${ADE_WORKER_INTERNAL_TOKEN:-}
+      ADE_INCARICANTE_CF: ${ADE_INCARICANTE_CF:-}
+      ADE_PROVIDER_TIMEOUT_MS: ${ADE_PROVIDER_TIMEOUT_MS:-240000}
     depends_on:
       postgres:
         condition: service_healthy
