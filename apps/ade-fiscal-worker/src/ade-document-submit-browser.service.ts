@@ -23,10 +23,7 @@ const DCO_DIRECT_URL =
 const DIRECT_DCO_DISCOVERY_TIMEOUT_MS = 2_000;
 const ELECTRONIC_TRANSITION_TIMEOUT_MS = 5_000;
 
-export type AdeSubmitConfirmationEvidence =
-  | 'DOWNLOAD'
-  | 'PDF_ACTION'
-  | 'PRINT_ACTION';
+export type AdeSubmitConfirmationEvidence = 'DOWNLOAD' | 'PDF_ACTION' | 'PRINT_ACTION';
 
 export interface AdeDocumentSubmitBrowserResult {
   finalUrl: string;
