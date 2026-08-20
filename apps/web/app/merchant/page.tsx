@@ -133,7 +133,7 @@ export default async function MerchantDashboardPage({
             <p className="muted mt-1">{readiness.description}</p>
           </div>
           {!aggregate && readiness.attention ? (
-            <Link className="button-primary" href="/merchant/settings?view=support">
+            <Link className="button-primary" href="/merchant/health">
               Risolvi
             </Link>
           ) : null}
@@ -167,7 +167,7 @@ export default async function MerchantDashboardPage({
       <section className="glass-panel panel-padding">
         <SectionHeading eyebrow="Azioni rapide" title="Cosa vuoi fare?" />
         <div className="quick-action-grid">
-          <Link className="quick-action" href="/merchant/catalog?new=product">
+          <Link className="quick-action" href="/merchant/catalog">
             <div><Icon name="plus" /></div>
             <div><strong>Nuovo prodotto</strong><span>Nome, prezzo e categoria</span></div>
           </Link>
