@@ -103,6 +103,75 @@ void main() {
     expect(profile.autoIssueOnPaid, isTrue);
   });
 
+  test('parses ADE_WEB profile and terminal attention states', () {
+    final profile = FiscalProfile.fromJson({
+      'id': 'profile-ade',
+      'organizationId': 'org-1',
+      'locationId': 'location-1',
+      'provider': 'ADE_WEB',
+      'environment': 'PRODUCTION',
+      'fiscalId': '12345678901',
+      'enabled': true,
+      'autoIssueOnPaid': true,
+      'receiptEmail': null,
+      'displayName': 'Punto vendita AdE',
+      'version': 1,
+      'createdAt': '2026-08-20T10:00:00Z',
+      'updatedAt': '2026-08-20T10:00:00Z',
+    });
+
+    expect(profile.provider, FiscalProvider.adeWeb);
+    expect(profile.provider.label, 'Agenzia delle Entrate');
+    expect(profile.environment, FiscalEnvironment.production);
+    expect(FiscalDocumentStatus.fromWire('UNKNOWN').requiresAttention, isTrue);
+    expect(
+      FiscalDocumentStatus.fromWire('AUTH_REQUIRED').requiresAttention,
+      isTrue,
+    );
+    expect(FiscalDocumentStatus.fromWire('UNKNOWN').isPending, isFalse);
+    expect(FiscalDocumentStatus.fromWire('AUTH_REQUIRED').isPending, isFalse);
+  });
+
+  test('does not expose ADE_WEB void before E4', () {
+    final document = FiscalDocument.fromJson({
+      'id': 'document-ade',
+      'organizationId': 'org-1',
+      'locationId': 'location-1',
+      'orderId': 'order-1',
+      'parentDocumentId': null,
+      'type': 'SALE',
+      'status': 'ISSUED',
+      'provider': 'ADE_WEB',
+      'environment': 'PRODUCTION',
+      'fiscalId': '12345678901',
+      'currency': 'EUR',
+      'totalCents': 130,
+      'cashPaymentCents': 130,
+      'electronicPaymentCents': 0,
+      'externalId': 'ADE-WEB:document-ade',
+      'externalStatus': 'issued',
+      'documentNumber': null,
+      'documentDate': '2026-08-20T10:00:00Z',
+      'errorCode': null,
+      'errorMessage': null,
+      'maxAttempts': 5,
+      'nextAttemptAt': '2026-08-20T10:00:00Z',
+      'version': 2,
+      'payload': const {},
+      'providerResponse': const {},
+      'createdAt': '2026-08-20T10:00:00Z',
+      'updatedAt': '2026-08-20T10:00:01Z',
+      'issuedAt': '2026-08-20T10:00:01Z',
+      'voidedAt': null,
+      'items': const [],
+      'vatSummaries': const [],
+      'attempts': const [],
+    });
+
+    expect(document.canVoid, isFalse);
+    expect(document.canRetry, isFalse);
+  });
+
   test('formats money and masks fiscal id', () {
     final profile = FiscalProfile.fromJson({
       'id': 'profile-1',

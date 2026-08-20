@@ -193,6 +193,14 @@ class FiscalController extends ChangeNotifier {
   Future<bool> issueOrder(String orderId, {String? lotteryCode}) async {
     if (_busy) return false;
     final normalizedLottery = lotteryCode?.trim().toUpperCase();
+    if (_profile?.provider == FiscalProvider.adeWeb &&
+        normalizedLottery != null &&
+        normalizedLottery.isNotEmpty) {
+      _errorMessage =
+          'Il codice lotteria non è ancora supportato con Agenzia delle Entrate. L’emissione non è stata avviata.';
+      _notify();
+      return false;
+    }
     if (normalizedLottery != null &&
         normalizedLottery.isNotEmpty &&
         !RegExp(r'^[A-Z0-9]{8}$').hasMatch(normalizedLottery)) {
@@ -296,9 +304,10 @@ class FiscalController extends ChangeNotifier {
     String? receiptEmail,
     String? displayName,
   }) async {
-    if (_profile?.provider == FiscalProvider.openapiSmartReceipts) {
+    if (_profile?.provider == FiscalProvider.openapiSmartReceipts ||
+        _profile?.provider == FiscalProvider.adeWeb) {
       _errorMessage =
-          'Il profilo OpenAPI è gestito dal Platform Control Center.';
+          'Il profilo fiscale corrente è gestito dal Platform Control Center.';
       _notify();
       return false;
     }

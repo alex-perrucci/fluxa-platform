@@ -187,7 +187,7 @@ class _FiscalizeView extends StatelessWidget {
                             }
                           },
                     icon: const Icon(Icons.receipt_long),
-                    label: const Text('Invia ad A-Cube'),
+                    label: const Text('Fiscalizza'),
                   ),
                 if (!canIssue &&
                     document == null &&

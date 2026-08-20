@@ -1,7 +1,8 @@
 enum FiscalProvider {
   mock('MOCK', 'Mock'),
   acubeSmartReceipts('ACUBE_SMART_RECEIPTS', 'A-Cube Smart Receipts'),
-  openapiSmartReceipts('OPENAPI_SMART_RECEIPTS', 'OpenAPI Smart Receipts');
+  openapiSmartReceipts('OPENAPI_SMART_RECEIPTS', 'OpenAPI Smart Receipts'),
+  adeWeb('ADE_WEB', 'Agenzia delle Entrate');
 
   const FiscalProvider(this.wireValue, this.label);
   final String wireValue;
@@ -49,6 +50,8 @@ enum FiscalDocumentStatus {
   issued('ISSUED', 'Emesso'),
   retry('RETRY', 'Da ritentare'),
   rejected('REJECTED', 'Rifiutato'),
+  unknown('UNKNOWN', 'Esito da verificare'),
+  authRequired('AUTH_REQUIRED', 'Accesso AdE richiesto'),
   voided('VOIDED', 'Annullato fiscalmente'),
   cancelled('CANCELLED', 'Cancellato');
 
@@ -60,6 +63,12 @@ enum FiscalDocumentStatus {
       this == FiscalDocumentStatus.queued ||
       this == FiscalDocumentStatus.processing ||
       this == FiscalDocumentStatus.retry;
+
+  bool get requiresAttention =>
+      this == FiscalDocumentStatus.rejected ||
+      this == FiscalDocumentStatus.cancelled ||
+      this == FiscalDocumentStatus.unknown ||
+      this == FiscalDocumentStatus.authRequired;
 
   static FiscalDocumentStatus fromWire(Object? value) => values.firstWhere(
     (item) => item.wireValue == value?.toString(),
@@ -262,6 +271,7 @@ class FiscalDocument {
       status == FiscalDocumentStatus.retry ||
       status == FiscalDocumentStatus.rejected;
   bool get canVoid =>
+      provider != FiscalProvider.adeWeb &&
       type == FiscalDocumentType.sale &&
       status == FiscalDocumentStatus.issued &&
       externalId != null;
