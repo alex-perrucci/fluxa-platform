@@ -232,18 +232,21 @@ await request(`/kitchen-stations/${station.id}/categories/${category.id}`, {
   method: 'PUT',
   token,
 });
-await request(`/fiscal-profiles/${locationId}`, {
-  method: 'PUT',
-  token,
-  body: {
-    provider: 'MOCK',
-    environment: 'SANDBOX',
-    fiscalId: '12345678901',
-    enabled: true,
-    autoIssueOnPaid: false,
-    displayName: 'Fluxa POS E2E Fiscal',
+await request(
+  `/platform/organizations/${organizationId}/locations/${locationId}/fiscal-profile`,
+  {
+    method: 'PUT',
+    token: adminToken,
+    body: {
+      provider: 'MOCK',
+      environment: 'SANDBOX',
+      fiscalId: '12345678901',
+      enabled: true,
+      autoIssueOnPaid: false,
+      displayName: 'Fluxa POS E2E Fiscal',
+    },
   },
-});
+);
 
 console.log('3/11 effective catalog');
 const catalog = await request(
