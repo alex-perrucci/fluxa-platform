@@ -3,7 +3,9 @@ import { AdeDocumentDryRunService } from './ade-document-dry-run.service';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 import { AdeSessionService } from './ade-session.service';
 
-function serviceWithBrowser(browser: AdeDocumentBrowserService): AdeDocumentDryRunService {
+function serviceWithBrowser(
+  browser: AdeDocumentBrowserService,
+): AdeDocumentDryRunService {
   const config = {
     read: () => ({
       dryRunEnabled: true,
