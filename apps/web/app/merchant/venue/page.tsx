@@ -1,12 +1,8 @@
 import Link from 'next/link';
 import { EmptyState, SectionHeading } from '@/components/control-center/shell';
 import { FloorPlanEditor } from '@/components/floor-plan/floor-plan-editor';
-import {
-  LocationConsole,
-  type DiningArea,
-  type DiningTable,
-  type MerchantLocation,
-} from '@/components/merchant/location-console';
+import type { DiningArea, DiningTable, MerchantLocation } from '@/components/merchant/location-console';
+import { VenueConsole } from '@/components/merchant/venue-console';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { requireMerchantSession } from '@/lib/auth/session';
 import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
@@ -56,6 +52,7 @@ export default async function MerchantVenuePage({
         ) : (
           <SpacesView
             defaultLocationId={membership?.defaultLocationId}
+            initialAction={params.new === 'table' ? 'table' : params.new === 'area' ? 'area' : null}
             requestedLocationId={params.locationId}
           />
         )}
@@ -66,9 +63,11 @@ export default async function MerchantVenuePage({
 
 async function SpacesView({
   defaultLocationId,
+  initialAction,
   requestedLocationId,
 }: {
   defaultLocationId?: string | null;
+  initialAction: 'table' | 'area' | null;
   requestedLocationId?: string;
 }) {
   const locations = await authenticatedFluxaFetch<MerchantLocation[]>('/locations');
@@ -100,7 +99,8 @@ async function SpacesView({
   ]);
 
   return (
-    <LocationConsole
+    <VenueConsole
+      initialAction={initialAction}
       initialAreas={initialAreas}
       initialLocationId={initialLocationId}
       initialLocations={locations}
