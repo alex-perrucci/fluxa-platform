@@ -3,22 +3,25 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/backend_error.dart';
+import '../../health/data/health_api.dart';
 import '../../orders/data/orders_api.dart';
 import '../../orders/domain/order_models.dart';
 import '../../orders/domain/uuid_v4.dart';
 import '../data/fiscal_api.dart';
 import '../domain/fiscal_models.dart';
+import '../domain/fiscal_runtime.dart';
 
 enum FiscalLoadStatus { idle, loading, ready, failure }
 
 class FiscalController extends ChangeNotifier {
-  FiscalController(this._gateway, this._orders);
+  FiscalController(this._gateway, this._orders, this._health);
 
   final FiscalGateway _gateway;
   final OrdersGateway _orders;
+  final HealthGateway _health;
 
   String? _locationId;
-  FiscalProfile? _profile;
+  FiscalRuntimeConfiguration? _runtime;
   List<FiscalDocument> _documents = const [];
   List<OrderHeader> _paidOrders = const [];
   FiscalDocument? _selectedDocument;
@@ -33,7 +36,7 @@ class FiscalController extends ChangeNotifier {
   bool _disposed = false;
 
   String? get locationId => _locationId;
-  FiscalProfile? get profile => _profile;
+  FiscalRuntimeConfiguration? get runtime => _runtime;
   List<FiscalDocument> get documents => _documents
       .where((document) {
         final matchesType = _typeFilter == null || document.type == _typeFilter;
@@ -70,7 +73,7 @@ class FiscalController extends ChangeNotifier {
     _requestVersion += 1;
     _stopPolling();
     _locationId = locationId;
-    _profile = null;
+    _runtime = null;
     _documents = const [];
     _paidOrders = const [];
     _selectedDocument = null;
@@ -101,25 +104,72 @@ class FiscalController extends ChangeNotifier {
     bool preserveSelection = false,
   }) async {
     final selectedId = preserveSelection ? _selectedDocument?.id : null;
+    final previousRuntime = _runtime?.locationId == locationId
+        ? _runtime
+        : null;
+
+    late final FiscalRuntimeConfiguration runtime;
     try {
-      FiscalProfile? profile;
-      try {
-        profile = await _gateway.getProfile(locationId);
-      } on BackendError catch (error) {
-        if (error.statusCode != 403) {
-          rethrow;
-        }
-        profile = null;
-      }
-      final documents = await _gateway.listDocuments(locationId: locationId);
-      final orders = await _orders.listOrders(
+      final health = await _health.operational(locationId: locationId);
+      runtime = FiscalRuntimeConfiguration.fromOperationalHealth(
         locationId: locationId,
-        status: OrderStatus.paid,
-        pageSize: 100,
+        health: health,
       );
+    } on BackendError {
       if (!_isCurrent(version, locationId)) return;
-      if (profile != null && profile.locationId != locationId) {
-        throw const FormatException('Profilo fiscale fuori location.');
+      const message =
+          'Impossibile verificare lo stato fiscale. Controlla la connessione o riprova.';
+      _runtime = FiscalRuntimeConfiguration.verificationError(
+        locationId: locationId,
+        message: message,
+        previous: previousRuntime,
+      );
+      _status = FiscalLoadStatus.failure;
+      _errorMessage = message;
+      _notify();
+      return;
+    } on FormatException {
+      if (!_isCurrent(version, locationId)) return;
+      const message =
+          'Impossibile verificare lo stato fiscale. La configurazione ricevuta non è valida.';
+      _runtime = FiscalRuntimeConfiguration.verificationError(
+        locationId: locationId,
+        message: message,
+        previous: previousRuntime,
+      );
+      _status = FiscalLoadStatus.failure;
+      _errorMessage = message;
+      _notify();
+      return;
+    } catch (_) {
+      if (!_isCurrent(version, locationId)) return;
+      const message =
+          'Impossibile verificare lo stato fiscale. Controlla la connessione o riprova.';
+      _runtime = FiscalRuntimeConfiguration.verificationError(
+        locationId: locationId,
+        message: message,
+        previous: previousRuntime,
+      );
+      _status = FiscalLoadStatus.failure;
+      _errorMessage = message;
+      _notify();
+      return;
+    }
+
+    try {
+      final results = await Future.wait<Object>([
+        _gateway.listDocuments(locationId: locationId),
+        _orders.listOrders(
+          locationId: locationId,
+          status: OrderStatus.paid,
+          pageSize: 100,
+        ),
+      ]);
+      final documents = results[0] as FiscalDocumentPage;
+      final orders = results[1] as OrderListPage;
+      if (!_isCurrent(version, locationId)) return;
+      if (runtime.locationId != locationId) {
+        throw const FormatException('Stato fiscale fuori location.');
       }
       if (documents.items.any(
         (document) => document.locationId != locationId,
@@ -129,10 +179,11 @@ class FiscalController extends ChangeNotifier {
       if (orders.items.any((order) => order.locationId != locationId)) {
         throw const FormatException('Ordine pagato fuori location.');
       }
-      _profile = profile;
+      _runtime = runtime;
       _documents = documents.items;
       _paidOrders = orders.items;
       _status = FiscalLoadStatus.ready;
+      _errorMessage = null;
       if (selectedId != null) {
         try {
           _selectedDocument = await _gateway.getDocument(selectedId);
@@ -143,16 +194,19 @@ class FiscalController extends ChangeNotifier {
       _syncPolling();
     } on BackendError catch (error) {
       if (!_isCurrent(version, locationId)) return;
+      _runtime = runtime;
       _status = FiscalLoadStatus.failure;
       _errorMessage = error.message;
     } on FormatException {
       if (!_isCurrent(version, locationId)) return;
+      _runtime = runtime;
       _status = FiscalLoadStatus.failure;
       _errorMessage = 'Il backend ha restituito dati fiscali non validi.';
     } catch (_) {
       if (!_isCurrent(version, locationId)) return;
+      _runtime = runtime;
       _status = FiscalLoadStatus.failure;
-      _errorMessage = 'Impossibile caricare la fiscalizzazione.';
+      _errorMessage = 'Impossibile caricare i documenti fiscali.';
     }
     _notify();
   }
@@ -192,8 +246,30 @@ class FiscalController extends ChangeNotifier {
 
   Future<bool> issueOrder(String orderId, {String? lotteryCode}) async {
     if (_busy) return false;
+    final runtime = _runtime;
+    if (runtime == null ||
+        runtime.status == FiscalRuntimeStatus.verificationError) {
+      _errorMessage =
+          'Impossibile verificare la configurazione fiscale. Riprova prima di emettere.';
+      _notify();
+      return false;
+    }
+    if (!runtime.isOperationallyConfigured) {
+      _errorMessage = runtime.status == FiscalRuntimeStatus.disabled
+          ? 'La fiscalizzazione è disabilitata per questa sede.'
+          : 'La fiscalizzazione non è configurata per questa sede.';
+      _notify();
+      return false;
+    }
+    if (runtime.status == FiscalRuntimeStatus.authRequired) {
+      _errorMessage =
+          'È necessario ripristinare l’accesso fiscale prima di emettere nuovi documenti.';
+      _notify();
+      return false;
+    }
+
     final normalizedLottery = lotteryCode?.trim().toUpperCase();
-    if (_profile?.provider == FiscalProvider.adeWeb &&
+    if (runtime.provider == FiscalProvider.adeWeb &&
         normalizedLottery != null &&
         normalizedLottery.isNotEmpty) {
       _errorMessage =
@@ -299,56 +375,6 @@ class FiscalController extends ChangeNotifier {
     }
   }
 
-  Future<bool> configureAcubeSandbox({
-    required String fiscalId,
-    String? receiptEmail,
-    String? displayName,
-  }) async {
-    if (_profile?.provider == FiscalProvider.openapiSmartReceipts ||
-        _profile?.provider == FiscalProvider.adeWeb) {
-      _errorMessage =
-          'Il profilo fiscale corrente è gestito dal Platform Control Center.';
-      _notify();
-      return false;
-    }
-    final normalizedFiscalId = fiscalId.trim();
-    if (_busy) return false;
-    if (!RegExp(r'^\d{11}$').hasMatch(normalizedFiscalId)) {
-      _errorMessage = 'La partita IVA deve contenere 11 cifre.';
-      _notify();
-      return false;
-    }
-    final locationId = _locationId;
-    if (locationId == null) return false;
-    _beginBusy();
-    try {
-      _profile = await _gateway.upsertProfile(
-        locationId: locationId,
-        provider: FiscalProvider.acubeSmartReceipts,
-        environment: FiscalEnvironment.sandbox,
-        fiscalId: normalizedFiscalId,
-        enabled: true,
-        autoIssueOnPaid: false,
-        receiptEmail: receiptEmail?.trim().isEmpty == true
-            ? null
-            : receiptEmail?.trim(),
-        displayName: displayName?.trim().isEmpty == true
-            ? null
-            : displayName?.trim(),
-      );
-      _noticeMessage = 'Profilo A-Cube sandbox configurato.';
-      return true;
-    } on BackendError catch (error) {
-      _errorMessage = error.message;
-      return false;
-    } catch (_) {
-      _errorMessage = 'Configurazione A-Cube non riuscita.';
-      return false;
-    } finally {
-      _endBusy();
-    }
-  }
-
   void clearMessages() {
     _errorMessage = null;
     _noticeMessage = null;
@@ -364,7 +390,7 @@ class FiscalController extends ChangeNotifier {
     _requestVersion += 1;
     _stopPolling();
     _locationId = null;
-    _profile = null;
+    _runtime = null;
     _documents = const [];
     _paidOrders = const [];
     _selectedDocument = null;

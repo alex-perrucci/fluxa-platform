@@ -45,6 +45,7 @@ interface FiscalRow extends QueryResultRow {
   provider: string;
   environment: string;
   enabled: boolean;
+  autoIssueOnPaid: boolean;
   status: string | null;
   errorCode: string | null;
   errorMessage: string | null;
@@ -173,6 +174,7 @@ export class HealthService implements OnModuleDestroy {
         ),
         this.database.pool.query<FiscalRow>(
           `SELECT fp.provider,fp.environment,fp.enabled,
+             fp.auto_issue_on_paid AS "autoIssueOnPaid",
              fd.status,fd.error_code AS "errorCode",
              fd.error_message AS "errorMessage",fd.updated_at AS "updatedAt"
            FROM fiscal_profiles fp
@@ -250,6 +252,8 @@ export class HealthService implements OnModuleDestroy {
         ? {
             provider: fiscal.provider,
             environment: fiscal.environment,
+            enabled: fiscal.enabled,
+            autoIssueOnPaid: fiscal.autoIssueOnPaid,
             status: fiscalStatus,
             lastDocumentStatus: fiscal.status,
             errorCode: fiscal.errorCode,

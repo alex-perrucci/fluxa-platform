@@ -4,37 +4,55 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluxa_pos/core/network/backend_error.dart';
 import 'package:fluxa_pos/features/fiscal/data/fiscal_api.dart';
 import 'package:fluxa_pos/features/fiscal/domain/fiscal_models.dart';
+import 'package:fluxa_pos/features/fiscal/domain/fiscal_runtime.dart';
 import 'package:fluxa_pos/features/fiscal/presentation/fiscal_controller.dart';
+import 'package:fluxa_pos/features/health/data/health_api.dart';
+import 'package:fluxa_pos/features/health/domain/health_models.dart';
 import 'package:fluxa_pos/features/orders/data/orders_api.dart';
 import 'package:fluxa_pos/features/orders/domain/order_models.dart';
 
 void main() {
-  test('loads profile, paid orders and issues idempotent sale', () async {
+  test('loads ADE_WEB production runtime from operational health', () async {
     final fiscal = _FiscalGateway();
-    final controller = FiscalController(fiscal, _OrdersGateway());
+    final health = _HealthGateway(
+      current: _health(
+        provider: FiscalProvider.adeWeb,
+        environment: FiscalEnvironment.production,
+        autoIssueOnPaid: true,
+      ),
+    );
+    final controller = FiscalController(fiscal, _OrdersGateway(), health);
     addTearDown(controller.dispose);
 
     await controller.bindLocation('location-1');
-    expect(controller.profile?.environment, FiscalEnvironment.sandbox);
-    expect(controller.ordersToFiscalize.single.id, 'order-1');
 
-    final success = await controller.issueOrder('order-1');
-    expect(success, isTrue);
-    expect(fiscal.issueCalls, 1);
-    expect(
-      controller.documentForOrder('order-1')?.status,
-      FiscalDocumentStatus.queued,
-    );
+    expect(controller.runtime?.status, FiscalRuntimeStatus.ready);
+    expect(controller.runtime?.provider, FiscalProvider.adeWeb);
+    expect(controller.runtime?.environment, FiscalEnvironment.production);
+    expect(controller.runtime?.enabled, isTrue);
+    expect(controller.runtime?.autoIssueOnPaid, isTrue);
+    expect(controller.ordersToFiscalize.single.id, 'order-location-1');
+    expect(health.locationIds, ['location-1']);
   });
 
   test('blocks lottery code before an ADE_WEB emission starts', () async {
-    final fiscal = _FiscalGateway(provider: FiscalProvider.adeWeb);
-    final controller = FiscalController(fiscal, _OrdersGateway());
+    final fiscal = _FiscalGateway();
+    final controller = FiscalController(
+      fiscal,
+      _OrdersGateway(),
+      _HealthGateway(
+        current: _health(
+          provider: FiscalProvider.adeWeb,
+          environment: FiscalEnvironment.production,
+          autoIssueOnPaid: true,
+        ),
+      ),
+    );
     addTearDown(controller.dispose);
 
     await controller.bindLocation('location-1');
     final success = await controller.issueOrder(
-      'order-1',
+      'order-location-1',
       lotteryCode: 'ABCD1234',
     );
 
@@ -48,11 +66,19 @@ void main() {
     'reloads authoritative fiscal document after version conflict',
     () async {
       final fiscal = _FiscalGateway(versionConflict: true);
-      final controller = FiscalController(fiscal, _OrdersGateway());
+      final controller = FiscalController(
+        fiscal,
+        _OrdersGateway(),
+        _HealthGateway(current: _health()),
+      );
       addTearDown(controller.dispose);
       await controller.bindLocation('location-1');
       fiscal.documents = [
-        _document(status: FiscalDocumentStatus.rejected, version: 2),
+        _document(
+          locationId: 'location-1',
+          status: FiscalDocumentStatus.rejected,
+          version: 2,
+        ),
       ];
       await controller.refresh();
       final selected = fiscal.documents.single;
@@ -63,33 +89,158 @@ void main() {
       expect(controller.errorMessage, 'Versione non aggiornata.');
     },
   );
+
+  test('real absence maps to NOT_CONFIGURED', () async {
+    final controller = FiscalController(
+      _FiscalGateway(),
+      _OrdersGateway(),
+      _HealthGateway(current: _health(provider: null, enabled: false)),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.bindLocation('location-1');
+
+    expect(controller.runtime?.status, FiscalRuntimeStatus.notConfigured);
+    expect(controller.runtime?.provider, isNull);
+    expect(controller.errorMessage, isNull);
+  });
+
+  for (final failure in [
+    const BackendError(message: 'timeout'),
+    const BackendError(message: 'server error', statusCode: 500),
+  ]) {
+    test(
+      'health failure ${failure.statusCode ?? 'timeout'} is verification error',
+      () async {
+        final controller = FiscalController(
+          _FiscalGateway(),
+          _OrdersGateway(),
+          _HealthGateway(error: failure),
+        );
+        addTearDown(controller.dispose);
+
+        await controller.bindLocation('location-1');
+
+        expect(
+          controller.runtime?.status,
+          FiscalRuntimeStatus.verificationError,
+        );
+        expect(controller.errorMessage, contains('Impossibile verificare'));
+        expect(controller.errorMessage, isNot(contains('non è configurata')));
+      },
+    );
+  }
+
+  test('AUTH_REQUIRED remains a distinct runtime state', () async {
+    final controller = FiscalController(
+      _FiscalGateway(),
+      _OrdersGateway(),
+      _HealthGateway(
+        current: _health(lastDocumentStatus: FiscalDocumentStatus.authRequired),
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.bindLocation('location-1');
+
+    expect(controller.runtime?.status, FiscalRuntimeStatus.authRequired);
+    final issued = await controller.issueOrder('order-location-1');
+    expect(issued, isFalse);
+    expect(controller.errorMessage, contains('ripristinare l’accesso fiscale'));
+  });
+
+  test('UNKNOWN remains attention and is never treated as pending', () async {
+    final controller = FiscalController(
+      _FiscalGateway(),
+      _OrdersGateway(),
+      _HealthGateway(
+        current: _health(lastDocumentStatus: FiscalDocumentStatus.unknown),
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.bindLocation('location-1');
+
+    expect(controller.runtime?.status, FiscalRuntimeStatus.attention);
+    expect(controller.runtime?.lastDocumentStatus?.isPending, isFalse);
+  });
+
+  test('binding a new device location loads the new runtime', () async {
+    final health = _HealthGateway(
+      current: _health(provider: FiscalProvider.adeWeb),
+      byLocation: {
+        'location-1': _health(provider: FiscalProvider.adeWeb),
+        'location-2': _health(
+          provider: FiscalProvider.openapiSmartReceipts,
+          environment: FiscalEnvironment.sandbox,
+        ),
+      },
+    );
+    final controller = FiscalController(
+      _FiscalGateway(),
+      _OrdersGateway(),
+      health,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.bindLocation('location-1');
+    await controller.bindLocation('location-2');
+
+    expect(controller.locationId, 'location-2');
+    expect(controller.runtime?.locationId, 'location-2');
+    expect(controller.runtime?.provider, FiscalProvider.openapiSmartReceipts);
+    expect(health.locationIds, ['location-1', 'location-2']);
+  });
+
+  test('manual refresh replaces the shared runtime snapshot', () async {
+    final health = _HealthGateway(
+      current: _health(provider: FiscalProvider.adeWeb),
+    );
+    final controller = FiscalController(
+      _FiscalGateway(),
+      _OrdersGateway(),
+      health,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.bindLocation('location-1');
+    expect(controller.runtime?.provider, FiscalProvider.adeWeb);
+
+    health.current = _health(
+      provider: FiscalProvider.acubeSmartReceipts,
+      environment: FiscalEnvironment.sandbox,
+      autoIssueOnPaid: false,
+    );
+    await controller.refresh();
+
+    expect(controller.runtime?.provider, FiscalProvider.acubeSmartReceipts);
+    expect(controller.runtime?.autoIssueOnPaid, isFalse);
+    expect(health.locationIds, ['location-1', 'location-1']);
+  });
+}
+
+class _HealthGateway implements HealthGateway {
+  _HealthGateway({this.current, this.error, this.byLocation = const {}});
+
+  OperationalHealth? current;
+  final BackendError? error;
+  final Map<String, OperationalHealth> byLocation;
+  final List<String> locationIds = [];
+
+  @override
+  Future<OperationalHealth> operational({required String locationId}) async {
+    locationIds.add(locationId);
+    if (error != null) throw error!;
+    return byLocation[locationId] ?? current ?? _health();
+  }
 }
 
 class _FiscalGateway implements FiscalGateway {
-  _FiscalGateway({
-    this.versionConflict = false,
-    this.provider = FiscalProvider.acubeSmartReceipts,
-  });
+  _FiscalGateway({this.versionConflict = false});
+
   final bool versionConflict;
-  final FiscalProvider provider;
   int issueCalls = 0;
   List<FiscalDocument> documents = [];
-
-  @override
-  Future<FiscalProfile?> getProfile(String locationId) async =>
-      _profile(provider: provider);
-
-  @override
-  Future<FiscalProfile> upsertProfile({
-    required String locationId,
-    required FiscalProvider provider,
-    required FiscalEnvironment environment,
-    required String fiscalId,
-    required bool enabled,
-    required bool autoIssueOnPaid,
-    String? receiptEmail,
-    String? displayName,
-  }) async => _profile(provider: provider);
 
   @override
   Future<FiscalDocumentPage> listDocuments({
@@ -106,8 +257,11 @@ class _FiscalGateway implements FiscalGateway {
   );
 
   @override
-  Future<FiscalDocument> getDocument(String documentId) async =>
-      _document(status: FiscalDocumentStatus.rejected, version: 3);
+  Future<FiscalDocument> getDocument(String documentId) async => _document(
+    locationId: documents.firstOrNull?.locationId ?? 'location-1',
+    status: FiscalDocumentStatus.rejected,
+    version: 3,
+  );
 
   @override
   Future<FiscalReceiptPdfData> downloadReceiptPdf(String documentId) async =>
@@ -123,7 +277,14 @@ class _FiscalGateway implements FiscalGateway {
     String? lotteryCode,
   }) async {
     issueCalls += 1;
-    final document = _document(status: FiscalDocumentStatus.queued, version: 1);
+    final locationId = orderId.startsWith('order-')
+        ? orderId.substring('order-'.length)
+        : 'location-1';
+    final document = _document(
+      locationId: locationId,
+      status: FiscalDocumentStatus.queued,
+      version: 1,
+    );
     documents = [document];
     return document;
   }
@@ -141,6 +302,7 @@ class _FiscalGateway implements FiscalGateway {
       );
     }
     return _document(
+      locationId: documents.firstOrNull?.locationId ?? 'location-1',
       status: FiscalDocumentStatus.queued,
       version: expectedVersion + 1,
     );
@@ -153,6 +315,7 @@ class _FiscalGateway implements FiscalGateway {
     required int expectedVersion,
     required String reason,
   }) async => _document(
+    locationId: documents.firstOrNull?.locationId ?? 'location-1',
     status: FiscalDocumentStatus.queued,
     version: 1,
     type: FiscalDocumentType.voidDocument,
@@ -170,7 +333,7 @@ class _OrdersGateway implements OrdersGateway {
     page: page,
     pageSize: pageSize,
     total: 1,
-    items: [_order()],
+    items: [_order(locationId)],
   );
 
   @override
@@ -248,35 +411,45 @@ class _OrdersGateway implements OrdersGateway {
   }) => throw UnimplementedError();
 }
 
-FiscalProfile _profile({
-  FiscalProvider provider = FiscalProvider.acubeSmartReceipts,
-}) => FiscalProfile(
-  id: 'profile-1',
-  organizationId: 'org-1',
-  locationId: 'location-1',
-  provider: provider,
-  environment: provider == FiscalProvider.adeWeb
-      ? FiscalEnvironment.production
-      : FiscalEnvironment.sandbox,
-  fiscalId: '12345678901',
-  enabled: true,
-  autoIssueOnPaid: provider == FiscalProvider.adeWeb,
-  receiptEmail: null,
-  displayName: 'Demo',
-  version: 1,
-  createdAt: DateTime.utc(2026, 7, 22),
-  updatedAt: DateTime.utc(2026, 7, 22),
+OperationalHealth _health({
+  FiscalProvider? provider = FiscalProvider.acubeSmartReceipts,
+  FiscalEnvironment environment = FiscalEnvironment.sandbox,
+  bool enabled = true,
+  bool autoIssueOnPaid = false,
+  FiscalDocumentStatus? lastDocumentStatus,
+}) => OperationalHealth(
+  generatedAt: DateTime.utc(2026, 8, 20),
+  overallStatus: HealthStatus.ok,
+  apiStatus: HealthStatus.ok,
+  apiLatencyMs: 10,
+  printerStatus: HealthStatus.ok,
+  printerCount: 1,
+  fiscalStatus: provider == null || !enabled
+      ? HealthStatus.notConfigured
+      : HealthStatus.ok,
+  fiscalProvider: provider?.wireValue,
+  fiscalEnvironment: provider == null ? null : environment.wireValue,
+  fiscalEnabled: provider == null ? null : enabled,
+  fiscalAutoIssueOnPaid: provider == null ? false : autoIssueOnPaid,
+  fiscalLastDocumentStatus: lastDocumentStatus?.wireValue,
+  fiscalErrorCode: null,
+  fiscalErrorMessage: null,
+  paymentStatus: HealthStatus.ok,
+  paymentProvider: 'MANUAL_TERMINAL',
+  lastPrintJob: null,
+  suggestions: const [],
+  raw: const {},
 );
 
-OrderHeader _order() => OrderHeader(
-  id: 'order-1',
+OrderHeader _order(String locationId) => OrderHeader(
+  id: 'order-$locationId',
   organizationId: 'org-1',
-  locationId: 'location-1',
+  locationId: locationId,
   deviceId: 'device-1',
   createdByUserId: 'user-1',
-  clientOrderId: 'client-1',
-  number: '20260722-000001',
-  businessDate: '2026-07-22',
+  clientOrderId: 'client-$locationId',
+  number: '20260820-000001',
+  businessDate: '2026-08-20',
   status: OrderStatus.paid,
   serviceMode: OrderServiceMode.counter,
   customerNote: null,
@@ -290,19 +463,20 @@ OrderHeader _order() => OrderHeader(
   heldAt: null,
   cancelledAt: null,
   cancelReason: null,
-  createdAt: DateTime.utc(2026, 7, 22),
-  updatedAt: DateTime.utc(2026, 7, 22),
+  createdAt: DateTime.utc(2026, 8, 20),
+  updatedAt: DateTime.utc(2026, 8, 20),
 );
 
 FiscalDocument _document({
+  required String locationId,
   required FiscalDocumentStatus status,
   required int version,
   FiscalDocumentType type = FiscalDocumentType.sale,
 }) => FiscalDocument(
   id: type == FiscalDocumentType.sale ? 'document-1' : 'void-1',
   organizationId: 'org-1',
-  locationId: 'location-1',
-  orderId: 'order-1',
+  locationId: locationId,
+  orderId: 'order-$locationId',
   parentDocumentId: type == FiscalDocumentType.voidDocument
       ? 'document-1'
       : null,
@@ -323,12 +497,12 @@ FiscalDocument _document({
   errorMessage: status == FiscalDocumentStatus.rejected ? 'Rifiutato' : null,
   attempts: 1,
   maxAttempts: 5,
-  nextAttemptAt: DateTime.utc(2026, 7, 22),
+  nextAttemptAt: DateTime.utc(2026, 8, 20),
   version: version,
   payload: const {},
   providerResponse: null,
-  createdAt: DateTime.utc(2026, 7, 22),
-  updatedAt: DateTime.utc(2026, 7, 22),
+  createdAt: DateTime.utc(2026, 8, 20),
+  updatedAt: DateTime.utc(2026, 8, 20),
   issuedAt: null,
   voidedAt: null,
   items: const [],

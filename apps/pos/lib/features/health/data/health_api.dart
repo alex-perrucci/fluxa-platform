@@ -3,11 +3,16 @@ import 'package:dio/dio.dart';
 import '../../../core/network/backend_error.dart';
 import '../domain/health_models.dart';
 
-class HealthApi {
+abstract interface class HealthGateway {
+  Future<OperationalHealth> operational({required String locationId});
+}
+
+class HealthApi implements HealthGateway {
   HealthApi(this._dio);
 
   final Dio _dio;
 
+  @override
   Future<OperationalHealth> operational({required String locationId}) async {
     final startedAt = DateTime.now();
     try {
@@ -29,6 +34,12 @@ class HealthApi {
         printerCount: result.printerCount,
         fiscalStatus: result.fiscalStatus,
         fiscalProvider: result.fiscalProvider,
+        fiscalEnvironment: result.fiscalEnvironment,
+        fiscalEnabled: result.fiscalEnabled,
+        fiscalAutoIssueOnPaid: result.fiscalAutoIssueOnPaid,
+        fiscalLastDocumentStatus: result.fiscalLastDocumentStatus,
+        fiscalErrorCode: result.fiscalErrorCode,
+        fiscalErrorMessage: result.fiscalErrorMessage,
         paymentStatus: result.paymentStatus,
         paymentProvider: result.paymentProvider,
         lastPrintJob: result.lastPrintJob,

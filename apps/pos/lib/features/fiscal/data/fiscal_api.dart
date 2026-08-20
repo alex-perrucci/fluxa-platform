@@ -13,19 +13,6 @@ class FiscalReceiptPdfData {
 }
 
 abstract interface class FiscalGateway {
-  Future<FiscalProfile?> getProfile(String locationId);
-
-  Future<FiscalProfile> upsertProfile({
-    required String locationId,
-    required FiscalProvider provider,
-    required FiscalEnvironment environment,
-    required String fiscalId,
-    required bool enabled,
-    required bool autoIssueOnPaid,
-    String? receiptEmail,
-    String? displayName,
-  });
-
   Future<FiscalDocumentPage> listDocuments({
     required String locationId,
     FiscalDocumentType? type,
@@ -61,47 +48,6 @@ abstract interface class FiscalGateway {
 class FiscalApi implements FiscalGateway {
   FiscalApi(this._dio);
   final Dio _dio;
-
-  @override
-  Future<FiscalProfile?> getProfile(String locationId) async {
-    try {
-      final response = await _dio.get<Object?>('fiscal-profiles/$locationId');
-      if (response.data == null) return null;
-      return FiscalProfile.fromJson(_map(response.data));
-    } on DioException catch (error) {
-      throw BackendError.fromDioException(error);
-    }
-  }
-
-  @override
-  Future<FiscalProfile> upsertProfile({
-    required String locationId,
-    required FiscalProvider provider,
-    required FiscalEnvironment environment,
-    required String fiscalId,
-    required bool enabled,
-    required bool autoIssueOnPaid,
-    String? receiptEmail,
-    String? displayName,
-  }) async {
-    try {
-      final response = await _dio.put<Object?>(
-        'fiscal-profiles/$locationId',
-        data: {
-          'provider': provider.wireValue,
-          'environment': environment.wireValue,
-          'fiscalId': fiscalId,
-          'enabled': enabled,
-          'autoIssueOnPaid': autoIssueOnPaid,
-          'receiptEmail': ?receiptEmail,
-          'displayName': ?displayName,
-        },
-      );
-      return FiscalProfile.fromJson(_map(response.data));
-    } on DioException catch (error) {
-      throw BackendError.fromDioException(error);
-    }
-  }
 
   @override
   Future<FiscalDocumentPage> listDocuments({

@@ -6,6 +6,7 @@ import '../../../core/di/providers.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../orders/domain/order_models.dart';
 import '../domain/fiscal_models.dart';
+import '../domain/fiscal_runtime.dart';
 import 'fiscal_controller.dart';
 import 'fiscal_screen.dart';
 
@@ -38,7 +39,7 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
     if (fiscal.locationId != location.id ||
         (fiscal.status == FiscalLoadStatus.loading &&
             fiscal.documents.isEmpty &&
-            fiscal.profile == null)) {
+            fiscal.runtime == null)) {
       return const FluxaLoadingView(label: 'Controllo scontrini fiscali');
     }
 
@@ -50,9 +51,9 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
         .where((document) => document.status.isPending)
         .toList(growable: false);
     final missing = fiscal.ordersToFiscalize;
-    final profileReady = fiscal.profile?.enabled == true;
+    final runtime = fiscal.runtime;
     final allGood =
-        profileReady &&
+        runtime?.isReady == true &&
         problems.isEmpty &&
         pending.isEmpty &&
         missing.isEmpty &&
@@ -85,9 +86,9 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
           ],
         ),
         const SizedBox(height: 14),
-        _FiscalSummary(
+        OperatorFiscalSummary(
+          runtime: runtime,
           allGood: allGood,
-          profileReady: profileReady,
           missingCount: missing.length,
           pendingCount: pending.length,
           problemCount: problems.length,
@@ -151,7 +152,7 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
         ],
         const SizedBox(height: 14),
         OutlinedButton.icon(
-          onPressed: fiscal.busy ? null : () => fiscal.refresh(),
+          onPressed: fiscal.busy ? null : _refreshRuntime,
           icon: const Icon(Icons.refresh),
           label: const Text('Controlla adesso'),
         ),
@@ -179,6 +180,26 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
     });
   }
 
+  Future<void> _refreshRuntime() async {
+    final auth = ref.read(authControllerProvider);
+    await auth.refreshOperationalContext();
+    if (!mounted) return;
+
+    final fiscal = ref.read(fiscalControllerProvider);
+    final location = auth.state.deviceAssignment?.location;
+    if (location == null) {
+      fiscal.clearContext();
+      return;
+    }
+
+    _scheduledLocationId = location.id;
+    if (fiscal.locationId == location.id) {
+      await fiscal.refresh();
+    } else {
+      await fiscal.bindLocation(location.id);
+    }
+  }
+
   Future<void> _recover(String locationId, OrderHeader order) async {
     final lotteryCode = await showLotteryCodeDialog(context, order.number);
     if (lotteryCode == null || !mounted) return;
@@ -194,18 +215,19 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
   }
 }
 
-class _FiscalSummary extends StatelessWidget {
-  const _FiscalSummary({
+class OperatorFiscalSummary extends StatelessWidget {
+  const OperatorFiscalSummary({
+    required this.runtime,
     required this.allGood,
-    required this.profileReady,
     required this.missingCount,
     required this.pendingCount,
     required this.problemCount,
     required this.errorMessage,
+    super.key,
   });
 
+  final FiscalRuntimeConfiguration? runtime;
   final bool allGood;
-  final bool profileReady;
   final int missingCount;
   final int pendingCount;
   final int problemCount;
@@ -213,29 +235,61 @@ class _FiscalSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final runtimeStatus = runtime?.status;
+    final verificationError =
+        runtimeStatus == FiscalRuntimeStatus.verificationError;
+    final configurationAttention = switch (runtimeStatus) {
+      FiscalRuntimeStatus.notConfigured ||
+      FiscalRuntimeStatus.disabled ||
+      FiscalRuntimeStatus.authRequired ||
+      FiscalRuntimeStatus.attention => true,
+      _ => false,
+    };
     final attention =
-        !allGood && (missingCount > 0 || problemCount > 0 || !profileReady);
-    final title = allGood
-        ? 'TUTTO A POSTO'
+        configurationAttention || missingCount > 0 || problemCount > 0;
+
+    final title = verificationError
+        ? 'VERIFICA NON DISPONIBILE'
+        : allGood
+        ? 'OPERATIVO'
         : attention
         ? 'SERVE ATTENZIONE'
         : 'ELABORAZIONE IN CORSO';
-    final message = !profileReady
-        ? 'La fiscalizzazione non è configurata per questa sede.'
-        : errorMessage != null
-        ? errorMessage!
-        : missingCount > 0 || problemCount > 0
-        ? '$missingCount da recuperare · $problemCount con errore'
-        : '$pendingCount scontrini stanno terminando automaticamente.';
+    final message = switch (runtimeStatus) {
+      FiscalRuntimeStatus.notConfigured =>
+        'La fiscalizzazione non è configurata per questa sede.',
+      FiscalRuntimeStatus.disabled =>
+        'La fiscalizzazione è configurata ma al momento è disabilitata.',
+      FiscalRuntimeStatus.authRequired =>
+        'È necessario ripristinare l’accesso fiscale. Contatta l’assistenza Fluxa.',
+      FiscalRuntimeStatus.attention =>
+        'Esiste un esito fiscale da verificare. Non ripetere automaticamente l’emissione.',
+      FiscalRuntimeStatus.verificationError =>
+        runtime?.errorMessage ??
+            'Impossibile verificare lo stato fiscale. Controlla la connessione o riprova.',
+      FiscalRuntimeStatus.ready when errorMessage != null => errorMessage!,
+      FiscalRuntimeStatus.ready when missingCount > 0 || problemCount > 0 =>
+        '$missingCount da recuperare · $problemCount con errore',
+      FiscalRuntimeStatus.ready when pendingCount > 0 =>
+        '$pendingCount scontrini stanno terminando automaticamente.',
+      FiscalRuntimeStatus.ready =>
+        runtime?.autoIssueOnPaid == true
+            ? 'La fiscalizzazione è attiva. Gli scontrini vengono emessi automaticamente al pagamento.'
+            : 'La fiscalizzazione è attiva. L’emissione automatica non è attiva.',
+      null => errorMessage ?? 'Verifica dello stato fiscale in corso.',
+    };
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
               allGood
                   ? Icons.verified_outlined
+                  : verificationError
+                  ? Icons.cloud_off_outlined
                   : attention
                   ? Icons.warning_amber
                   : Icons.hourglass_top,
@@ -249,6 +303,12 @@ class _FiscalSummary extends StatelessWidget {
                   Text(title, style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 4),
                   Text(message),
+                  if (runtime?.provider != null &&
+                      runtime?.environment != null) ...[
+                    const SizedBox(height: 12),
+                    Text('Provider: ${runtime!.provider!.label}'),
+                    Text('Ambiente: ${runtime!.environment!.label}'),
+                  ],
                 ],
               ),
             ),

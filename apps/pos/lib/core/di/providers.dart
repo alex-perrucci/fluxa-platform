@@ -12,6 +12,7 @@ import '../../features/catalog/presentation/catalog_controller.dart';
 import '../../features/device/data/device_api.dart';
 import '../../features/fiscal/data/fiscal_api.dart';
 import '../../features/fiscal/presentation/fiscal_controller.dart';
+import '../../features/health/data/health_api.dart';
 import '../../features/hospitality/data/hospitality_api.dart';
 import '../../features/hospitality/presentation/kitchen_controller.dart';
 import '../../features/hospitality/presentation/table_controller.dart';
@@ -84,6 +85,9 @@ final refundsApiProvider = Provider<RefundsApi>(
 );
 final fiscalApiProvider = Provider<FiscalApi>(
   (ref) => FiscalApi(ref.watch(apiClientProvider).dio),
+);
+final healthApiProvider = Provider<HealthApi>(
+  (ref) => HealthApi(ref.watch(apiClientProvider).dio),
 );
 final hospitalityApiProvider = Provider<HospitalityApi>(
   (ref) => HospitalityApi(ref.watch(apiClientProvider).dio),
@@ -160,6 +164,7 @@ final fiscalControllerProvider = ChangeNotifierProvider<FiscalController>(
   (ref) => FiscalController(
     ref.watch(fiscalApiProvider),
     ref.watch(ordersApiProvider),
+    ref.watch(healthApiProvider),
   ),
 );
 final printingControllerProvider = ChangeNotifierProvider<PrintingController>(

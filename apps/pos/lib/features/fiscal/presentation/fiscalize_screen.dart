@@ -113,6 +113,7 @@ class _FiscalizeView extends StatelessWidget {
       return const FluxaLoadingView(label: 'Caricamento ordine pagato');
     }
     final document = fiscal.documentForOrder(orderId);
+    final runtime = fiscal.runtime;
     final canIssue = {'OWNER', 'ADMIN', 'MANAGER', 'CASHIER'}.contains(role);
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -133,13 +134,14 @@ class _FiscalizeView extends StatelessWidget {
                 const SizedBox(height: 12),
                 Chip(label: Text(order.header.status.label)),
                 const Divider(height: 28),
-                if (fiscal.profile == null)
-                  const Text(
-                    'Profilo fiscale non configurato o non visibile al ruolo corrente.',
-                  )
+                if (runtime == null)
+                  const Text('Verifica dello stato fiscale in corso.')
+                else if (runtime.provider == null ||
+                    runtime.environment == null)
+                  Text(runtime.operatorStatusLabel)
                 else
                   Text(
-                    '${fiscal.profile!.provider.label} · ${fiscal.profile!.environment.label} · ${fiscal.profile!.enabled ? 'attivo' : 'disabilitato'}',
+                    '${runtime.provider!.label} · ${runtime.environment!.label} · ${runtime.operatorStatusLabel.toLowerCase()}',
                   ),
                 const SizedBox(height: 16),
                 if (order.header.status != OrderStatus.paid)
