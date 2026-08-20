@@ -87,9 +87,15 @@ for (const marker of [
   'Dockerfile.ade-fiscal-worker',
   'ADE_DRY_RUN_ENABLED:',
   'ADE_WORKER_INTERNAL_TOKEN:',
-  'ADE_STORAGE_STATE_PATH: /run/fluxa-ade/storage-state.json',
+  'ADE_AUTH_ENTRY_URL:',
+  'ADE_STORAGE_STATE_PATH: /run/fluxa-ade-session/storage-state.json',
   'ADE_SELECTOR_PROFILE_PATH: /run/fluxa-ade/selectors.json',
+  'ADE_AUTH_PROFILE_PATH: /run/fluxa-ade/auth-profile.json',
+  'ADE_CIE_USERNAME_FILE: /run/fluxa-ade-secrets/cie-username',
+  'ADE_CIE_PASSWORD_FILE: /run/fluxa-ade-secrets/cie-password',
   ':/run/fluxa-ade:ro',
+  ':/run/fluxa-ade-session:rw',
+  ':/run/fluxa-ade-secrets:ro',
   '- ade-fiscal',
 ]) {
   assert.ok(
@@ -188,6 +194,8 @@ for (const marker of [
   'ADE_DRY_RUN_ENABLED=false',
   'ADE_WORKER_INTERNAL_TOKEN=',
   'ADE_RUNTIME_DIR=/opt/fluxa/runtime/ade',
+  'ADE_SESSION_DIR=/opt/fluxa/runtime/ade-session',
+  'ADE_SECRET_DIR=/opt/fluxa/runtime/ade-secrets',
 ]) {
   assert.ok(
     environment.includes(marker),
