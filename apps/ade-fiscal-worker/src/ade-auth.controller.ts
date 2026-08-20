@@ -51,13 +51,17 @@ function publicMessage(error: AdeAutomationError): string {
       return 'Percorso sessione AdE non configurato correttamente.';
     case 'ADE_INCARICANTE_NOT_FOUND':
       return 'La società configurata non è disponibile tra gli incaricanti AdE.';
+    case 'ADE_PORTAL_FLOW_MISMATCH':
+      // The browser service uses only static, non-secret step descriptions here.
+      // Returning the detail lets operations identify the exact post-MFA step
+      // without logging credentials, cookies or selector values.
+      return error.message;
     case 'ADE_CIE_ENTRY_NOT_FOUND':
     case 'ADE_CIE_LEVEL2_NOT_FOUND':
     case 'ADE_CIE_USERNAME_FIELD_NOT_FOUND':
     case 'ADE_CIE_PASSWORD_FIELD_NOT_FOUND':
     case 'ADE_CIE_SUBMIT_NOT_FOUND':
     case 'ADE_CIE_MFA_NOT_STARTED':
-    case 'ADE_PORTAL_FLOW_MISMATCH':
       return 'Il flusso AdE/CIE non corrisponde al profilo selector configurato.';
     case 'ADE_NAVIGATION_FAILED':
       return 'Navigazione verso il login AdE/CIE non riuscita.';
