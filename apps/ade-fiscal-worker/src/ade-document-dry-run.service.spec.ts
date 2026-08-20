@@ -57,12 +57,7 @@ function serviceWithDependencies(options: {
         }),
     } as unknown as AdeAuthService);
 
-  return new AdeDocumentDryRunService(
-    config,
-    session,
-    options.browser,
-    auth,
-  );
+  return new AdeDocumentDryRunService(config, session, options.browser, auth);
 }
 
 describe('AdeDocumentDryRunService', () => {
@@ -83,19 +78,18 @@ describe('AdeDocumentDryRunService', () => {
   });
 
   it('refreshes an expired portal session once and retries the document', async () => {
-    const browser = {
-      dryRun: jest
-        .fn()
-        .mockRejectedValueOnce(
-          new AdeAutomationError(
-            'Documento Commerciale on line non disponibile.',
-            'ADE_DOCUMENT_FLOW_MISMATCH',
-            'SELECTOR_MISMATCH',
-            false,
-          ),
-        )
-        .mockResolvedValueOnce(BROWSER_SUCCESS),
-    } as unknown as AdeDocumentBrowserService;
+    const dryRun = jest
+      .fn()
+      .mockRejectedValueOnce(
+        new AdeAutomationError(
+          'Documento Commerciale on line non disponibile.',
+          'ADE_DOCUMENT_FLOW_MISMATCH',
+          'SELECTOR_MISMATCH',
+          false,
+        ),
+      )
+      .mockResolvedValueOnce(BROWSER_SUCCESS);
+    const browser = { dryRun } as unknown as AdeDocumentBrowserService;
     const refresh = jest.fn().mockResolvedValue({
       status: 'SESSION_READY',
       finalUrl: 'https://example.invalid/ade',
@@ -108,7 +102,7 @@ describe('AdeDocumentDryRunService', () => {
     );
 
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect(browser.dryRun).toHaveBeenCalledTimes(2);
+    expect(dryRun).toHaveBeenCalledTimes(2);
     expect(result.status).toBe('DOCUMENT_READY_NOT_SUBMITTED');
     expect(result.submitAttempted).toBe(false);
     expect(result.canSubmit).toBe(false);
@@ -130,9 +124,8 @@ describe('AdeDocumentDryRunService', () => {
         return '/runtime/storage-state.json';
       },
     } as unknown as AdeSessionService;
-    const browser = {
-      dryRun: jest.fn().mockResolvedValue(BROWSER_SUCCESS),
-    } as unknown as AdeDocumentBrowserService;
+    const dryRun = jest.fn().mockResolvedValue(BROWSER_SUCCESS);
+    const browser = { dryRun } as unknown as AdeDocumentBrowserService;
     const refresh = jest.fn().mockResolvedValue({
       status: 'SESSION_READY',
       finalUrl: 'https://example.invalid/ade',
@@ -140,29 +133,26 @@ describe('AdeDocumentDryRunService', () => {
     });
     const auth = { refresh } as unknown as AdeAuthService;
 
-    const result = await serviceWithDependencies({
-      browser,
-      auth,
-      session,
-    }).run(DOCUMENT_INPUT);
+    const result = await serviceWithDependencies({ browser, auth, session }).run(
+      DOCUMENT_INPUT,
+    );
 
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(sessionAttempts).toBe(2);
-    expect(browser.dryRun).toHaveBeenCalledTimes(1);
+    expect(dryRun).toHaveBeenCalledTimes(1);
     expect(result.status).toBe('DOCUMENT_READY_NOT_SUBMITTED');
   });
 
   it('does not treat later document selector failures as expired sessions', async () => {
-    const browser = {
-      dryRun: jest.fn().mockRejectedValue(
-        new AdeAutomationError(
-          'Conferma preliminare del documento non disponibile.',
-          'ADE_DOCUMENT_FLOW_MISMATCH',
-          'SELECTOR_MISMATCH',
-          false,
-        ),
+    const dryRun = jest.fn().mockRejectedValue(
+      new AdeAutomationError(
+        'Conferma preliminare del documento non disponibile.',
+        'ADE_DOCUMENT_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
       ),
-    } as unknown as AdeDocumentBrowserService;
+    );
+    const browser = { dryRun } as unknown as AdeDocumentBrowserService;
     const refresh = jest.fn();
     const auth = { refresh } as unknown as AdeAuthService;
 
@@ -173,7 +163,7 @@ describe('AdeDocumentDryRunService', () => {
     });
 
     expect(refresh).not.toHaveBeenCalled();
-    expect(browser.dryRun).toHaveBeenCalledTimes(1);
+    expect(dryRun).toHaveBeenCalledTimes(1);
   });
 
   it('retries only once after a successful session refresh', async () => {
@@ -183,9 +173,8 @@ describe('AdeDocumentDryRunService', () => {
       'SELECTOR_MISMATCH',
       false,
     );
-    const browser = {
-      dryRun: jest.fn().mockRejectedValue(sessionError),
-    } as unknown as AdeDocumentBrowserService;
+    const dryRun = jest.fn().mockRejectedValue(sessionError);
+    const browser = { dryRun } as unknown as AdeDocumentBrowserService;
     const refresh = jest.fn().mockResolvedValue({
       status: 'SESSION_READY',
       finalUrl: 'https://example.invalid/ade',
@@ -200,7 +189,7 @@ describe('AdeDocumentDryRunService', () => {
     });
 
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect(browser.dryRun).toHaveBeenCalledTimes(2);
+    expect(dryRun).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a payment total different from the document total', async () => {
