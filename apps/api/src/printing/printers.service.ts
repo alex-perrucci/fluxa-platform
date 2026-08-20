@@ -54,7 +54,10 @@ export class PrintersService {
   ) {}
 
   async list(auth: AuthContext, query: PrinterListQueryDto) {
-    const access = await this.access.assertLocation(auth, query.locationId);
+    const access = await this.access.assertAdministrativeLocation(
+      auth,
+      query.locationId,
+    );
     const offset = (query.page - 1) * query.pageSize;
     const values = [
       access.organizationId,
@@ -102,12 +105,15 @@ export class PrintersService {
   async get(auth: AuthContext, printerId: string) {
     const organizationId = assertOrganizationScope(auth);
     const printer = await this.access.printer(organizationId, printerId);
-    await this.access.assertLocation(auth, printer.locationId);
+    await this.access.assertAdministrativeLocation(auth, printer.locationId);
     return printer;
   }
 
   async create(auth: AuthContext, dto: CreatePrinterDto) {
-    const access = await this.access.assertLocation(auth, dto.locationId);
+    const access = await this.access.assertAdministrativeLocation(
+      auth,
+      dto.locationId,
+    );
     if (dto.agentDeviceId) {
       await this.access.assertAssignableDevice(
         access.organizationId,
@@ -160,7 +166,7 @@ export class PrintersService {
   async update(auth: AuthContext, printerId: string, dto: UpdatePrinterDto) {
     const organizationId = assertOrganizationScope(auth);
     const current = await this.access.printer(organizationId, printerId);
-    await this.access.assertLocation(auth, current.locationId);
+    await this.access.assertAdministrativeLocation(auth, current.locationId);
     const agentDeviceId =
       dto.agentDeviceId !== undefined
         ? dto.agentDeviceId
@@ -238,7 +244,10 @@ export class PrintersService {
   }
 
   async listRoutes(auth: AuthContext, query: PrintRouteListQueryDto) {
-    const access = await this.access.assertLocation(auth, query.locationId);
+    const access = await this.access.assertAdministrativeLocation(
+      auth,
+      query.locationId,
+    );
     const result = await this.database.pool.query<RouteRow>(
       `
         SELECT pr.id,pr.organization_id AS "organizationId",
@@ -261,7 +270,10 @@ export class PrintersService {
   }
 
   async upsertRoute(auth: AuthContext, dto: UpsertPrintRouteDto) {
-    const access = await this.access.assertLocation(auth, dto.locationId);
+    const access = await this.access.assertAdministrativeLocation(
+      auth,
+      dto.locationId,
+    );
     const printer = await this.access.printer(
       access.organizationId,
       dto.printerId,
@@ -352,7 +364,10 @@ export class PrintersService {
         message: 'Rotta di stampa non trovata.',
       });
     }
-    await this.access.assertLocation(auth, route.rows[0].locationId);
+    await this.access.assertAdministrativeLocation(
+      auth,
+      route.rows[0].locationId,
+    );
     await this.database.pool.query(
       `DELETE FROM printer_routes WHERE id=$1 AND organization_id=$2`,
       [routeId, organizationId],

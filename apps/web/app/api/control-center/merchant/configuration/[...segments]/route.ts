@@ -24,7 +24,6 @@ const writableRoots = new Set([
   'price-lists',
   'kitchen-stations',
   'print-routes',
-  'fiscal-profiles',
 ]);
 
 async function forward(
@@ -37,7 +36,10 @@ async function forward(
 
   if (!root || !readableRoots.has(root)) {
     return NextResponse.json(
-      { code: 'CONFIGURATION_ROUTE_NOT_FOUND', message: 'Configurazione non disponibile.' },
+      {
+        code: 'CONFIGURATION_ROUTE_NOT_FOUND',
+        message: 'Configurazione non disponibile.',
+      },
       { status: 404 },
     );
   }
@@ -46,13 +48,18 @@ async function forward(
     return NextResponse.json(
       {
         code: 'CONFIGURATION_ROUTE_READ_ONLY',
-        message: 'Questa configurazione è in sola lettura dal Venue Control Center.',
+        message:
+          root === 'fiscal-profiles'
+            ? 'La fiscalizzazione è gestita dall’assistenza Fluxa.'
+            : 'Questa configurazione è disponibile in sola lettura.',
       },
       { status: 405 },
     );
   }
 
-  const encodedPath = segments.map((segment) => encodeURIComponent(segment)).join('/');
+  const encodedPath = segments
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
   const target = `/${encodedPath}${request.nextUrl.search}`;
   const init: RequestInit = { method };
 

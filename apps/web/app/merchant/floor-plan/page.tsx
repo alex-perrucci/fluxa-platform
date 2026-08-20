@@ -2,6 +2,7 @@ import { EmptyState, SectionHeading } from '@/components/control-center/shell';
 import { FloorPlanEditor } from '@/components/floor-plan/floor-plan-editor';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { requireMerchantSession } from '@/lib/auth/session';
+import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
 import type {
   FloorPlanLocation,
   FloorPlanView,
@@ -21,7 +22,7 @@ export default async function MerchantFloorPlanPage({
     return (
       <section className="glass-panel">
         <EmptyState
-          description="Serve il permesso Piantina su almeno una location attiva."
+          description="Serve il permesso Piantina su almeno una sede attiva."
           title="Nessuna piantina modificabile"
         />
       </section>
@@ -32,16 +33,12 @@ export default async function MerchantFloorPlanPage({
     (organization) =>
       organization.organizationId === session.session.organizationId,
   );
-  const requested = params.locationId
-    ? locations.find((location) => location.id === params.locationId)
-    : null;
-  const defaultLocation = membership?.defaultLocationId
-    ? locations.find(
-        (location) => location.id === membership.defaultLocationId,
-      )
-    : null;
-  const locationId =
-    requested?.id ?? defaultLocation?.id ?? locations[0]?.id ?? '';
+  const location = resolveAdministrativeLocation({
+    locations,
+    requestedLocationId: params.locationId,
+    defaultLocationId: membership?.defaultLocationId,
+  });
+  const locationId = location?.id ?? '';
   const initialView = await authenticatedFluxaFetch<FloorPlanView>(
     `/floor-plans/${locationId}`,
   );
@@ -49,13 +46,10 @@ export default async function MerchantFloorPlanPage({
   return (
     <>
       <section className="glass-panel panel-padding">
-        <SectionHeading
-          eyebrow="Visual venue builder"
-          title="Floor-plan editor"
-        />
+        <SectionHeading eyebrow="Piantina" title="Tavoli e spazi" />
         <p className="muted">
-          Disegna pareti e forme, posiziona i tavoli operativi e pubblica
-          versioni immutabili della piantina.
+          Disegna gli spazi, posiziona i tavoli e pubblica la piantina usata dal
+          locale.
         </p>
       </section>
       <div className="mt-5">

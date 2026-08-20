@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { proxyAuthenticatedJson } from '@/lib/api/bff';
 
-function fiscalResource(request: NextRequest) {
-  return request.nextUrl.searchParams.get('resource') === 'openapi-fiscal-profile';
+type FiscalResource = 'openapi-fiscal-profile' | 'fiscal-profile';
+
+function fiscalResource(request: NextRequest): FiscalResource | null {
+  const resource = request.nextUrl.searchParams.get('resource');
+  return resource === 'openapi-fiscal-profile' || resource === 'fiscal-profile'
+    ? resource
+    : null;
+}
+
+function fiscalTarget(
+  organizationId: string,
+  locationId: string,
+  resource: FiscalResource,
+) {
+  return `/platform/organizations/${organizationId}/locations/${locationId}/${resource}`;
 }
 
 export async function GET(
@@ -11,12 +24,16 @@ export async function GET(
     params: Promise<{ organizationId: string; locationId: string }>;
   },
 ) {
-  if (!fiscalResource(request)) {
-    return NextResponse.json({ message: 'Risorsa non supportata.' }, { status: 400 });
+  const resource = fiscalResource(request);
+  if (!resource) {
+    return NextResponse.json(
+      { message: 'Risorsa non supportata.' },
+      { status: 400 },
+    );
   }
   const { organizationId, locationId } = await context.params;
   return proxyAuthenticatedJson(
-    `/platform/organizations/${organizationId}/locations/${locationId}/openapi-fiscal-profile`,
+    fiscalTarget(organizationId, locationId, resource),
   );
 }
 
@@ -26,26 +43,37 @@ export async function PUT(
     params: Promise<{ organizationId: string; locationId: string }>;
   },
 ) {
-  if (!fiscalResource(request)) {
-    return NextResponse.json({ message: 'Risorsa non supportata.' }, { status: 400 });
+  const resource = fiscalResource(request);
+  if (!resource) {
+    return NextResponse.json(
+      { message: 'Risorsa non supportata.' },
+      { status: 400 },
+    );
   }
   const { organizationId, locationId } = await context.params;
   const payload = (await request.json()) as Record<string, unknown>;
-  const companyName =
-    typeof payload.companyName === 'string' && payload.companyName.trim()
-      ? payload.companyName
-      : payload.displayName;
-  const companyEmail =
-    typeof payload.companyEmail === 'string' && payload.companyEmail.trim()
-      ? payload.companyEmail
-      : payload.receiptEmail;
+
+  if (resource === 'openapi-fiscal-profile') {
+    const companyName =
+      typeof payload.companyName === 'string' && payload.companyName.trim()
+        ? payload.companyName
+        : payload.displayName;
+    const companyEmail =
+      typeof payload.companyEmail === 'string' && payload.companyEmail.trim()
+        ? payload.companyEmail
+        : payload.receiptEmail;
+    return proxyAuthenticatedJson(
+      fiscalTarget(organizationId, locationId, resource),
+      {
+        method: 'PUT',
+        body: JSON.stringify({ ...payload, companyName, companyEmail }),
+      },
+    );
+  }
 
   return proxyAuthenticatedJson(
-    `/platform/organizations/${organizationId}/locations/${locationId}/openapi-fiscal-profile`,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ ...payload, companyName, companyEmail }),
-    },
+    fiscalTarget(organizationId, locationId, resource),
+    { method: 'PUT', body: JSON.stringify(payload) },
   );
 }
 
