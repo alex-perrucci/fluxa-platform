@@ -18,7 +18,7 @@ import {
 
 export interface AdeWorkerReadiness {
   service: 'ok';
-  phase: 'cie_auth';
+  phase: 'document_submit_preflight';
   browser: AdeBrowserStatus;
   adeSession: AdeSessionStatus;
   selectorProfile: AdeSelectorProfileStatus;
@@ -29,6 +29,7 @@ export interface AdeWorkerReadiness {
   entryUrl: 'missing' | 'invalid' | 'configured';
   internalAuth: 'missing' | 'configured';
   dryRun: 'disabled' | 'blocked' | 'ready';
+  submit: 'disabled' | 'blocked' | 'armed';
   operational: false;
   canSubmit: false;
 }
@@ -74,10 +75,15 @@ export class AdeWebFiscalService {
           selectorProfile !== 'invalid'
         ? 'ready'
         : 'blocked';
+    const submit = !config.submitEnabled
+      ? 'disabled'
+      : dryRun === 'ready'
+        ? 'armed'
+        : 'blocked';
 
     return {
       service: 'ok',
-      phase: 'cie_auth',
+      phase: 'document_submit_preflight',
       browser,
       adeSession,
       selectorProfile,
@@ -88,6 +94,7 @@ export class AdeWebFiscalService {
       entryUrl,
       internalAuth,
       dryRun,
+      submit,
       operational: false,
       canSubmit: false,
     };

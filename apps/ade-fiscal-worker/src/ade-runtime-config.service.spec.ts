@@ -1,6 +1,10 @@
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 
-const managedKeys = ['ADE_WORKER_INTERNAL_TOKEN', 'ADE_WEB_ENTRY_URL'] as const;
+const managedKeys = [
+  'ADE_WORKER_INTERNAL_TOKEN',
+  'ADE_WEB_ENTRY_URL',
+  'ADE_SUBMIT_ENABLED',
+] as const;
 
 function withEnvironment(
   values: Partial<Record<(typeof managedKeys)[number], string>>,
@@ -54,5 +58,17 @@ describe('AdeRuntimeConfigService', () => {
         expect(service.validatedEntryUrl()?.protocol).toBe('https:');
       },
     );
+  });
+
+  it('keeps fiscal submit disabled unless explicitly enabled', () => {
+    withEnvironment({}, () => {
+      const service = new AdeRuntimeConfigService();
+      expect(service.read().submitEnabled).toBe(false);
+    });
+
+    withEnvironment({ ADE_SUBMIT_ENABLED: 'true' }, () => {
+      const service = new AdeRuntimeConfigService();
+      expect(service.read().submitEnabled).toBe(true);
+    });
   });
 });
