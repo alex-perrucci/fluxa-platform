@@ -27,7 +27,10 @@ const ALLOWED_KEYS = new Set([
   'authenticatedMarker',
 ]);
 
-function requiredSelector(record: Record<string, unknown>, key: string): string {
+function requiredSelector(
+  record: Record<string, unknown>,
+  key: string,
+): string {
   const value = record[key];
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`${key} must be a non-empty string`);
@@ -35,7 +38,10 @@ function requiredSelector(record: Record<string, unknown>, key: string): string 
   return value.trim();
 }
 
-function optionalSelector(record: Record<string, unknown>, key: string): string | undefined {
+function optionalSelector(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined {
   const value = record[key];
   if (value === undefined) return undefined;
   if (typeof value !== 'string' || !value.trim()) {
@@ -55,7 +61,8 @@ function readProfile(path: string): AdeAuthProfile {
   }
   const record = parsed as Record<string, unknown>;
   for (const key of Object.keys(record)) {
-    if (!ALLOWED_KEYS.has(key)) throw new Error(`unsupported auth profile key: ${key}`);
+    if (!ALLOWED_KEYS.has(key))
+      throw new Error(`unsupported auth profile key: ${key}`);
   }
   if (record.version !== 1) throw new Error('auth profile version must be 1');
 
@@ -65,9 +72,15 @@ function readProfile(path: string): AdeAuthProfile {
     level2Selector: optionalSelector(record, 'level2Selector'),
     usernameSelector: requiredSelector(record, 'usernameSelector'),
     passwordSelector: requiredSelector(record, 'passwordSelector'),
-    credentialsSubmitSelector: requiredSelector(record, 'credentialsSubmitSelector'),
+    credentialsSubmitSelector: requiredSelector(
+      record,
+      'credentialsSubmitSelector',
+    ),
     waitingMfaMarker: optionalSelector(record, 'waitingMfaMarker'),
-    postMfaContinueSelector: optionalSelector(record, 'postMfaContinueSelector'),
+    postMfaContinueSelector: optionalSelector(
+      record,
+      'postMfaContinueSelector',
+    ),
     authenticatedMarker: requiredSelector(record, 'authenticatedMarker'),
   };
 }
