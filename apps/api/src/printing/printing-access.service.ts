@@ -6,6 +6,7 @@ import {
 import type { QueryResultRow } from 'pg';
 import { DatabaseService } from '@fluxa/database';
 import type { AuthContext } from '../auth/auth.types';
+import { LocationAccessService } from '../auth/location-access.service';
 import { assertOrganizationScope } from '../auth/tenant-scope';
 import type { PrinterPurpose, PrinterStatus } from './printing.constants';
 
@@ -40,7 +41,18 @@ export interface AccessiblePrinter extends QueryResultRow {
 
 @Injectable()
 export class PrintingAccessService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly locationAccess: LocationAccessService,
+  ) {}
+
+  assertAdministrativeLocation(auth: AuthContext, locationId: string) {
+    return this.locationAccess.assert(
+      auth,
+      locationId,
+      auth.role === 'MANAGER' ? 'manage_location' : undefined,
+    );
+  }
 
   async assertLocation(auth: AuthContext, locationId: string) {
     const organizationId = assertOrganizationScope(auth);
