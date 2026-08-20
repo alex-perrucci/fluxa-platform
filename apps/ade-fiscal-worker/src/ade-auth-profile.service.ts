@@ -14,6 +14,7 @@ export interface AdeAuthProfile {
   serviceSearchSelector: string;
   serviceLinkSelector: string;
   serviceAccessButtonSelector: string;
+  changeUserText?: string;
   workProfileRadioSelector: string;
   workProfileProceedSelector: string;
   workProfileSelectLabel: string;
@@ -40,6 +41,7 @@ const REQUIRED_KEYS = [
 const ALLOWED_KEYS = new Set<string>([
   'version',
   ...REQUIRED_KEYS,
+  'changeUserText',
   'finalMarker',
 ]);
 
@@ -105,6 +107,7 @@ function readProfile(path: string): AdeAuthProfile {
       record,
       'serviceAccessButtonSelector',
     ),
+    changeUserText: optionalString(record, 'changeUserText'),
     workProfileRadioSelector: requiredString(
       record,
       'workProfileRadioSelector',
