@@ -22,7 +22,9 @@ export type AdeAutomationErrorCode =
   | 'ADE_CIE_SUBMIT_NOT_FOUND'
   | 'ADE_CIE_MFA_NOT_STARTED'
   | 'ADE_CIE_MFA_TIMEOUT'
-  | 'ADE_CIE_AUTH_BUSY';
+  | 'ADE_CIE_AUTH_BUSY'
+  | 'ADE_PORTAL_FLOW_MISMATCH'
+  | 'ADE_INCARICANTE_NOT_FOUND';
 
 export type AdeAutomationErrorCategory =
   | 'CONFIGURATION'
