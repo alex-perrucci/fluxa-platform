@@ -18,7 +18,7 @@ import {
 
 export interface AdeWorkerReadiness {
   service: 'ok';
-  phase: 'document_submit_preflight';
+  phase: 'document_submit';
   browser: AdeBrowserStatus;
   adeSession: AdeSessionStatus;
   selectorProfile: AdeSelectorProfileStatus;
@@ -30,8 +30,8 @@ export interface AdeWorkerReadiness {
   internalAuth: 'missing' | 'configured';
   dryRun: 'disabled' | 'blocked' | 'ready';
   submit: 'disabled' | 'blocked' | 'armed';
-  operational: false;
-  canSubmit: false;
+  operational: boolean;
+  canSubmit: boolean;
 }
 
 @Injectable()
@@ -80,10 +80,11 @@ export class AdeWebFiscalService {
       : dryRun === 'ready'
         ? 'armed'
         : 'blocked';
+    const canSubmit = submit === 'armed';
 
     return {
       service: 'ok',
-      phase: 'document_submit_preflight',
+      phase: 'document_submit',
       browser,
       adeSession,
       selectorProfile,
@@ -95,8 +96,8 @@ export class AdeWebFiscalService {
       internalAuth,
       dryRun,
       submit,
-      operational: false,
-      canSubmit: false,
+      operational: canSubmit,
+      canSubmit,
     };
   }
 }
