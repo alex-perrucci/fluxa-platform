@@ -1,59 +1,99 @@
-import { SectionHeading } from '@/components/control-center/shell';
+import { EmptyState, SectionHeading } from '@/components/control-center/shell';
 import {
-  FiscalProfileConsole,
-  type FiscalProfile,
-  type FiscalProfileLocation,
-} from '@/components/merchant/fiscal-profile-console';
+  FiscalStatusPanel,
+  type MerchantFiscalStatus,
+} from '@/components/merchant/fiscal-status-panel';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
+import { FluxaApiError } from '@/lib/api/fluxa-api';
 import { requireMerchantSession } from '@/lib/auth/session';
+import { controlCenterErrorView } from '@/lib/control-center/error-policy';
+import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
 
-interface LocationRow extends FiscalProfileLocation {
-  status: 'ACTIVE' | 'INACTIVE';
+interface LocationRow {
+  id: string;
+  name: string;
+  status: string;
 }
 
-export default async function FiscalConfigurationPage() {
+const allowedRoles = new Set([
+  'OWNER',
+  'ADMIN',
+  'MANAGER',
+  'ACCOUNTANT',
+  'SUPPORT_READONLY',
+]);
+
+export default async function FiscalConfigurationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ locationId?: string }>;
+}) {
   const session = await requireMerchantSession();
-  const locations = await authenticatedFluxaFetch<LocationRow[]>('/locations');
+  const params = await searchParams;
   const role = session.session.role ?? '';
-  const canView = [
-    'OWNER',
-    'ADMIN',
-    'MANAGER',
-    'ACCOUNTANT',
-    'SUPPORT_READONLY',
-  ].includes(role);
-  const canManage = ['OWNER', 'ADMIN'].includes(role);
+
+  if (!allowedRoles.has(role)) {
+    return (
+      <section className="glass-panel panel-padding">
+        <EmptyState
+          description="Il tuo ruolo non consente di visualizzare lo stato fiscale."
+          title="Accesso non disponibile"
+        />
+      </section>
+    );
+  }
+
+  const locations = await authenticatedFluxaFetch<LocationRow[]>('/locations');
   const membership = session.availableOrganizations.find(
     (organization) =>
       organization.organizationId === session.session.organizationId,
   );
-  const initialLocationId =
-    membership?.defaultLocationId ??
-    locations.find((location) => location.status === 'ACTIVE')?.id ??
-    locations[0]?.id ??
-    null;
-  const initialProfile =
-    canView && initialLocationId
-      ? await authenticatedFluxaFetch<FiscalProfile | null>(
-          `/fiscal-profiles/${initialLocationId}`,
-        )
-      : null;
+  const initialLocation = resolveAdministrativeLocation({
+    locations,
+    requestedLocationId: params.locationId,
+    defaultLocationId: membership?.defaultLocationId,
+  });
+
+  let initialStatus: MerchantFiscalStatus | null = null;
+  let initialError: string | null = null;
+  if (initialLocation) {
+    try {
+      initialStatus = await authenticatedFluxaFetch<MerchantFiscalStatus>(
+        `/fiscal-profiles/${initialLocation.id}`,
+      );
+    } catch (error) {
+      initialError =
+        error instanceof FluxaApiError
+          ? controlCenterErrorView(error.code, error.status).message
+          : 'Impossibile verificare la fiscalizzazione. Riprova tra poco.';
+    }
+  }
 
   return (
-    <section className="glass-panel panel-padding">
-      <SectionHeading eyebrow="Venue configuration" title="Configurazione fiscale" />
-      {canView ? (
-        <FiscalProfileConsole
-          canManage={canManage}
-          initialLocationId={initialLocationId}
-          initialLocations={locations}
-          initialProfile={initialProfile}
-        />
-      ) : (
+    <>
+      <section className="glass-panel panel-padding">
+        <SectionHeading eyebrow="Fiscalizzazione" title="Stato fiscale" />
         <p className="muted">
-          Il tuo ruolo non può visualizzare i profili fiscali. OWNER e ADMIN possono modificarli.
+          Qui puoi verificare se la fiscalizzazione è operativa. Le impostazioni
+          tecniche e le credenziali sono gestite esclusivamente da Fluxa.
         </p>
-      )}
-    </section>
+      </section>
+
+      <section className="glass-panel panel-padding mt-5">
+        {locations.length ? (
+          <FiscalStatusPanel
+            initialError={initialError}
+            initialLocationId={initialLocation?.id ?? null}
+            initialStatus={initialStatus}
+            locations={locations}
+          />
+        ) : (
+          <EmptyState
+            description="Configura prima una sede per poter attivare la fiscalizzazione."
+            title="Nessuna sede disponibile"
+          />
+        )}
+      </section>
+    </>
   );
 }

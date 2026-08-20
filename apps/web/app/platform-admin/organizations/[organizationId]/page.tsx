@@ -8,6 +8,7 @@ import {
   type PlatformManagedLocation,
 } from '@/components/platform/multi-location-manager';
 import { OpenApiFiscalProfileManager } from '@/components/platform/openapi-fiscal-profile-manager';
+import { PlatformFiscalProfileManager } from '@/components/platform/fiscal-profile-manager';
 import { PlatformTableLayoutEditor } from '@/components/platform/table-layout-editor';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import type {
@@ -72,66 +73,29 @@ export default async function OrganizationDetailPage({
       </section>
 
       <div className="metrics-grid mt-5">
-        <MetricCard
-          hint={`${managedLocations.length} location`}
-          icon="building"
-          label="Merchant"
-          value={detail.metrics.merchants}
-        />
-        <MetricCard
-          accent="violet"
-          hint="Account collegati"
-          icon="users"
-          label="Membri"
-          value={detail.metrics.members}
-        />
-        <MetricCard
-          accent="cyan"
-          hint={`${detail.metrics.reservations} prenotazioni`}
-          icon="calendar"
-          label="Eventi"
-          value={detail.metrics.events}
-        />
-        <MetricCard
-          accent="blue"
-          hint="Pagamenti Stripe"
-          icon="money"
-          label="Volume"
-          value={euro(detail.metrics.paidVolumeCents)}
-        />
+        <MetricCard hint={`${managedLocations.length} location`} icon="building" label="Merchant" value={detail.metrics.merchants} />
+        <MetricCard accent="violet" hint="Account collegati" icon="users" label="Membri" value={detail.metrics.members} />
+        <MetricCard accent="cyan" hint={`${detail.metrics.reservations} prenotazioni`} icon="calendar" label="Eventi" value={detail.metrics.events} />
+        <MetricCard accent="blue" hint="Pagamenti Stripe" icon="money" label="Volume" value={euro(detail.metrics.paidVolumeCents)} />
       </div>
 
       <section className="glass-panel panel-padding mt-5">
-        <SectionHeading
-          eyebrow="Multi-location"
-          title="Location permanenti e temporanee"
-        />
+        <SectionHeading eyebrow="Multi-location" title="Location permanenti e temporanee" />
         <p className="muted">
-          Crea nuove sedi sotto lo stesso merchant fiscale, copia le
-          configurazioni operative e gestisci disattivazione o archiviazione.
+          Crea nuove sedi sotto lo stesso merchant fiscale, copia le configurazioni operative e gestisci disattivazione o archiviazione.
         </p>
         <div className="mt-5">
-          <MultiLocationManager
-            initialLocations={managedLocations}
-            merchants={detail.merchants}
-            organizationId={organizationId}
-          />
+          <MultiLocationManager initialLocations={managedLocations} merchants={detail.merchants} organizationId={organizationId} />
         </div>
       </section>
 
       <section className="glass-panel panel-padding mt-5">
-        <SectionHeading
-          eyebrow="Fiscalità OpenAPI"
-          title="Profilo fiscale per tenant e location"
-        />
+        <SectionHeading eyebrow="Fiscalità" title="Configurazione fiscale platform-admin" />
         <p className="muted">
-          Provisiona la configurazione aziendale OpenAPI dal control panel e
-          collega il profilo fiscale Fluxa alla singola location. In produzione
-          l&apos;attivazione resta fail-closed finché il provider non risulta
-          pronto per gli scontrini.
+          Provider, ambiente, fiscal ID e policy di emissione sono amministrati esclusivamente da Fluxa. Il merchant riceve soltanto uno stato sanitizzato in sola lettura.
         </p>
         <div className="mt-5">
-          <OpenApiFiscalProfileManager
+          <PlatformFiscalProfileManager
             initialLocationId={firstActiveLocation?.id ?? null}
             locations={managedLocations}
             organizationId={organizationId}
@@ -140,56 +104,43 @@ export default async function OrganizationDetailPage({
       </section>
 
       <section className="glass-panel panel-padding mt-5">
-        <SectionHeading
-          eyebrow="Accesso per location"
-          title="Assegnazioni e permessi"
-        />
+        <SectionHeading eyebrow="Provisioning OpenAPI" title="Configurazione OpenAPI per tenant e location" />
         <p className="muted">
-          Limita manager e operatori a una o più location. OWNER e ADMIN
-          mantengono accesso globale al tenant.
+          Provisiona la configurazione aziendale OpenAPI e collega il profilo fiscale Fluxa alla singola location. In produzione l’attivazione resta fail-closed finché il provider non risulta pronto per gli scontrini.
         </p>
         <div className="mt-5">
-          <LocationAccessManager
-            members={detail.members}
-            organizationId={organizationId}
-          />
+          <OpenApiFiscalProfileManager initialLocationId={firstActiveLocation?.id ?? null} locations={managedLocations} organizationId={organizationId} />
+        </div>
+      </section>
+
+      <section className="glass-panel panel-padding mt-5">
+        <SectionHeading eyebrow="Accesso per location" title="Assegnazioni e permessi" />
+        <p className="muted">
+          Limita manager e operatori a una o più location. OWNER e ADMIN mantengono accesso globale al tenant.
+        </p>
+        <div className="mt-5">
+          <LocationAccessManager members={detail.members} organizationId={organizationId} />
         </div>
       </section>
 
       <section className="glass-panel panel-padding mt-5">
         <SectionHeading
-          action={
-            <Link
-              className="button-primary"
-              href={`/platform-admin/organizations/${organizationId}/floor-plan`}
-            >
-              Apri editor SVG
-            </Link>
-          }
+          action={<Link className="button-primary" href={`/platform-admin/organizations/${organizationId}/floor-plan`}>Apri editor SVG</Link>}
           eyebrow="Floor plan"
           title="Piantine versionate"
         />
         <p className="muted">
-          Disegna pareti, forme, testi e tavoli, quindi pubblica snapshot
-          immutabili per ciascuna location attiva.
+          Disegna pareti, forme, testi e tavoli, quindi pubblica snapshot immutabili per ciascuna location attiva.
         </p>
       </section>
 
       <section className="glass-panel panel-padding mt-5">
-        <SectionHeading
-          eyebrow="Layout operativo"
-          title="Sale, tavoli e capienza"
-        />
+        <SectionHeading eyebrow="Layout operativo" title="Sale, tavoli e capienza" />
         <p className="muted">
-          Modifica il numero dei tavoli e i posti disponibili per ciascuna
-          location non archiviata.
+          Modifica il numero dei tavoli e i posti disponibili per ciascuna location non archiviata.
         </p>
         <div className="mt-5">
-          <PlatformTableLayoutEditor
-            initialLayout={initialLayout}
-            locations={layoutLocations}
-            organizationId={organizationId}
-          />
+          <PlatformTableLayoutEditor initialLayout={initialLayout} locations={layoutLocations} organizationId={organizationId} />
         </div>
       </section>
 

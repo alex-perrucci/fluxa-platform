@@ -7,6 +7,7 @@ import {
 } from '@/components/merchant/location-console';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { requireMerchantSession } from '@/lib/auth/session';
+import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
 
 export default async function MerchantLocationPage({
   searchParams,
@@ -21,23 +22,19 @@ export default async function MerchantLocationPage({
     (organization) =>
       organization.organizationId === session.session.organizationId,
   );
-  const requested = params.locationId
-    ? locations.find((location) => location.id === params.locationId)
-    : null;
-  const defaultLocation = membership?.defaultLocationId
-    ? locations.find(
-        (location) => location.id === membership.defaultLocationId,
-      )
-    : null;
-  const initialLocationId =
-    requested?.id ?? defaultLocation?.id ?? locations[0]?.id ?? null;
+  const initialLocation = resolveAdministrativeLocation({
+    locations,
+    requestedLocationId: params.locationId,
+    defaultLocationId: membership?.defaultLocationId,
+  });
+  const initialLocationId = initialLocation?.id ?? null;
 
   if (!locations.length || !initialLocationId) {
     return (
       <section className="glass-panel">
         <EmptyState
-          description="Chiedi a un amministratore Fluxa di assegnarti una location attiva."
-          title="Nessuna location assegnata"
+          description="Chiedi a un amministratore Fluxa di assegnarti una sede attiva."
+          title="Nessuna sede disponibile"
         />
       </section>
     );
@@ -55,13 +52,10 @@ export default async function MerchantLocationPage({
   return (
     <>
       <section className="glass-panel panel-padding">
-        <SectionHeading
-          eyebrow="Venue operations"
-          title="Gestione completa del locale"
-        />
+        <SectionHeading eyebrow="Sedi" title="Gestione del locale" />
         <p className="muted">
-          Aggiorna dati della location, sale, tavoli e capienze rispettando i
-          permessi assegnati al tuo account.
+          Aggiorna dati della sede, sale, tavoli e capienze in base ai permessi
+          del tuo account.
         </p>
       </section>
       <div className="mt-5">
