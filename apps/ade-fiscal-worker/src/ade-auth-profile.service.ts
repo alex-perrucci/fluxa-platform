@@ -15,6 +15,11 @@ export interface AdeAuthProfile {
   serviceLinkSelector: string;
   serviceAccessButtonSelector: string;
   changeUserText?: string;
+  changeUserSelector?: string;
+  changeUserSelectLabel?: string;
+  serviceSearchButtonSelector?: string;
+  serviceResultText?: string;
+  legacyWorkProfileCardSelector?: string;
   workProfileRadioSelector: string;
   workProfileProceedSelector: string;
   workProfileSelectLabel: string;
@@ -38,11 +43,20 @@ const REQUIRED_KEYS = [
   'workProfileConfirmSelector',
 ] as const;
 
+const OPTIONAL_KEYS = [
+  'changeUserText',
+  'changeUserSelector',
+  'changeUserSelectLabel',
+  'serviceSearchButtonSelector',
+  'serviceResultText',
+  'legacyWorkProfileCardSelector',
+  'finalMarker',
+] as const;
+
 const ALLOWED_KEYS = new Set<string>([
   'version',
   ...REQUIRED_KEYS,
-  'changeUserText',
-  'finalMarker',
+  ...OPTIONAL_KEYS,
 ]);
 
 function requiredString(
@@ -73,10 +87,12 @@ function readProfile(path: string): AdeAuthProfile {
   if (!stat.isFile() || stat.isSymbolicLink()) {
     throw new Error('auth profile must be a regular file');
   }
+
   const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('auth profile must be an object');
   }
+
   const record = parsed as Record<string, unknown>;
   for (const key of Object.keys(record)) {
     if (!ALLOWED_KEYS.has(key)) {
@@ -108,6 +124,17 @@ function readProfile(path: string): AdeAuthProfile {
       'serviceAccessButtonSelector',
     ),
     changeUserText: optionalString(record, 'changeUserText'),
+    changeUserSelector: optionalString(record, 'changeUserSelector'),
+    changeUserSelectLabel: optionalString(record, 'changeUserSelectLabel'),
+    serviceSearchButtonSelector: optionalString(
+      record,
+      'serviceSearchButtonSelector',
+    ),
+    serviceResultText: optionalString(record, 'serviceResultText'),
+    legacyWorkProfileCardSelector: optionalString(
+      record,
+      'legacyWorkProfileCardSelector',
+    ),
     workProfileRadioSelector: requiredString(
       record,
       'workProfileRadioSelector',
