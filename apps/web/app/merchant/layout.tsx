@@ -2,17 +2,9 @@
 import type { ReactNode } from 'react';
 import { ControlCenterShell } from '@/components/control-center/shell';
 import { requireMerchantSession } from '@/lib/auth/session';
+import { merchantNavigation } from '@/lib/control-center/merchant-navigation';
 
 export const dynamic = 'force-dynamic';
-
-const nav = [
-  { href: '/merchant', label: 'Home', icon: 'dashboard' as const },
-  { href: '/merchant/catalog', label: 'Menu', icon: 'money' as const },
-  { href: '/merchant/venue', label: 'Locale', icon: 'building' as const },
-  { href: '/merchant/operations', label: 'Operatività', icon: 'activity' as const },
-  { href: '/merchant/sales', label: 'Vendite', icon: 'money' as const },
-  { href: '/merchant/settings', label: 'Impostazioni', icon: 'shield' as const },
-];
 
 export default async function MerchantLayout({
   children,
@@ -21,7 +13,7 @@ export default async function MerchantLayout({
   return (
     <ControlCenterShell
       mode="merchant"
-      nav={nav}
+      nav={[...merchantNavigation]}
       organizations={session.availableOrganizations}
       session={session}
       subtitle={`${session.organization?.name ?? 'Organizzazione'} · ${session.session.role ?? ''}`}
