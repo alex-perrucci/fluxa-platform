@@ -8,7 +8,6 @@ import {
 } from 'playwright';
 import {
   AdeAutomationError,
-  type AdeAutomationErrorCategory,
   type AdeAutomationErrorCode,
 } from './ade-automation-error';
 import type { AdeAuthProfile } from './ade-auth-profile.service';
@@ -51,6 +50,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     authEntryUrl: string;
     username: string;
     password: string;
+    incaricanteCf: string;
     profile: AdeAuthProfile;
     storageStatePath: string;
     navigationTimeoutMs: number;
@@ -65,20 +65,16 @@ export class AdeBrowserService implements OnApplicationShutdown {
 
       await this.clickRequired(
         page,
+        input.profile.cieTabSelector,
+        input.navigationTimeoutMs,
+        'ADE_CIE_ENTRY_NOT_FOUND',
+      );
+      await this.clickRequired(
+        page,
         input.profile.enterWithCieSelector,
         input.navigationTimeoutMs,
         'ADE_CIE_ENTRY_NOT_FOUND',
       );
-
-      if (input.profile.level2Selector) {
-        await this.clickRequired(
-          page,
-          input.profile.level2Selector,
-          input.navigationTimeoutMs,
-          'ADE_CIE_LEVEL2_NOT_FOUND',
-        );
-      }
-
       await this.fillRequired(
         page,
         input.profile.usernameSelector,
@@ -100,21 +96,73 @@ export class AdeBrowserService implements OnApplicationShutdown {
         'ADE_CIE_SUBMIT_NOT_FOUND',
       );
 
-      if (input.profile.waitingMfaMarker) {
-        await this.waitForCssMarker(
-          page,
-          input.profile.waitingMfaMarker,
-          input.navigationTimeoutMs,
-          'ADE_CIE_MFA_NOT_STARTED',
-          'AUTH_REQUIRED',
-          false,
-        );
-      }
       input.onWaitingMfa?.();
+      await this.waitAndClickMfaContinuation(
+        page,
+        input.profile.postMfaContinueSelector,
+        input.mfaTimeoutMs,
+      );
 
-      await this.waitForCieCompletion(page, input.profile, input.mfaTimeoutMs);
+      await this.fillAndPressEnter(
+        page,
+        input.profile.serviceSearchSelector,
+        'fatture',
+        input.navigationTimeoutMs,
+      );
+      await this.clickRequired(
+        page,
+        input.profile.serviceLinkSelector,
+        input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
+      );
+      await this.clickRequired(
+        page,
+        input.profile.serviceAccessButtonSelector,
+        input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
+      );
+      await this.checkRequired(
+        page,
+        input.profile.workProfileRadioSelector,
+        input.navigationTimeoutMs,
+      );
+      await this.clickRequired(
+        page,
+        input.profile.workProfileProceedSelector,
+        input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
+      );
+      await this.selectIncaricanteByCf(
+        page,
+        input.profile.workProfileSelectLabel,
+        input.incaricanteCf,
+        input.navigationTimeoutMs,
+      );
+      await this.clickRequired(
+        page,
+        input.profile.workProfileProceedSelector,
+        input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
+      );
+      await this.clickRequired(
+        page,
+        input.profile.workProfileConfirmSelector,
+        input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
+      );
+
+      if (input.profile.finalMarker) {
+        await this.waitForSelector(
+          page,
+          input.profile.finalMarker,
+          input.navigationTimeoutMs,
+          'ADE_PORTAL_FLOW_MISMATCH',
+        );
+      } else {
+        await page.waitForTimeout(750);
+      }
+
       await context.storageState({ path: input.storageStatePath });
-
       return {
         finalUrl: safeUrl(page.url()),
         sessionSaved: true,
@@ -188,42 +236,107 @@ export class AdeBrowserService implements OnApplicationShutdown {
     }
   }
 
-  private async waitForCieCompletion(
+  private async waitAndClickMfaContinuation(
     page: Page,
-    profile: AdeAuthProfile,
+    selector: string,
     timeoutMs: number,
   ): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-    let postMfaClicked = false;
-
-    while (Date.now() < deadline) {
-      if (
-        await page
-          .locator(profile.authenticatedMarker)
-          .first()
-          .isVisible()
-          .catch(() => false)
-      ) {
-        return;
-      }
-      if (profile.postMfaContinueSelector && !postMfaClicked) {
-        const continueButton = page
-          .locator(profile.postMfaContinueSelector)
-          .first();
-        if (await continueButton.isVisible().catch(() => false)) {
-          await continueButton.click();
-          postMfaClicked = true;
-        }
-      }
-      await page.waitForTimeout(500);
+    try {
+      const locator = page.locator(selector).first();
+      await locator.waitFor({ state: 'visible', timeout: timeoutMs });
+      await locator.click();
+    } catch {
+      throw new AdeAutomationError(
+        'Autorizzazione CIE non completata entro il tempo previsto.',
+        'ADE_CIE_MFA_TIMEOUT',
+        'AUTH_REQUIRED',
+        false,
+      );
     }
+  }
 
-    throw new AdeAutomationError(
-      'Autorizzazione CIE non completata entro il tempo previsto.',
-      'ADE_CIE_MFA_TIMEOUT',
-      'AUTH_REQUIRED',
-      false,
-    );
+  private async selectIncaricanteByCf(
+    page: Page,
+    label: string,
+    incaricanteCf: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    try {
+      const select = page.getByLabel(label).first();
+      await select.waitFor({ state: 'visible', timeout: timeoutMs });
+      const value = await select.evaluate((element, cf) => {
+        const htmlSelect = element as HTMLSelectElement;
+        for (const option of Array.from(htmlSelect.options)) {
+          try {
+            const payload = JSON.parse(option.value) as {
+              incaricante?: { cf?: string };
+            };
+            if (payload.incaricante?.cf === cf) return option.value;
+          } catch {
+            // Non-JSON option: ignore it.
+          }
+        }
+        return null;
+      }, incaricanteCf);
+
+      if (!value) {
+        throw new AdeAutomationError(
+          'Incaricante configurato non presente nell’elenco AdE.',
+          'ADE_INCARICANTE_NOT_FOUND',
+          'AUTH_REQUIRED',
+          false,
+        );
+      }
+      await select.selectOption(value);
+    } catch (error) {
+      if (error instanceof AdeAutomationError) throw error;
+      throw new AdeAutomationError(
+        'Impossibile selezionare l’incaricante AdE.',
+        'ADE_INCARICANTE_NOT_FOUND',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+  }
+
+  private async fillAndPressEnter(
+    page: Page,
+    selector: string,
+    value: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    try {
+      const locator = page.locator(selector).first();
+      await locator.waitFor({ state: 'visible', timeout: timeoutMs });
+      await locator.fill(value);
+      await locator.press('Enter');
+    } catch {
+      throw new AdeAutomationError(
+        'Ricerca del servizio AdE non disponibile.',
+        'ADE_PORTAL_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
+  }
+
+  private async checkRequired(
+    page: Page,
+    selector: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    try {
+      const locator = page.locator(selector).first();
+      await locator.waitFor({ state: 'visible', timeout: timeoutMs });
+      await locator.check();
+    } catch {
+      throw new AdeAutomationError(
+        'Profilo incaricato AdE non selezionabile.',
+        'ADE_PORTAL_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
+        false,
+      );
+    }
   }
 
   private async goto(
@@ -258,7 +371,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
       await locator.click();
     } catch {
       throw new AdeAutomationError(
-        'Elemento richiesto nel flusso CIE non trovato.',
+        'Elemento richiesto nel flusso AdE non trovato.',
         code,
         'SELECTOR_MISMATCH',
         false,
@@ -287,13 +400,11 @@ export class AdeBrowserService implements OnApplicationShutdown {
     }
   }
 
-  private async waitForCssMarker(
+  private async waitForSelector(
     page: Page,
     selector: string,
     timeoutMs: number,
     code: AdeAutomationErrorCode,
-    category: AdeAutomationErrorCategory,
-    retrySafe: boolean,
   ): Promise<void> {
     try {
       await page
@@ -302,10 +413,10 @@ export class AdeBrowserService implements OnApplicationShutdown {
         .waitFor({ state: 'visible', timeout: timeoutMs });
     } catch {
       throw new AdeAutomationError(
-        'Marker atteso nel flusso CIE non trovato.',
+        'Marker finale AdE non trovato.',
         code,
-        category,
-        retrySafe,
+        'SELECTOR_MISMATCH',
+        false,
       );
     }
   }
