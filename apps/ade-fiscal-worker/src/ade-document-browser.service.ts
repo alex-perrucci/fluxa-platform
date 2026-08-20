@@ -405,6 +405,9 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
     const next = page
       .getByRole('button', { name: 'Vai a Conferma e stampa', exact: false })
       .first();
+    const confirmation = page
+      .getByRole('button', { name: 'Conferma', exact: true })
+      .first();
 
     await this.clickRequired(
       next,
@@ -414,10 +417,10 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
 
     if (payment.electronicCents <= 0) return;
 
-    // When an electronic payment is present, AdE can intercept the first
-    // transition with an informational modal. Acknowledging "Ho capito" is
-    // not a fiscal submit; after closing it the transition must be requested
-    // again. The irreversible "Procedi" boundary remains untouched.
+    // With electronic payments AdE can interrupt wizard3 with an informational
+    // modal. "Ho capito" only acknowledges that notice and is never a fiscal
+    // submit. Depending on portal state, dismissing it may either complete the
+    // transition to wizard4 or leave the user on wizard3, so handle both paths.
     const acknowledge = page
       .getByRole('button', { name: 'Ho capito', exact: true })
       .first();
@@ -434,10 +437,25 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
 
     try {
       await acknowledge.click();
+      await acknowledge
+        .waitFor({ state: 'hidden', timeout: Math.min(timeoutMs, 5_000) })
+        .catch(() => undefined);
     } catch {
       throw documentFlowError(
         'Informativa pagamento elettronico non chiudibile.',
       );
+    }
+
+    // Some portal builds continue to wizard4 as part of the acknowledgement.
+    // Give that path a short chance before attempting a second wizard3 click.
+    try {
+      await confirmation.waitFor({
+        state: 'visible',
+        timeout: Math.min(timeoutMs, 3_000),
+      });
+      return;
+    } catch {
+      // Still on wizard3: request the transition again after the modal is gone.
     }
 
     await this.clickRequired(
@@ -445,6 +463,14 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
       timeoutMs,
       'Passaggio a Conferma e stampa non disponibile dopo informativa pagamento elettronico.',
     );
+
+    try {
+      await confirmation.waitFor({ state: 'visible', timeout: timeoutMs });
+    } catch {
+      throw documentFlowError(
+        'Schermata Conferma e stampa non raggiunta dopo informativa pagamento elettronico.',
+      );
+    }
   }
 
   private async clickRequired(
