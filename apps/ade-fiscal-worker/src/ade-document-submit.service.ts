@@ -122,7 +122,9 @@ function normalizeInput(raw: unknown): NormalizedSubmitInput {
   let grossTotalCents = 0;
   for (const item of items) {
     const lineTotal = item.quantity * item.grossUnitPriceCents;
-    if (!Number.isSafeInteger(lineTotal)) invalid('Totale riga fuori intervallo.');
+    if (!Number.isSafeInteger(lineTotal)) {
+      invalid('Totale riga fuori intervallo.');
+    }
     grossTotalCents += lineTotal;
     if (!Number.isSafeInteger(grossTotalCents)) {
       invalid('Totale documento fuori intervallo.');
@@ -280,8 +282,7 @@ export class AdeDocumentSubmitService {
     this.attemptedOperationIds.add(operationId);
     if (this.attemptedOperationIds.size <= 2_000) return;
     const oldest = this.attemptedOperationIds.values().next().value as
-      | string
-      | undefined;
+      string | undefined;
     if (oldest) this.attemptedOperationIds.delete(oldest);
   }
 }
