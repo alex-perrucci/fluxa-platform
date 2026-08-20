@@ -37,7 +37,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function safeInteger(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) ? value : null;
+  return typeof value === 'number' && Number.isSafeInteger(value)
+    ? value
+    : null;
 }
 
 function invalid(message: string): never {
@@ -53,7 +55,11 @@ function normalizeInput(raw: unknown): NormalizedDocumentInput {
   if (!isRecord(raw)) invalid('Payload documento commerciale non valido.');
 
   const rawItems = raw.items;
-  if (!Array.isArray(rawItems) || rawItems.length < 1 || rawItems.length > MAX_ITEMS) {
+  if (
+    !Array.isArray(rawItems) ||
+    rawItems.length < 1 ||
+    rawItems.length > MAX_ITEMS
+  ) {
     invalid(`items deve contenere da 1 a ${MAX_ITEMS} righe.`);
   }
 
@@ -101,13 +107,19 @@ function normalizeInput(raw: unknown): NormalizedDocumentInput {
   let grossTotalCents = 0;
   for (const item of items) {
     const lineTotal = item.quantity * item.grossUnitPriceCents;
-    if (!Number.isSafeInteger(lineTotal)) invalid('Totale riga fuori intervallo.');
+    if (!Number.isSafeInteger(lineTotal)) {
+      invalid('Totale riga fuori intervallo.');
+    }
     grossTotalCents += lineTotal;
-    if (!Number.isSafeInteger(grossTotalCents)) invalid('Totale documento fuori intervallo.');
+    if (!Number.isSafeInteger(grossTotalCents)) {
+      invalid('Totale documento fuori intervallo.');
+    }
   }
 
   const paymentTotalCents = cashCents + electronicCents;
-  if (!Number.isSafeInteger(paymentTotalCents)) invalid('Totale pagamento fuori intervallo.');
+  if (!Number.isSafeInteger(paymentTotalCents)) {
+    invalid('Totale pagamento fuori intervallo.');
+  }
   if (paymentTotalCents !== grossTotalCents) {
     invalid(
       `Il totale pagamenti (${paymentTotalCents}) deve coincidere con il totale lordo (${grossTotalCents}) in centesimi.`,
