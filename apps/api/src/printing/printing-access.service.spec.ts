@@ -33,29 +33,30 @@ function makeService() {
     ],
   });
   const database = { pool: { query } } as unknown as DatabaseService;
+  const assertAdministrativeLocation = jest.fn().mockResolvedValue({
+    organizationId,
+    locationId: adminLocationId,
+    timezone: 'Europe/Rome',
+  });
   const locationAccess = {
-    assert: jest.fn().mockResolvedValue({
-      organizationId,
-      locationId: adminLocationId,
-      timezone: 'Europe/Rome',
-    }),
+    assert: assertAdministrativeLocation,
   } as unknown as LocationAccessService;
   return {
     service: new PrintingAccessService(database, locationAccess),
     query,
-    locationAccess,
+    assertAdministrativeLocation,
   };
 }
 
 describe('PrintingAccessService context separation', () => {
   it('lets an OWNER administer an authorized location independently from the browser device assignment', async () => {
-    const { service, locationAccess, query } = makeService();
+    const { service, assertAdministrativeLocation, query } = makeService();
 
     await expect(
       service.assertAdministrativeLocation(ownerAuth, adminLocationId),
     ).resolves.toMatchObject({ locationId: adminLocationId });
 
-    expect(locationAccess.assert).toHaveBeenCalledWith(
+    expect(assertAdministrativeLocation).toHaveBeenCalledWith(
       ownerAuth,
       adminLocationId,
       undefined,
@@ -72,12 +73,12 @@ describe('PrintingAccessService context separation', () => {
   });
 
   it('requires manage_location for manager-side printer administration', async () => {
-    const { service, locationAccess } = makeService();
+    const { service, assertAdministrativeLocation } = makeService();
     const managerAuth: AuthContext = { ...ownerAuth, role: 'MANAGER' };
 
     await service.assertAdministrativeLocation(managerAuth, adminLocationId);
 
-    expect(locationAccess.assert).toHaveBeenCalledWith(
+    expect(assertAdministrativeLocation).toHaveBeenCalledWith(
       managerAuth,
       adminLocationId,
       'manage_location',
