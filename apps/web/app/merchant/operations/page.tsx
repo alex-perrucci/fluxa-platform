@@ -1,53 +1,108 @@
 import Link from 'next/link';
-import { Icon } from '@/components/control-center/icons';
-import { SectionHeading } from '@/components/control-center/shell';
+import { EmptyState, SectionHeading } from '@/components/control-center/shell';
+import {
+  KitchenConfigurationConsole,
+  type CategoryRoute,
+  type KitchenStation,
+  type LogicalPrinter,
+  type PrintRoute,
+} from '@/components/merchant/kitchen-configuration-console';
+import type { CatalogCategory, CatalogLocation, CatalogPage } from '@/components/merchant/catalog-console';
+import { PosDevicesConsole } from '@/components/merchant/pos-devices-console';
+import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
+import { requireMerchantSession } from '@/lib/auth/session';
+import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
 
-const tasks = [
-  {
-    href: '/merchant/reservations',
-    icon: 'ticket' as const,
-    title: 'Prenotazioni',
-    description: 'Clienti, tavoli e stato delle prenotazioni',
-  },
-  {
-    href: '/merchant/events',
-    icon: 'calendar' as const,
-    title: 'Eventi',
-    description: 'Programma e gestisci gli eventi del locale',
-  },
-  {
-    href: '/merchant/kitchen-configuration',
-    icon: 'activity' as const,
-    title: 'Stampa e cucina',
-    description: 'Dove arrivano comande di cucina e bar',
-  },
-  {
-    href: '/merchant/pos-configuration',
-    icon: 'dashboard' as const,
-    title: 'Dispositivi POS',
-    description: 'Casse e dispositivi usati nel locale',
-  },
-];
+export default async function OperationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const params = await searchParams;
+  const view = params.view === 'printing' ? 'printing' : 'devices';
 
-export default function OperationsPage() {
   return (
-    <section className="glass-panel panel-padding">
-      <SectionHeading eyebrow="Operatività" title="Gestisci il lavoro quotidiano" />
-      <p className="muted max-w-3xl">
-        Tutto ciò che serve durante il servizio è raccolto qui. I dettagli tecnici restano nascosti finché non servono per l’assistenza.
-      </p>
+    <>
+      <section className="glass-panel panel-padding">
+        <SectionHeading eyebrow="Operatività" title="Casse, cucina e stampa" />
+        <p className="muted max-w-3xl">
+          Gestisci gli strumenti usati durante il servizio con nomi reali: casse, postazioni di preparazione e stampanti.
+        </p>
+        <nav className="mt-5 flex flex-wrap gap-2" aria-label="Sezioni operative">
+          <Link className={view === 'devices' ? 'button-primary' : 'button-secondary'} href="/merchant/operations">Dispositivi</Link>
+          <Link className={view === 'printing' ? 'button-primary' : 'button-secondary'} href="/merchant/operations?view=printing">Cucina e stampa</Link>
+        </nav>
+      </section>
 
-      <div className="quick-action-grid mt-5">
-        {tasks.map((task) => (
-          <Link className="quick-action" href={task.href} key={task.href}>
-            <div><Icon name={task.icon} /></div>
-            <div>
-              <strong>{task.title}</strong>
-              <span>{task.description}</span>
-            </div>
-          </Link>
-        ))}
+      <section className="glass-panel panel-padding mt-5">
+        {view === 'devices' ? (
+          <>
+            <div className="mb-5"><strong className="text-lg">Dispositivi</strong><p className="muted">Scegli in quale sede si trova ogni POS e come viene usato.</p></div>
+            <PosDevicesConsole />
+          </>
+        ) : <PrintingSection />}
+      </section>
+
+      <section className="glass-panel panel-padding mt-5">
+        <strong>Altre attività del servizio</strong>
+        <p className="muted mt-1">Aprile solo quando servono: non fanno parte della configurazione quotidiana di casse e stampanti.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link className="button-secondary" href="/merchant/reservations">Prenotazioni</Link>
+          <Link className="button-secondary" href="/merchant/events">Eventi</Link>
+        </div>
+      </section>
+    </>
+  );
+}
+
+async function PrintingSection() {
+  const session = await requireMerchantSession();
+  const [locations, categories] = await Promise.all([
+    authenticatedFluxaFetch<CatalogLocation[]>('/locations'),
+    authenticatedFluxaFetch<CatalogPage<CatalogCategory>>('/categories?page=1&pageSize=100'),
+  ]);
+  const membership = session.availableOrganizations.find(
+    (organization) => organization.organizationId === session.session.organizationId,
+  );
+  const initialLocation = resolveAdministrativeLocation({
+    locations,
+    defaultLocationId: membership?.defaultLocationId,
+  });
+  const initialLocationId = initialLocation?.id ?? null;
+
+  if (!initialLocationId) {
+    return (
+      <EmptyState
+        description="Configura prima una sede attiva per gestire cucina e stampanti."
+        title="Nessuna sede disponibile"
+      />
+    );
+  }
+
+  const [stationRows, routeRows, printerPage, printRouteRows] = await Promise.all([
+    authenticatedFluxaFetch<KitchenStation[]>(`/kitchen-stations?locationId=${encodeURIComponent(initialLocationId)}`),
+    authenticatedFluxaFetch<CategoryRoute[]>(`/kitchen-station-routes?locationId=${encodeURIComponent(initialLocationId)}`),
+    authenticatedFluxaFetch<CatalogPage<LogicalPrinter>>(`/printers?locationId=${encodeURIComponent(initialLocationId)}&page=1&pageSize=100`),
+    authenticatedFluxaFetch<PrintRoute[]>(`/print-routes?locationId=${encodeURIComponent(initialLocationId)}`),
+  ]);
+  const canManage = ['OWNER', 'ADMIN', 'MANAGER'].includes(session.session.role ?? '');
+
+  return (
+    <>
+      <div className="mb-5">
+        <strong className="text-lg">Cucina e stampa</strong>
+        <p className="muted">Indica dove vengono preparate le categorie e cosa deve uscire da ogni stampante.</p>
       </div>
-    </section>
+      <KitchenConfigurationConsole
+        canManage={canManage}
+        categories={categories.items}
+        initialCategoryRoutes={routeRows}
+        initialLocationId={initialLocationId}
+        initialLocations={locations}
+        initialPrintRoutes={printRouteRows}
+        initialPrinters={printerPage.items}
+        initialStations={stationRows}
+      />
+    </>
   );
 }
