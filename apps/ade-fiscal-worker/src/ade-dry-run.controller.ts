@@ -26,6 +26,8 @@ function statusFor(error: AdeAutomationError): HttpStatus {
     case 'ADE_SELECTOR_PROFILE_INVALID':
     case 'ADE_INTERNAL_AUTH_REQUIRED':
       return HttpStatus.SERVICE_UNAVAILABLE;
+    default:
+      return HttpStatus.SERVICE_UNAVAILABLE;
   }
 }
 
@@ -51,6 +53,8 @@ function publicMessage(error: AdeAutomationError): string {
       return 'Profilo selector AdE non valido.';
     case 'ADE_MARKER_NOT_FOUND':
       return 'La pagina AdE non corrisponde al profilo selector configurato.';
+    default:
+      return 'Dry-run AdE non riuscito.';
   }
 }
 
