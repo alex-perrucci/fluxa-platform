@@ -13,7 +13,7 @@ export interface AdeAuthProfile {
   postMfaContinueSelector: string;
   serviceSearchSelector: string;
   serviceLinkSelector: string;
-  serviceAccessListText: string;
+  serviceAccessButtonSelector: string;
   workProfileRadioSelector: string;
   workProfileProceedSelector: string;
   workProfileSelectLabel: string;
@@ -30,7 +30,7 @@ const REQUIRED_KEYS = [
   'postMfaContinueSelector',
   'serviceSearchSelector',
   'serviceLinkSelector',
-  'serviceAccessListText',
+  'serviceAccessButtonSelector',
   'workProfileRadioSelector',
   'workProfileProceedSelector',
   'workProfileSelectLabel',
@@ -101,7 +101,10 @@ function readProfile(path: string): AdeAuthProfile {
     ),
     serviceSearchSelector: requiredString(record, 'serviceSearchSelector'),
     serviceLinkSelector: requiredString(record, 'serviceLinkSelector'),
-    serviceAccessListText: requiredString(record, 'serviceAccessListText'),
+    serviceAccessButtonSelector: requiredString(
+      record,
+      'serviceAccessButtonSelector',
+    ),
     workProfileRadioSelector: requiredString(
       record,
       'workProfileRadioSelector',
