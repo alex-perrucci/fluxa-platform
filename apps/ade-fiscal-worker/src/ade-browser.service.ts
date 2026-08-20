@@ -4,6 +4,7 @@ import {
   chromium,
   type Browser,
   type BrowserContext,
+  type Locator,
   type Page,
 } from 'playwright';
 import {
@@ -115,10 +116,11 @@ export class AdeBrowserService implements OnApplicationShutdown {
         input.navigationTimeoutMs,
         'ADE_PORTAL_FLOW_MISMATCH',
       );
-      await this.clickButtonInsideList(
+      await this.clickRequired(
         page,
-        input.profile.serviceAccessListText,
+        input.profile.serviceAccessButtonSelector,
         input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
       );
       await this.checkRequired(
         page,
@@ -241,7 +243,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     timeoutMs: number,
   ): Promise<void> {
     try {
-      const locator = page.locator(selector).first();
+      const locator = this.profileLocator(page, selector).first();
       await locator.waitFor({ state: 'visible', timeout: timeoutMs });
       await locator.click();
     } catch {
@@ -249,27 +251,6 @@ export class AdeBrowserService implements OnApplicationShutdown {
         'Autorizzazione CIE non completata entro il tempo previsto.',
         'ADE_CIE_MFA_TIMEOUT',
         'AUTH_REQUIRED',
-        false,
-      );
-    }
-  }
-
-  private async clickButtonInsideList(
-    page: Page,
-    listText: string,
-    timeoutMs: number,
-  ): Promise<void> {
-    try {
-      const list = page.getByRole('list').filter({ hasText: listText }).first();
-      await list.waitFor({ state: 'visible', timeout: timeoutMs });
-      const button = list.getByRole('button').first();
-      await button.waitFor({ state: 'visible', timeout: timeoutMs });
-      await button.click();
-    } catch {
-      throw new AdeAutomationError(
-        'Accesso al servizio Fatture e Corrispettivi non disponibile.',
-        'ADE_PORTAL_FLOW_MISMATCH',
-        'SELECTOR_MISMATCH',
         false,
       );
     }
@@ -326,7 +307,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     timeoutMs: number,
   ): Promise<void> {
     try {
-      const locator = page.locator(selector).first();
+      const locator = this.profileLocator(page, selector).first();
       await locator.waitFor({ state: 'visible', timeout: timeoutMs });
       await locator.fill(value);
       await locator.press('Enter');
@@ -346,7 +327,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     timeoutMs: number,
   ): Promise<void> {
     try {
-      const locator = page.locator(selector).first();
+      const locator = this.profileLocator(page, selector).first();
       await locator.waitFor({ state: 'visible', timeout: timeoutMs });
       await locator.check();
     } catch {
@@ -386,7 +367,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     code: AdeAutomationErrorCode,
   ): Promise<void> {
     try {
-      const locator = page.locator(selector).first();
+      const locator = this.profileLocator(page, selector).first();
       await locator.waitFor({ state: 'visible', timeout: timeoutMs });
       await locator.click();
     } catch {
@@ -407,7 +388,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     code: AdeAutomationErrorCode,
   ): Promise<void> {
     try {
-      const locator = page.locator(selector).first();
+      const locator = this.profileLocator(page, selector).first();
       await locator.waitFor({ state: 'visible', timeout: timeoutMs });
       await locator.fill(value);
     } catch {
@@ -427,8 +408,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     code: AdeAutomationErrorCode,
   ): Promise<void> {
     try {
-      await page
-        .locator(selector)
+      await this.profileLocator(page, selector)
         .first()
         .waitFor({ state: 'visible', timeout: timeoutMs });
     } catch {
@@ -438,6 +418,29 @@ export class AdeBrowserService implements OnApplicationShutdown {
         'SELECTOR_MISMATCH',
         false,
       );
+    }
+  }
+
+  private profileLocator(page: Page, selector: string): Locator {
+    const match = selector.match(/^role=([a-z]+)\[name="(.+)"\]$/);
+    if (!match) return page.locator(selector);
+
+    const [, role, name] = match;
+    switch (role) {
+      case 'tab':
+        return page.getByRole('tab', { name, exact: false });
+      case 'link':
+        return page.getByRole('link', { name, exact: false });
+      case 'textbox':
+        return page.getByRole('textbox', { name, exact: false });
+      case 'button':
+        return page.getByRole('button', { name, exact: false });
+      case 'combobox':
+        return page.getByRole('combobox', { name, exact: false });
+      case 'radio':
+        return page.getByRole('radio', { name, exact: false });
+      default:
+        return page.locator(selector);
     }
   }
 
