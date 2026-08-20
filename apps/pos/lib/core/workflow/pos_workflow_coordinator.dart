@@ -11,6 +11,7 @@ import '../../features/orders/domain/order_models.dart';
 import '../../features/orders/presentation/order_controller.dart';
 import '../../features/payments/presentation/checkout_controller.dart';
 import '../../features/printing/presentation/printing_controller.dart';
+import 'automatic_payment_receipt_trigger.dart';
 
 enum PosWorkflowStatus { idle, working, ready, attention }
 
@@ -38,6 +39,8 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   final PrintingController _printing;
   final FiscalGateway _fiscalGateway;
 
+  final AutomaticPaymentReceiptTrigger _automaticPaymentReceiptTrigger =
+      AutomaticPaymentReceiptTrigger();
   final Set<String> _printingDocuments = <String>{};
   final Set<String> _handledCompletedCheckouts = <String>{};
   final Map<String, bool> _observedCheckoutCompletion = <String, bool>{};
@@ -79,6 +82,7 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   Future<void> completePaidSale({
     required String locationId,
     required String orderId,
+    String? checkoutId,
   }) async {
     final existing = _finalizations[orderId];
     if (existing != null) {
@@ -86,7 +90,11 @@ class PosWorkflowCoordinator extends ChangeNotifier {
       return;
     }
 
-    final future = _completePaidSale(locationId: locationId, orderId: orderId);
+    final future = _completePaidSale(
+      locationId: locationId,
+      orderId: orderId,
+      checkoutId: checkoutId,
+    );
     _finalizations[orderId] = future;
     try {
       await future;
@@ -130,6 +138,7 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   Future<void> _completePaidSale({
     required String locationId,
     required String orderId,
+    String? checkoutId,
   }) async {
     _setStatus(PosWorkflowStatus.working, 'Chiusura vendita…');
     try {
@@ -154,6 +163,16 @@ class PosWorkflowCoordinator extends ChangeNotifier {
           'Il pagamento è stato registrato ma la vendita non risulta ancora conclusa.',
         );
         return;
+      }
+
+      final completedCheckoutId =
+          checkoutId ?? _completedCheckoutIdForOrder(orderId);
+      if (completedCheckoutId != null) {
+        await _enqueueAutomaticPaymentReceipt(completedCheckoutId);
+      } else {
+        _setAttention(
+          'Pagamento completato, ma il checkout concluso non è disponibile per la stampa automatica. La ristampa manuale resta disponibile.',
+        );
       }
 
       if (order.header.serviceMode == OrderServiceMode.table) {
@@ -229,8 +248,35 @@ class PosWorkflowCoordinator extends ChangeNotifier {
       completePaidSale(
         locationId: checkout.locationId,
         orderId: checkout.orderId,
+        checkoutId: checkout.id,
       ),
     );
+  }
+
+  String? _completedCheckoutIdForOrder(String orderId) {
+    final checkout = _checkout.checkout;
+    if (checkout == null ||
+        checkout.orderId != orderId ||
+        !checkout.isCompleted) {
+      return null;
+    }
+    return checkout.id;
+  }
+
+  Future<void> _enqueueAutomaticPaymentReceipt(String checkoutId) async {
+    final outcome = await _automaticPaymentReceiptTrigger.onCheckoutState(
+      checkoutId: checkoutId,
+      completed: true,
+      enqueueReceipt: () => _printing.requestPaymentReceipt(checkoutId),
+    );
+
+    if (outcome == AutomaticPaymentReceiptOutcome.failed) {
+      _setAttention(
+        _printing.errorMessage == null
+            ? 'Pagamento completato, ma la stampa automatica della ricevuta non è riuscita. Usa la ristampa manuale senza ripetere il pagamento.'
+            : 'Pagamento completato, ma la stampa automatica della ricevuta non è riuscita: ${_printing.errorMessage} La ristampa manuale resta disponibile.',
+      );
+    }
   }
 
   Future<FiscalDocument?> _ensureFiscalDocument({
