@@ -19,13 +19,22 @@ type Health = {
   suggestions: string[];
 };
 
-const badge: Record<Status, string> = {
-  OK: 'bg-emerald-100 text-emerald-800',
-  DEGRADED: 'bg-amber-100 text-amber-800',
-  DOWN: 'bg-red-100 text-red-800',
-  NOT_CONFIGURED: 'bg-neutral-100 text-neutral-700',
-  UNKNOWN: 'bg-neutral-100 text-neutral-700',
-};
+function statusLabel(status: Status) {
+  switch (status) {
+    case 'OK': return 'Operativo';
+    case 'DEGRADED': return 'Da verificare';
+    case 'DOWN': return 'Non operativo';
+    case 'NOT_CONFIGURED': return 'Da configurare';
+    default: return 'Verifica in corso';
+  }
+}
+
+function statusClass(status: Status) {
+  if (status === 'OK') return 'bg-emerald-100 text-emerald-800';
+  if (status === 'DEGRADED' || status === 'NOT_CONFIGURED') return 'bg-amber-100 text-amber-800';
+  if (status === 'DOWN') return 'bg-red-100 text-red-800';
+  return 'bg-neutral-100 text-neutral-700';
+}
 
 export default function HealthPage() {
   const [locations, setLocations] = useState<Location[]>([]);
@@ -40,14 +49,14 @@ export default function HealthPage() {
     const startedAt = performance.now();
     try {
       const response = await fetch(`/api/control-center/merchant/health?locationId=${encodeURIComponent(target)}`, { cache: 'no-store' });
-      if (!response.ok) throw new Error('Diagnostica non disponibile.');
+      if (!response.ok) throw new Error('Non siamo riusciti a verificare lo stato del locale. Riprova.');
       const payload = (await response.json()) as Health;
       payload.api.latencyMs = Math.round(performance.now() - startedAt);
       setHealth(payload);
       setNetworkOnline(true);
     } catch (error) {
       setNetworkOnline(navigator.onLine);
-      setMessage(error instanceof Error ? error.message : 'Errore inatteso.');
+      setMessage(error instanceof Error ? error.message : 'Non siamo riusciti a caricare questa sezione. Riprova.');
     }
   }
 
@@ -57,7 +66,7 @@ export default function HealthPage() {
     window.addEventListener('offline', updateNetwork);
     void fetch('/api/control-center/merchant/locations', { cache: 'no-store' })
       .then(async (response) => {
-        if (!response.ok) throw new Error('Sedi non disponibili.');
+        if (!response.ok) throw new Error('Non siamo riusciti a caricare le sedi.');
         return (await response.json()) as Location[];
       })
       .then((items) => {
@@ -66,7 +75,7 @@ export default function HealthPage() {
         setLocationId(first);
         if (first) void load(first);
       })
-      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Errore inatteso.'));
+      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Non siamo riusciti a caricare questa sezione.'));
     return () => {
       window.removeEventListener('online', updateNetwork);
       window.removeEventListener('offline', updateNetwork);
@@ -87,35 +96,75 @@ export default function HealthPage() {
     URL.revokeObjectURL(url);
   }
 
+  const overall = health?.overallStatus ?? 'UNKNOWN';
+  const operational = overall === 'OK' && networkOnline;
+  const offlinePrinters = health?.printers.items.filter((printer) => printer.status !== 'OK') ?? [];
+
   return (
     <main className="space-y-6">
       <header className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-neutral-500">Operatività</p>
-        <h1 className="text-3xl font-semibold text-neutral-950">Health panel</h1>
-        <p className="max-w-3xl text-sm text-neutral-600">Stato reale dei servizi del locale e suggerimenti di ripristino. L’esportazione esclude credenziali, token e identificativi fiscali sensibili.</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-neutral-500">Assistenza</p>
+        <h1 className="text-3xl font-semibold text-neutral-950">Stato del locale</h1>
+        <p className="max-w-3xl text-sm text-neutral-600">Qui vedi solo ciò che può impedirti di lavorare. I dettagli tecnici restano disponibili per l’assistenza.</p>
       </header>
+
       <div className="flex flex-wrap gap-3">
         <select className="rounded-lg border px-3 py-2" value={locationId} onChange={(event) => { setLocationId(event.target.value); void load(event.target.value); }}>
-          {locations.map((location) => <option key={location.id} value={location.id}>{location.code} — {location.name}</option>)}
+          {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
         </select>
-        <button className="rounded-lg border px-4 py-2" type="button" onClick={() => void load()}>Aggiorna</button>
-        <button className="rounded-lg bg-neutral-950 px-4 py-2 text-white disabled:opacity-50" disabled={!health} type="button" onClick={exportDiagnostics}>Esporta JSON</button>
+        <button className="button-secondary" type="button" onClick={() => void load()}>Aggiorna</button>
       </div>
+
       {message ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{message}</div> : null}
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <HealthCard title="Rete" status={networkOnline ? 'OK' : 'DOWN'} detail={networkOnline ? 'Dispositivo online' : 'Connessione non disponibile'} />
-        <HealthCard title="API" status={health?.api.status ?? 'UNKNOWN'} detail={health ? `${health.api.latencyMs} ms` : 'In attesa'} />
-        <HealthCard title="Stampanti" status={health?.printers.status ?? 'UNKNOWN'} detail={`${health?.printers.items.length ?? 0} configurate`} />
-        <HealthCard title="Fiscal worker / A-Cube" status={health?.fiscal.status ?? 'UNKNOWN'} detail={health?.fiscal.provider ?? 'Non configurato'} />
-        <HealthCard title="Terminale pagamento" status={health?.paymentTerminal.status ?? 'UNKNOWN'} detail={health?.paymentTerminal.provider ?? 'Nessun segnale disponibile'} />
-        <HealthCard title="Stato complessivo" status={health?.overallStatus ?? 'UNKNOWN'} detail={health ? new Date(health.generatedAt).toLocaleString('it-IT') : 'In attesa'} />
+
+      <section className={`rounded-2xl border bg-white p-6 ${operational ? 'border-emerald-200' : 'border-amber-200'}`}>
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-500">Posso lavorare?</p>
+        <h2 className="mt-2 text-2xl font-semibold">{operational ? 'Tutto operativo' : 'Serve attenzione'}</h2>
+        <p className="mt-2 text-sm text-neutral-600">
+          {operational
+            ? 'Non risultano problemi che richiedono il tuo intervento.'
+            : !networkOnline
+              ? 'Questo dispositivo non è connesso a Internet.'
+              : health?.suggestions[0] ?? 'Controlla gli elementi indicati qui sotto.'}
+        </p>
       </section>
-      {health?.printers.lastJob ? <section className="rounded-2xl border bg-white p-5"><h2 className="font-semibold">Ultimo job di stampa</h2><p className="mt-2 text-sm text-neutral-600">{health.printers.lastJob.printerName} · {health.printers.lastJob.documentType} · {health.printers.lastJob.status}</p>{health.printers.lastJob.lastError ? <p className="mt-2 text-sm text-red-700">{health.printers.lastJob.lastError}</p> : null}</section> : null}
-      <section className="rounded-2xl border bg-white p-5"><h2 className="font-semibold">Suggerimenti di ripristino</h2><ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-neutral-700">{(health?.suggestions ?? ['Carica la diagnostica per ricevere indicazioni.']).map((item) => <li key={item}>{item}</li>)}</ul></section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <SimpleStatus title="Connessione" status={networkOnline ? 'OK' : 'DOWN'} detail={networkOnline ? 'Dispositivo online' : 'Connessione non disponibile'} />
+        <SimpleStatus title="Stampanti" status={health?.printers.status ?? 'UNKNOWN'} detail={offlinePrinters.length ? `${offlinePrinters.length} richiedono attenzione` : `${health?.printers.items.length ?? 0} configurate`} />
+        <SimpleStatus title="Fiscalizzazione" status={health?.fiscal.status ?? 'UNKNOWN'} detail={health?.fiscal.status === 'OK' ? 'Emissione disponibile' : 'Contatta Fluxa se il problema persiste'} />
+        <SimpleStatus title="Pagamenti" status={health?.paymentTerminal.status ?? 'UNKNOWN'} detail={health?.paymentTerminal.status === 'OK' ? 'Servizio disponibile' : 'Verifica il terminale se lo utilizzi'} />
+      </section>
+
+      {health?.suggestions.length ? (
+        <section className="rounded-2xl border bg-white p-5">
+          <h2 className="font-semibold">Come risolvere</h2>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-neutral-700">{health.suggestions.map((item) => <li key={item}>{item}</li>)}</ul>
+        </section>
+      ) : null}
+
+      <details className="rounded-2xl border bg-white p-5">
+        <summary className="cursor-pointer font-semibold">Dettagli tecnici per assistenza</summary>
+        <div className="mt-4 grid gap-3 text-sm text-neutral-700 md:grid-cols-2">
+          <p><strong>API:</strong> {statusLabel(health?.api.status ?? 'UNKNOWN')} · {health?.api.latencyMs ?? '—'} ms</p>
+          <p><strong>Ultima verifica:</strong> {health ? new Date(health.generatedAt).toLocaleString('it-IT') : '—'}</p>
+          {health?.printers.lastJob ? <p><strong>Ultima stampa:</strong> {health.printers.lastJob.printerName} · {health.printers.lastJob.status}</p> : null}
+          {health?.printers.lastJob?.lastError ? <p><strong>Errore stampa:</strong> {health.printers.lastJob.lastError}</p> : null}
+        </div>
+        <button className="button-secondary mt-4" disabled={!health} type="button" onClick={exportDiagnostics}>Esporta diagnostica</button>
+      </details>
     </main>
   );
 }
 
-function HealthCard({ title, status, detail }: { title: string; status: Status; detail: string }) {
-  return <article className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-3"><h2 className="font-semibold">{title}</h2><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badge[status]}`}>{status}</span></div><p className="mt-3 text-sm text-neutral-600">{detail}</p></article>;
+function SimpleStatus({ title, status, detail }: { title: string; status: Status; detail: string }) {
+  return (
+    <article className="rounded-2xl border bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-semibold">{title}</h2>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(status)}`}>{statusLabel(status)}</span>
+      </div>
+      <p className="mt-3 text-sm text-neutral-600">{detail}</p>
+    </article>
+  );
 }

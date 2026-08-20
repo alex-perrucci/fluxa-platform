@@ -2,7 +2,6 @@
 
 import { useMemo, useState, type FormEvent } from 'react';
 import { ControlCenterNotification } from '@/components/control-center/notification';
-import { StatusBadge } from '@/components/control-center/status-badge';
 import type { CatalogCategory, CatalogLocation, CatalogPage } from './catalog-console';
 
 export interface KitchenStation {
@@ -65,10 +64,30 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(
       body && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
         ? body.message
-        : 'Operazione non riuscita.',
+        : 'Non siamo riusciti a completare l’operazione. Riprova.',
     );
   }
   return body as T;
+}
+
+function internalCode(name: string) {
+  const suffix = Date.now().toString(36).slice(-5).toUpperCase();
+  const safe = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'POSTAZIONE';
+  return `${safe.slice(0, 34)}_${suffix}`;
+}
+
+function documentLabel(type: PrintRoute['documentType']) {
+  switch (type) {
+    case 'KITCHEN_TICKET': return 'Comande cucina';
+    case 'ORDER_RECEIPT': return 'Ricevute ordine';
+    case 'PAYMENT_RECEIPT': return 'Ricevute pagamento';
+    case 'TEST_PAGE': return 'Pagina di test';
+  }
 }
 
 export function KitchenConfigurationConsole({
@@ -128,7 +147,7 @@ export function KitchenConfigurationConsole({
       await action();
       setMessage(success);
     } catch (mutationError) {
-      setError(mutationError instanceof Error ? mutationError.message : 'Operazione non riuscita.');
+      setError(mutationError instanceof Error ? mutationError.message : 'Non siamo riusciti a completare l’operazione. Riprova.');
     } finally {
       setPending(false);
     }
@@ -136,26 +155,28 @@ export function KitchenConfigurationConsole({
 
   async function changeLocation(next: string) {
     setLocationId(next);
-    await run(() => reload(next), 'Configurazione della sede caricata.');
+    await run(() => reload(next), 'Sede caricata.');
   }
 
   async function createStation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const name = String(form.get('name') ?? '').trim();
     await run(async () => {
       await requestJson('/api/control-center/merchant/configuration/kitchen-stations', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           locationId,
-          code: String(form.get('code') ?? ''),
-          name: String(form.get('name') ?? ''),
+          code: String(form.get('code') ?? '').trim() || internalCode(name),
+          name,
           sortOrder: Number(form.get('sortOrder') ?? 0),
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       await reload();
-    }, 'Postazione cucina creata.');
+    }, 'Postazione creata.');
   }
 
   async function saveStation(event: FormEvent<HTMLFormElement>, station: KitchenStation) {
@@ -166,10 +187,10 @@ export function KitchenConfigurationConsole({
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          code: String(form.get('code') ?? ''),
-          name: String(form.get('name') ?? ''),
-          sortOrder: Number(form.get('sortOrder') ?? 0),
-          status: String(form.get('status') ?? 'ACTIVE'),
+          code: String(form.get('code') ?? station.code),
+          name: String(form.get('name') ?? station.name),
+          sortOrder: Number(form.get('sortOrder') ?? station.sortOrder),
+          status: String(form.get('status') ?? station.status),
         }),
       });
       await reload();
@@ -193,15 +214,16 @@ export function KitchenConfigurationConsole({
         );
       }
       await reload();
-    }, stationId ? 'Categoria instradata alla postazione.' : 'Routing categoria rimosso.');
+    }, stationId ? 'Destinazione aggiornata.' : 'Preparazione rimossa per la categoria.');
   }
 
   async function savePrintRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const stationId = String(form.get('kitchenStationId') ?? '');
     if (documentType === 'KITCHEN_TICKET' && !stationId) {
-      setError('Per una comanda cucina scegli la postazione.');
+      setError('Per le comande cucina scegli dove devono arrivare.');
       return;
     }
     await run(async () => {
@@ -217,67 +239,64 @@ export function KitchenConfigurationConsole({
           kitchenStationId: documentType === 'KITCHEN_TICKET' ? stationId : undefined,
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       await reload();
-    }, 'Rotta di stampa salvata.');
+    }, 'Stampante configurata.');
   }
 
   async function removePrintRoute(routeId: string) {
     await run(async () => {
       await requestJson(`/api/control-center/merchant/configuration/print-routes/${routeId}`, { method: 'DELETE' });
       await reload();
-    }, 'Rotta di stampa rimossa.');
+    }, 'Configurazione di stampa rimossa.');
   }
 
   return (
     <div>
       <ControlCenterNotification message={error} onDismiss={() => setError(null)} title="Operazione non completata" />
-      <ControlCenterNotification message={message} onDismiss={() => setMessage(null)} title="Configurazione aggiornata" />
+      <ControlCenterNotification message={message} onDismiss={() => setMessage(null)} title="Operatività aggiornata" />
 
       <div className="filter-bar">
         <select disabled={pending} onChange={(event) => void changeLocation(event.target.value)} value={locationId}>
           <option value="">Seleziona sede</option>
-          {initialLocations.map((location) => <option key={location.id} value={location.id}>{location.name} · {location.code}</option>)}
+          {initialLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
         </select>
-        <span className="muted">{stations.length} postazioni · {categoryRoutes.length} categorie instradate · {printers.length} stampanti logiche</span>
+        <span className="muted">{activeStations.length} postazioni · {activePrinters.length} stampanti</span>
       </div>
 
       <section className="glass-panel panel-padding mt-5">
-        <div className="wizard-actions"><strong>Postazioni cucina</strong><span className="muted">Configurazione server-side per la sede selezionata</span></div>
+        <div className="wizard-actions">
+          <div>
+            <strong>Dove devono arrivare i prodotti?</strong>
+            <p className="muted">Imposta la destinazione una volta per categoria. I prodotti della categoria la useranno automaticamente.</p>
+          </div>
+        </div>
+
+        {!activeStations.length && locationId ? (
+          <div className="mt-5 rounded-2xl border border-dashed p-5">
+            <strong>Non hai ancora postazioni di preparazione.</strong>
+            <p className="muted mt-1">Aggiungi “Cucina”, “Bar” o un altro punto di preparazione.</p>
+          </div>
+        ) : null}
+
         {canManage && locationId ? (
-          <form className="form-grid mt-5" onSubmit={createStation}>
-            <label className="field"><span>Codice</span><input name="code" required /></label>
-            <label className="field"><span>Nome</span><input name="name" required /></label>
-            <label className="field"><span>Ordine</span><input defaultValue="0" min="0" name="sortOrder" type="number" /></label>
-            <div className="wizard-actions span-2"><span /><button className="button-primary" disabled={pending} type="submit">Aggiungi postazione</button></div>
+          <form className="mt-5 flex flex-wrap items-end gap-3" onSubmit={createStation}>
+            <label className="field min-w-[240px]"><span>Nuova postazione</span><input name="name" placeholder="Cucina" required /></label>
+            <button className="button-secondary" disabled={pending} type="submit">Aggiungi</button>
+            <details className="text-sm">
+              <summary className="cursor-pointer text-neutral-500">Opzioni avanzate</summary>
+              <div className="mt-2 flex gap-2"><input name="code" placeholder="Codice automatico" /><input defaultValue="0" min="0" name="sortOrder" placeholder="Ordine" type="number" /></div>
+            </details>
           </form>
         ) : null}
-        <div className="data-list mt-5">
-          {stations.map((station) => (
-            <form className="data-row" key={station.id} onSubmit={(event) => void saveStation(event, station)}>
-              <div><input defaultValue={station.name} disabled={!canManage} name="name" required /><small>{station.code}</small></div>
-              <input defaultValue={station.code} disabled={!canManage} name="code" required />
-              <input defaultValue={station.sortOrder} disabled={!canManage} min="0" name="sortOrder" type="number" />
-              <select defaultValue={station.status} disabled={!canManage} name="status"><option value="ACTIVE">Attiva</option><option value="INACTIVE">Inattiva</option></select>
-              {canManage ? <button className="button-secondary" disabled={pending} type="submit">Salva</button> : <StatusBadge status={station.status} />}
-            </form>
-          ))}
-        </div>
-      </section>
 
-      <section className="glass-panel panel-padding mt-5">
-        <div className="wizard-actions"><strong>Routing categorie → cucina</strong><span className="muted">Ogni categoria può puntare a una sola postazione per sede.</span></div>
         <div className="data-list mt-5">
           {activeCategories.map((category) => {
             const current = routeByCategory.get(category.id);
             return (
               <div className="data-row" key={category.id}>
-                <div><strong>{category.name}</strong><small>{category.code}</small></div>
-                <select disabled={!canManage || pending} onChange={(event) => void routeCategory(category.id, event.target.value)} value={current?.stationId ?? ''}>
-                  <option value="">Non instradata</option>
-                  {activeStations.map((station) => <option key={station.id} value={station.id}>{station.name} · {station.code}</option>)}
-                </select>
-                <StatusBadge status={current ? 'ROUTED' : 'UNROUTED'} />
+                <div><strong>{category.name}</strong><small>{current ? `Va a ${current.stationName}` : 'Nessuna preparazione'}</small></div>
+                <label className="field min-w-[220px]"><span>Dove arriva?</span><select disabled={!canManage || pending} onChange={(event) => void routeCategory(category.id, event.target.value)} value={current?.stationId ?? ''}><option value="">Nessuna preparazione</option>{activeStations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label>
               </div>
             );
           })}
@@ -285,30 +304,56 @@ export function KitchenConfigurationConsole({
       </section>
 
       <section className="glass-panel panel-padding mt-5">
-        <div className="wizard-actions"><div><strong>Routing logico di stampa</strong><p className="muted">Qui scegli quale stampante logica riceve i documenti. Wi-Fi/Bluetooth si associa dal POS.</p></div><span className="muted">{printRoutes.length} rotte</span></div>
-        {activePrinters.length === 0 ? (
-          <div className="mt-5"><p className="muted">Nessuna stampante logica attiva. Creala dal POS in Impostazioni → Configura stampanti, poi torna qui per il routing.</p></div>
+        <div className="wizard-actions">
+          <div>
+            <strong>Stampanti</strong>
+            <p className="muted">Scegli cosa deve uscire su ciascuna stampante. La connessione fisica della stampante resta gestita dal POS.</p>
+          </div>
+        </div>
+
+        {!activePrinters.length ? (
+          <div className="mt-5 rounded-2xl border border-dashed p-5"><strong>Nessuna stampante disponibile.</strong><p className="muted mt-1">Configura prima la stampante dal POS, poi torna qui per scegliere cosa deve stampare.</p></div>
         ) : null}
+
         {canManage && locationId && activePrinters.length ? (
           <form className="form-grid mt-5" onSubmit={savePrintRoute}>
-            <label className="field"><span>Documento</span><select name="documentType" onChange={(event) => setDocumentType(event.target.value as PrintRoute['documentType'])} value={documentType}><option value="KITCHEN_TICKET">Comanda cucina</option><option value="ORDER_RECEIPT">Riepilogo ordine</option><option value="PAYMENT_RECEIPT">Riepilogo pagamento</option><option value="TEST_PAGE">Pagina di test</option></select></label>
-            <label className="field"><span>Postazione cucina</span><select disabled={documentType !== 'KITCHEN_TICKET'} name="kitchenStationId"><option value="">Seleziona postazione</option>{activeStations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label>
-            <label className="field"><span>Stampante logica</span><select name="printerId" required>{activePrinters.map((printer) => <option key={printer.id} value={printer.id}>{printer.name} · {printer.purpose}</option>)}</select></label>
+            <label className="field"><span>Cosa deve stampare?</span><select name="documentType" onChange={(event) => setDocumentType(event.target.value as PrintRoute['documentType'])} value={documentType}><option value="KITCHEN_TICKET">Comande cucina</option><option value="ORDER_RECEIPT">Ricevute ordine</option><option value="PAYMENT_RECEIPT">Ricevute pagamento</option><option value="TEST_PAGE">Pagina di test</option></select></label>
+            <label className="field"><span>Dove?</span><select disabled={documentType !== 'KITCHEN_TICKET'} name="kitchenStationId"><option value="">Scegli postazione</option>{activeStations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label>
+            <label className="field"><span>Stampante</span><select name="printerId" required>{activePrinters.map((printer) => <option key={printer.id} value={printer.id}>{printer.name}</option>)}</select></label>
             <label className="field"><span>Copie</span><input defaultValue="1" max="5" min="1" name="copies" type="number" /></label>
-            <div className="wizard-actions span-2"><span /><button className="button-primary" disabled={pending} type="submit">Salva rotta</button></div>
+            <div className="wizard-actions span-2"><span /><button className="button-primary" disabled={pending} type="submit">Salva stampa</button></div>
           </form>
         ) : null}
+
         <div className="data-list mt-5">
           {printRoutes.map((route) => (
             <div className="data-row" key={route.id}>
-              <div><strong>{route.documentType}</strong><small>{route.kitchenStationName ?? 'Generale'}</small></div>
-              <div><span>{route.printerName}</span><small>{route.printerCode} · {route.copies} copia/e</small></div>
-              <StatusBadge status={route.active ? 'ACTIVE' : 'INACTIVE'} />
+              <div><strong>{documentLabel(route.documentType)}</strong><small>{route.kitchenStationName ?? 'Generale'}</small></div>
+              <div><span>{route.printerName}</span><small>{route.copies} copia/e</small></div>
+              <span>{route.active ? 'Attiva' : 'Non attiva'}</span>
               {canManage ? <button className="button-secondary" disabled={pending} onClick={() => void removePrintRoute(route.id)} type="button">Rimuovi</button> : null}
             </div>
           ))}
         </div>
       </section>
+
+      {stations.length ? (
+        <details className="glass-panel panel-padding mt-5">
+          <summary className="cursor-pointer font-semibold">Impostazioni avanzate postazioni</summary>
+          <p className="muted mt-2">Codici e ordinamento servono solo in casi particolari o per assistenza.</p>
+          <div className="data-list mt-5">
+            {stations.map((station) => (
+              <form className="data-row" key={station.id} onSubmit={(event) => void saveStation(event, station)}>
+                <input defaultValue={station.name} disabled={!canManage} name="name" aria-label="Nome postazione" required />
+                <input defaultValue={station.code} disabled={!canManage} name="code" aria-label="Codice postazione" required />
+                <input defaultValue={station.sortOrder} disabled={!canManage} min="0" name="sortOrder" aria-label="Ordine postazione" type="number" />
+                <select defaultValue={station.status} disabled={!canManage} name="status"><option value="ACTIVE">Attiva</option><option value="INACTIVE">Inattiva</option></select>
+                {canManage ? <button className="button-secondary" disabled={pending} type="submit">Salva</button> : null}
+              </form>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

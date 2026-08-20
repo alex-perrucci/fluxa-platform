@@ -83,7 +83,7 @@ export function ControlCenterShell({
           }}
         >
           <nav className="cc-nav" style={{ minWidth: 0, scrollbarWidth: 'none' }}>
-            <p>Control center</p>
+            <p>{mode === 'merchant' ? 'Gestione locale' : 'Control center'}</p>
             {nav.map((item) => (
               <Link href={item.href} key={item.href}>
                 <Icon name={item.icon} />
@@ -121,10 +121,12 @@ export function ControlCenterShell({
             <p className="eyebrow">{subtitle}</p>
             <h1>{title}</h1>
           </div>
-          <div className="cc-live-pill">
-            <span />
-            sistemi operativi
-          </div>
+          {mode === 'platform' ? (
+            <div className="cc-live-pill">
+              <span />
+              Platform control
+            </div>
+          ) : null}
         </header>
         <main className="cc-content">{children}</main>
       </div>
