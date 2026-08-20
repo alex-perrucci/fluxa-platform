@@ -133,9 +133,11 @@ describe('AdeDocumentDryRunService', () => {
     });
     const auth = { refresh } as unknown as AdeAuthService;
 
-    const result = await serviceWithDependencies({ browser, auth, session }).run(
-      DOCUMENT_INPUT,
-    );
+    const result = await serviceWithDependencies({
+      browser,
+      auth,
+      session,
+    }).run(DOCUMENT_INPUT);
 
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(sessionAttempts).toBe(2);
@@ -144,14 +146,16 @@ describe('AdeDocumentDryRunService', () => {
   });
 
   it('does not treat later document selector failures as expired sessions', async () => {
-    const dryRun = jest.fn().mockRejectedValue(
-      new AdeAutomationError(
-        'Conferma preliminare del documento non disponibile.',
-        'ADE_DOCUMENT_FLOW_MISMATCH',
-        'SELECTOR_MISMATCH',
-        false,
-      ),
-    );
+    const dryRun = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'Conferma preliminare del documento non disponibile.',
+          'ADE_DOCUMENT_FLOW_MISMATCH',
+          'SELECTOR_MISMATCH',
+          false,
+        ),
+      );
     const browser = { dryRun } as unknown as AdeDocumentBrowserService;
     const refresh = jest.fn();
     const auth = { refresh } as unknown as AdeAuthService;
