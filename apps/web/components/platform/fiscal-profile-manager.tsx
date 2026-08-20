@@ -52,6 +52,10 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+function fiscalEndpoint(organizationId: string, locationId: string) {
+  return `/api/control-center/platform/organizations/${organizationId}/locations/${encodeURIComponent(locationId)}?resource=fiscal-profile`;
+}
+
 export function PlatformFiscalProfileManager({
   organizationId,
   locations,
@@ -63,10 +67,6 @@ export function PlatformFiscalProfileManager({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  function endpoint(nextLocationId: string) {
-    return `/api/control-center/platform/organizations/${organizationId}/locations/${encodeURIComponent(nextLocationId)}?resource=fiscal-profile`;
-  }
-
   async function load(nextLocationId: string) {
     setLocationId(nextLocationId);
     setError(null);
@@ -77,10 +77,18 @@ export function PlatformFiscalProfileManager({
     }
     setPending(true);
     try {
-      setProfile(await requestJson<FiscalProfile | null>(endpoint(nextLocationId)));
+      setProfile(
+        await requestJson<FiscalProfile | null>(
+          fiscalEndpoint(organizationId, nextLocationId),
+        ),
+      );
     } catch (loadError) {
       setProfile(null);
-      setError(loadError instanceof Error ? loadError.message : 'Caricamento non riuscito.');
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Caricamento non riuscito.',
+      );
     } finally {
       setPending(false);
     }
@@ -89,13 +97,19 @@ export function PlatformFiscalProfileManager({
   useEffect(() => {
     if (!initialLocationId) return;
     let active = true;
-    void requestJson<FiscalProfile | null>(endpoint(initialLocationId))
+    void requestJson<FiscalProfile | null>(
+      fiscalEndpoint(organizationId, initialLocationId),
+    )
       .then((result) => {
         if (active) setProfile(result);
       })
       .catch((loadError: unknown) => {
         if (active) {
-          setError(loadError instanceof Error ? loadError.message : 'Caricamento non riuscito.');
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Caricamento non riuscito.',
+          );
         }
       });
     return () => {
@@ -111,23 +125,32 @@ export function PlatformFiscalProfileManager({
     setError(null);
     setMessage(null);
     try {
-      const saved = await requestJson<FiscalProfile>(endpoint(locationId), {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          provider: String(form.get('provider') ?? 'ADE_WEB'),
-          environment: String(form.get('environment') ?? 'PRODUCTION'),
-          fiscalId: String(form.get('fiscalId') ?? '').trim(),
-          enabled: form.get('enabled') === 'on',
-          autoIssueOnPaid: form.get('autoIssueOnPaid') === 'on',
-          receiptEmail: String(form.get('receiptEmail') ?? '').trim() || undefined,
-          displayName: String(form.get('displayName') ?? '').trim() || undefined,
-        }),
-      });
+      const saved = await requestJson<FiscalProfile>(
+        fiscalEndpoint(organizationId, locationId),
+        {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            provider: String(form.get('provider') ?? 'ADE_WEB'),
+            environment: String(form.get('environment') ?? 'PRODUCTION'),
+            fiscalId: String(form.get('fiscalId') ?? '').trim(),
+            enabled: form.get('enabled') === 'on',
+            autoIssueOnPaid: form.get('autoIssueOnPaid') === 'on',
+            receiptEmail:
+              String(form.get('receiptEmail') ?? '').trim() || undefined,
+            displayName:
+              String(form.get('displayName') ?? '').trim() || undefined,
+          }),
+        },
+      );
       setProfile(saved);
       setMessage('Configurazione fiscale aggiornata.');
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Salvataggio non riuscito.');
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : 'Salvataggio non riuscito.',
+      );
     } finally {
       setPending(false);
     }
@@ -151,7 +174,9 @@ export function PlatformFiscalProfileManager({
       <div className="wizard-actions">
         <div>
           <strong>Policy fiscale della sede</strong>
-          <p className="muted">Solo gli amministratori Fluxa possono modificare questi parametri.</p>
+          <p className="muted">
+            Solo gli amministratori Fluxa possono modificare questi parametri.
+          </p>
         </div>
         <select
           disabled={pending}
@@ -173,16 +198,28 @@ export function PlatformFiscalProfileManager({
         <form className="form-grid mt-5" key={formKey} onSubmit={save}>
           <label className="field">
             <span>Provider</span>
-            <select defaultValue={profile?.provider ?? 'ADE_WEB'} disabled={pending} name="provider">
+            <select
+              defaultValue={profile?.provider ?? 'ADE_WEB'}
+              disabled={pending}
+              name="provider"
+            >
               <option value="ADE_WEB">ADE Web</option>
-              <option value="ACUBE_SMART_RECEIPTS">A-Cube Smart Receipts</option>
+              <option value="ACUBE_SMART_RECEIPTS">
+                A-Cube Smart Receipts
+              </option>
               <option value="MOCK">Mock / test</option>
-              <option disabled value="OPENAPI_SMART_RECEIPTS">OpenAPI — usa provisioning dedicato</option>
+              <option disabled value="OPENAPI_SMART_RECEIPTS">
+                OpenAPI — usa provisioning dedicato
+              </option>
             </select>
           </label>
           <label className="field">
             <span>Ambiente</span>
-            <select defaultValue={profile?.environment ?? 'PRODUCTION'} disabled={pending} name="environment">
+            <select
+              defaultValue={profile?.environment ?? 'PRODUCTION'}
+              disabled={pending}
+              name="environment"
+            >
               <option value="SANDBOX">Sandbox</option>
               <option value="PRODUCTION">Produzione</option>
             </select>
@@ -202,31 +239,56 @@ export function PlatformFiscalProfileManager({
           </label>
           <label className="field">
             <span>Nome visualizzato</span>
-            <input defaultValue={profile?.displayName ?? ''} disabled={pending} maxLength={120} name="displayName" />
+            <input
+              defaultValue={profile?.displayName ?? ''}
+              disabled={pending}
+              maxLength={120}
+              name="displayName"
+            />
           </label>
           <label className="field">
             <span>Email ricevute</span>
-            <input defaultValue={profile?.receiptEmail ?? ''} disabled={pending} name="receiptEmail" type="email" />
+            <input
+              defaultValue={profile?.receiptEmail ?? ''}
+              disabled={pending}
+              name="receiptEmail"
+              type="email"
+            />
           </label>
           <label className="field">
             <span>Emissione automatica</span>
             <span>
-              <input defaultChecked={profile?.autoIssueOnPaid ?? true} disabled={pending} name="autoIssueOnPaid" type="checkbox" />{' '}
+              <input
+                defaultChecked={profile?.autoIssueOnPaid ?? true}
+                disabled={pending}
+                name="autoIssueOnPaid"
+                type="checkbox"
+              />{' '}
               Emetti al pagamento
             </span>
           </label>
           <label className="field">
             <span>Stato</span>
             <span>
-              <input defaultChecked={profile?.enabled ?? false} disabled={pending} name="enabled" type="checkbox" />{' '}
+              <input
+                defaultChecked={profile?.enabled ?? false}
+                disabled={pending}
+                name="enabled"
+                type="checkbox"
+              />{' '}
               Profilo attivo
             </span>
           </label>
           <div className="wizard-actions span-2">
             <span className="muted">
-              OpenAPI mantiene il proprio provisioning nella sezione dedicata qui sotto.
+              OpenAPI mantiene il proprio provisioning nella sezione dedicata
+              qui sotto.
             </span>
-            <button className="button-primary" disabled={pending} type="submit">
+            <button
+              className="button-primary"
+              disabled={pending}
+              type="submit"
+            >
               {pending ? 'Salvataggio…' : 'Salva configurazione'}
             </button>
           </div>
