@@ -60,6 +60,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
   }): Promise<AdeCieAuthResult> {
     const browser = await this.browser();
     const context = await browser.newContext();
+
     try {
       const page = await context.newPage();
       await this.goto(page, input.authEntryUrl, input.navigationTimeoutMs);
@@ -104,6 +105,15 @@ export class AdeBrowserService implements OnApplicationShutdown {
         input.mfaTimeoutMs,
       );
 
+      // After CIE login the portal initially operates as the natural person.
+      // Switch the working identity before opening Fatture e Corrispettivi.
+      await this.switchToIncaricante(
+        page,
+        input.profile,
+        input.incaricanteCf,
+        input.navigationTimeoutMs,
+      );
+
       await this.fillAndPressEnter(
         page,
         input.profile.serviceSearchSelector,
@@ -116,47 +126,19 @@ export class AdeBrowserService implements OnApplicationShutdown {
         input.navigationTimeoutMs,
         'ADE_PORTAL_FLOW_MISMATCH',
       );
-      await this.clickRequired(
+      await this.clickServiceAccess(
         page,
         input.profile.serviceAccessButtonSelector,
         input.navigationTimeoutMs,
-        'ADE_PORTAL_FLOW_MISMATCH',
       );
 
-      await this.ensureWorkProfileChooser(
+      // Compatibility fallback: some AdE paths may still show the older
+      // multi-step work-profile chooser when the service is opened.
+      await this.completeLegacyWorkProfileIfPresent(
         page,
-        input.profile.workProfileRadioSelector,
-        input.profile.changeUserText ?? 'Cambia utenza',
-        input.navigationTimeoutMs,
-      );
-      await this.checkRequired(
-        page,
-        input.profile.workProfileRadioSelector,
-        input.navigationTimeoutMs,
-      );
-      await this.clickRequired(
-        page,
-        input.profile.workProfileProceedSelector,
-        input.navigationTimeoutMs,
-        'ADE_PORTAL_FLOW_MISMATCH',
-      );
-      await this.selectIncaricanteByCf(
-        page,
-        input.profile.workProfileSelectLabel,
+        input.profile,
         input.incaricanteCf,
         input.navigationTimeoutMs,
-      );
-      await this.clickRequired(
-        page,
-        input.profile.workProfileProceedSelector,
-        input.navigationTimeoutMs,
-        'ADE_PORTAL_FLOW_MISMATCH',
-      );
-      await this.clickRequired(
-        page,
-        input.profile.workProfileConfirmSelector,
-        input.navigationTimeoutMs,
-        'ADE_PORTAL_FLOW_MISMATCH',
       );
 
       if (input.profile.finalMarker) {
@@ -188,6 +170,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
   }): Promise<AdeReadOnlyNavigationResult> {
     const browser = await this.browser();
     let context: BrowserContext;
+
     try {
       context = await browser.newContext({
         storageState: input.storageStatePath,
@@ -236,6 +219,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     const browserPromise = this.browserPromise;
     this.browserPromise = null;
     if (!browserPromise) return;
+
     try {
       const browser = await browserPromise;
       await browser.close().catch(() => undefined);
@@ -244,15 +228,13 @@ export class AdeBrowserService implements OnApplicationShutdown {
     }
   }
 
-  private async ensureWorkProfileChooser(
+  private async switchToIncaricante(
     page: Page,
-    workProfileRadioSelector: string,
-    changeUserText: string,
+    profile: AdeAuthProfile,
+    incaricanteCf: string,
     timeoutMs: number,
   ): Promise<void> {
-    const radio = this.profileLocator(page, workProfileRadioSelector).first();
-    if (await radio.isVisible().catch(() => false)) return;
-
+    const changeUserText = profile.changeUserText ?? 'Cambia utenza';
     const candidates = [
       page.getByRole('button', { name: changeUserText, exact: false }).first(),
       page.getByRole('link', { name: changeUserText, exact: false }).first(),
@@ -277,16 +259,105 @@ export class AdeBrowserService implements OnApplicationShutdown {
       );
     }
 
+    const incaricatoRadio = page
+      .getByRole('radio', { name: 'Incaricato', exact: false })
+      .first();
     try {
-      await radio.waitFor({ state: 'visible', timeout: timeoutMs });
+      await incaricatoRadio.waitFor({ state: 'visible', timeout: timeoutMs });
+      await incaricatoRadio.check();
     } catch {
       throw new AdeAutomationError(
-        'Selezione profilo incaricato non disponibile dopo Cambia utenza.',
+        'Opzione Incaricato non disponibile nella pagina Cambia utenza.',
         'ADE_PORTAL_FLOW_MISMATCH',
         'SELECTOR_MISMATCH',
         false,
       );
     }
+
+    const select = page.getByRole('combobox').first();
+    try {
+      await select.waitFor({ state: 'visible', timeout: timeoutMs });
+      await this.selectOptionByCf(select, incaricanteCf);
+    } catch (error) {
+      if (error instanceof AdeAutomationError) throw error;
+      throw new AdeAutomationError(
+        'Selezione dell’utenza incaricante non disponibile.',
+        'ADE_INCARICANTE_NOT_FOUND',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+
+    await this.clickRequired(
+      page,
+      profile.workProfileConfirmSelector,
+      timeoutMs,
+      'ADE_PORTAL_FLOW_MISMATCH',
+    );
+
+    // Let the portal apply the new working identity before searching services.
+    await page.waitForTimeout(500);
+  }
+
+  private async completeLegacyWorkProfileIfPresent(
+    page: Page,
+    profile: AdeAuthProfile,
+    incaricanteCf: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    const radio = this.profileLocator(page, profile.workProfileRadioSelector).first();
+    const visible = await radio.isVisible().catch(() => false);
+    if (!visible) return;
+
+    await this.checkRequired(page, profile.workProfileRadioSelector, timeoutMs);
+    await this.clickRequired(
+      page,
+      profile.workProfileProceedSelector,
+      timeoutMs,
+      'ADE_PORTAL_FLOW_MISMATCH',
+    );
+    await this.selectIncaricanteByCf(
+      page,
+      profile.workProfileSelectLabel,
+      incaricanteCf,
+      timeoutMs,
+    );
+    await this.clickRequired(
+      page,
+      profile.workProfileProceedSelector,
+      timeoutMs,
+      'ADE_PORTAL_FLOW_MISMATCH',
+    );
+    await this.clickRequired(
+      page,
+      profile.workProfileConfirmSelector,
+      timeoutMs,
+      'ADE_PORTAL_FLOW_MISMATCH',
+    );
+  }
+
+  private async clickServiceAccess(
+    page: Page,
+    fallbackSelector: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    const codegenLocator = page
+      .getByRole('list')
+      .filter({ hasText: 'Accedi' })
+      .getByRole('button')
+      .first();
+
+    if (await codegenLocator.isVisible().catch(() => false)) {
+      await codegenLocator.click();
+      return;
+    }
+
+    await this.clickRequired(
+      page,
+      fallbackSelector,
+      timeoutMs,
+      'ADE_PORTAL_FLOW_MISMATCH',
+    );
   }
 
   private async waitAndClickMfaContinuation(
@@ -308,6 +379,42 @@ export class AdeBrowserService implements OnApplicationShutdown {
     }
   }
 
+  private async selectOptionByCf(
+    select: Locator,
+    incaricanteCf: string,
+  ): Promise<void> {
+    const value = await select.evaluate((element, cf) => {
+      const htmlSelect = element as HTMLSelectElement;
+      for (const option of Array.from(htmlSelect.options)) {
+        const text = option.textContent?.trim() ?? '';
+        const optionValue = option.value.trim();
+
+        if (text === cf || optionValue === cf) return option.value;
+
+        try {
+          const payload = JSON.parse(option.value) as {
+            incaricante?: { cf?: string };
+          };
+          if (payload.incaricante?.cf === cf) return option.value;
+        } catch {
+          // Plain-value option, already checked above.
+        }
+      }
+      return null;
+    }, incaricanteCf);
+
+    if (!value) {
+      throw new AdeAutomationError(
+        'Incaricante configurato non presente nell’elenco AdE.',
+        'ADE_INCARICANTE_NOT_FOUND',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+
+    await select.selectOption(value);
+  }
+
   private async selectIncaricanteByCf(
     page: Page,
     label: string,
@@ -317,30 +424,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     try {
       const select = page.getByLabel(label).first();
       await select.waitFor({ state: 'visible', timeout: timeoutMs });
-      const value = await select.evaluate((element, cf) => {
-        const htmlSelect = element as HTMLSelectElement;
-        for (const option of Array.from(htmlSelect.options)) {
-          try {
-            const payload = JSON.parse(option.value) as {
-              incaricante?: { cf?: string };
-            };
-            if (payload.incaricante?.cf === cf) return option.value;
-          } catch {
-            // Non-JSON option: ignore it.
-          }
-        }
-        return null;
-      }, incaricanteCf);
-
-      if (!value) {
-        throw new AdeAutomationError(
-          'Incaricante configurato non presente nell’elenco AdE.',
-          'ADE_INCARICANTE_NOT_FOUND',
-          'AUTH_REQUIRED',
-          false,
-        );
-      }
-      await select.selectOption(value);
+      await this.selectOptionByCf(select, incaricanteCf);
     } catch (error) {
       if (error instanceof AdeAutomationError) throw error;
       throw new AdeAutomationError(
@@ -498,20 +582,17 @@ export class AdeBrowserService implements OnApplicationShutdown {
 
   private async browser(): Promise<Browser> {
     if (!this.browserPromise) {
-      this.browserPromise = chromium
-        .launch({ headless: true })
-        .catch((error) => {
-          this.browserPromise = null;
-          throw new AdeAutomationError(
-            error instanceof Error
-              ? error.message
-              : 'Chromium non disponibile.',
-            'ADE_BROWSER_UNAVAILABLE',
-            'BROWSER',
-            true,
-          );
-        });
+      this.browserPromise = chromium.launch({ headless: true }).catch((error) => {
+        this.browserPromise = null;
+        throw new AdeAutomationError(
+          error instanceof Error ? error.message : 'Chromium non disponibile.',
+          'ADE_BROWSER_UNAVAILABLE',
+          'BROWSER',
+          true,
+        );
+      });
     }
+
     const browser = await this.browserPromise;
     if (!browser.isConnected()) {
       this.browserPromise = null;
