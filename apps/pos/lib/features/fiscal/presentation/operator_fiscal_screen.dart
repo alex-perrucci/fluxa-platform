@@ -44,11 +44,7 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
 
     final documents = fiscal.documents;
     final problems = documents
-        .where(
-          (document) =>
-              document.status == FiscalDocumentStatus.rejected ||
-              document.status == FiscalDocumentStatus.cancelled,
-        )
+        .where((document) => document.status.requiresAttention)
         .toList(growable: false);
     final pending = documents
         .where((document) => document.status.isPending)
@@ -119,12 +115,18 @@ class _OperatorFiscalScreenState extends ConsumerState<OperatorFiscalScreen> {
           _ExceptionCard(
             title: 'Richiedono attenzione',
             message:
-                'Apri la gestione fiscale per vedere errore e azioni disponibili.',
+                'Apri la gestione fiscale per vedere errore e azioni disponibili. Gli esiti UNKNOWN non vanno ritentati automaticamente.',
             children: problems
                 .map(
                   (document) => ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.error_outline),
+                    leading: Icon(
+                      document.status == FiscalDocumentStatus.unknown
+                          ? Icons.help_outline
+                          : document.status == FiscalDocumentStatus.authRequired
+                          ? Icons.lock_outline
+                          : Icons.error_outline,
+                    ),
                     title: Text(document.documentNumber ?? 'Documento fiscale'),
                     subtitle: Text(document.status.label),
                     trailing: const Icon(Icons.chevron_right),
