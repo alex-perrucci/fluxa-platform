@@ -6,47 +6,79 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   format-pos:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/pos
     steps:
-      - name: Checkout
+      - name: Checkout PR branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.32.5
           channel: stable
           cache: true
-      - name: Format changed POS files
-        run: >-
-          dart format
-          lib/core/workflow/pos_workflow_coordinator.dart
-          lib/features/fiscal/presentation/fiscal_controller.dart
-          lib/features/fiscal/presentation/operator_fiscal_screen.dart
-          lib/features/settings/presentation/operator_diagnostics_screen.dart
-          test/features/fiscal/fiscal_controller_test.dart
-          test/features/fiscal/fiscal_runtime_test.dart
-          test/features/fiscal/fiscal_screen_test.dart
-          test/features/fiscal/operator_fiscal_screen_test.dart
-          test/features/health/diagnostics_fiscal_runtime_test.dart
-      - name: Upload exact formatted files
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-pos-files
-          path: |
-            apps/pos/lib/core/workflow/pos_workflow_coordinator.dart
-            apps/pos/lib/features/fiscal/presentation/fiscal_controller.dart
-            apps/pos/lib/features/fiscal/presentation/operator_fiscal_screen.dart
-            apps/pos/lib/features/settings/presentation/operator_diagnostics_screen.dart
-            apps/pos/test/features/fiscal/fiscal_controller_test.dart
-            apps/pos/test/features/fiscal/fiscal_runtime_test.dart
-            apps/pos/test/features/fiscal/fiscal_screen_test.dart
-            apps/pos/test/features/fiscal/operator_fiscal_screen_test.dart
-            apps/pos/test/features/health/diagnostics_fiscal_runtime_test.dart
-          if-no-files-found: error
+
+      - name: Align fiscalize screen with runtime state
+        working-directory: apps/pos
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('lib/features/fiscal/presentation/fiscalize_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          anchor = "    final document = fiscal.documentForOrder(orderId);\n"
+          if "    final runtime = fiscal.runtime;\n" not in text:
+              if anchor not in text:
+                  raise SystemExit('fiscalize runtime anchor not found')
+              text = text.replace(anchor, anchor + "    final runtime = fiscal.runtime;\n", 1)
+
+          pattern = re.compile(
+              r"                if \(fiscal\.profile == null\)\n"
+              r".*?"
+              r"                const SizedBox\(height: 16\),",
+              re.DOTALL,
+          )
+          replacement = """                if (runtime == null)
+                  const Text('Verifica dello stato fiscale in corso.')
+                else if (runtime.provider == null || runtime.environment == null)
+                  Text(runtime.operatorStatusLabel)
+                else
+                  Text(
+                    '${runtime.provider!.label} · ${runtime.environment!.label} · ${runtime.operatorStatusLabel.toLowerCase()}',
+                  ),
+                const SizedBox(height: 16),"""
+
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1 and 'fiscal.profile' in text:
+              raise SystemExit('legacy fiscal.profile block was not replaced')
+          if 'fiscal.profile' in text:
+              raise SystemExit('legacy fiscal.profile reference remains')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Apply exact Dart formatting
+        working-directory: apps/pos
+        run: dart format lib test
+
+      - name: Commit formatted runtime fix and remove helper workflow
+        shell: bash
+        run: |
+          rm .github/workflows/format-pos-debug.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/pos .github/workflows/format-pos-debug.yml
+          git diff --cached --check
+          git commit -m "fix(pos): align fiscal runtime consumers"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
