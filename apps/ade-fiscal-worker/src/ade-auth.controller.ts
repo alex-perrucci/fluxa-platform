@@ -17,6 +17,7 @@ function statusFor(error: AdeAutomationError): HttpStatus {
     case 'ADE_CIE_MFA_TIMEOUT':
     case 'ADE_CIE_CREDENTIALS_REQUIRED':
     case 'ADE_CIE_CREDENTIALS_INVALID':
+    case 'ADE_INCARICANTE_NOT_FOUND':
       return HttpStatus.PRECONDITION_FAILED;
     case 'ADE_CIE_ENTRY_NOT_FOUND':
     case 'ADE_CIE_LEVEL2_NOT_FOUND':
@@ -24,6 +25,7 @@ function statusFor(error: AdeAutomationError): HttpStatus {
     case 'ADE_CIE_PASSWORD_FIELD_NOT_FOUND':
     case 'ADE_CIE_SUBMIT_NOT_FOUND':
     case 'ADE_CIE_MFA_NOT_STARTED':
+    case 'ADE_PORTAL_FLOW_MISMATCH':
       return HttpStatus.UNPROCESSABLE_ENTITY;
     case 'ADE_NAVIGATION_FAILED':
       return HttpStatus.BAD_GATEWAY;
@@ -47,13 +49,16 @@ function publicMessage(error: AdeAutomationError): string {
     case 'ADE_SESSION_PATH_REQUIRED':
     case 'ADE_SESSION_PATH_INVALID':
       return 'Percorso sessione AdE non configurato correttamente.';
+    case 'ADE_INCARICANTE_NOT_FOUND':
+      return 'La società configurata non è disponibile tra gli incaricanti AdE.';
     case 'ADE_CIE_ENTRY_NOT_FOUND':
     case 'ADE_CIE_LEVEL2_NOT_FOUND':
     case 'ADE_CIE_USERNAME_FIELD_NOT_FOUND':
     case 'ADE_CIE_PASSWORD_FIELD_NOT_FOUND':
     case 'ADE_CIE_SUBMIT_NOT_FOUND':
     case 'ADE_CIE_MFA_NOT_STARTED':
-      return 'Il flusso CIE non corrisponde al profilo selector configurato.';
+    case 'ADE_PORTAL_FLOW_MISMATCH':
+      return 'Il flusso AdE/CIE non corrisponde al profilo selector configurato.';
     case 'ADE_NAVIGATION_FAILED':
       return 'Navigazione verso il login AdE/CIE non riuscita.';
     case 'ADE_BROWSER_UNAVAILABLE':
