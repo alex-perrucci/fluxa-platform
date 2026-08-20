@@ -4,30 +4,46 @@ import { AdeAutomationError } from './ade-automation-error';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 
 export interface AdeAuthProfile {
-  version: 1;
+  version: 2;
+  cieTabSelector: string;
   enterWithCieSelector: string;
-  level2Selector?: string;
   usernameSelector: string;
   passwordSelector: string;
   credentialsSubmitSelector: string;
-  waitingMfaMarker?: string;
-  postMfaContinueSelector?: string;
-  authenticatedMarker: string;
+  postMfaContinueSelector: string;
+  serviceSearchSelector: string;
+  serviceLinkSelector: string;
+  serviceAccessButtonSelector: string;
+  workProfileRadioSelector: string;
+  workProfileProceedSelector: string;
+  workProfileSelectLabel: string;
+  workProfileConfirmSelector: string;
+  finalMarker?: string;
 }
 
-const ALLOWED_KEYS = new Set([
-  'version',
+const REQUIRED_KEYS = [
+  'cieTabSelector',
   'enterWithCieSelector',
-  'level2Selector',
   'usernameSelector',
   'passwordSelector',
   'credentialsSubmitSelector',
-  'waitingMfaMarker',
   'postMfaContinueSelector',
-  'authenticatedMarker',
+  'serviceSearchSelector',
+  'serviceLinkSelector',
+  'serviceAccessButtonSelector',
+  'workProfileRadioSelector',
+  'workProfileProceedSelector',
+  'workProfileSelectLabel',
+  'workProfileConfirmSelector',
+] as const;
+
+const ALLOWED_KEYS = new Set<string>([
+  'version',
+  ...REQUIRED_KEYS,
+  'finalMarker',
 ]);
 
-function requiredSelector(
+function requiredString(
   record: Record<string, unknown>,
   key: string,
 ): string {
@@ -38,7 +54,7 @@ function requiredSelector(
   return value.trim();
 }
 
-function optionalSelector(
+function optionalString(
   record: Record<string, unknown>,
   key: string,
 ): string | undefined {
@@ -61,27 +77,48 @@ function readProfile(path: string): AdeAuthProfile {
   }
   const record = parsed as Record<string, unknown>;
   for (const key of Object.keys(record)) {
-    if (!ALLOWED_KEYS.has(key))
+    if (!ALLOWED_KEYS.has(key)) {
       throw new Error(`unsupported auth profile key: ${key}`);
+    }
   }
-  if (record.version !== 1) throw new Error('auth profile version must be 1');
+  if (record.version !== 2) {
+    throw new Error('auth profile version must be 2');
+  }
 
   return {
-    version: 1,
-    enterWithCieSelector: requiredSelector(record, 'enterWithCieSelector'),
-    level2Selector: optionalSelector(record, 'level2Selector'),
-    usernameSelector: requiredSelector(record, 'usernameSelector'),
-    passwordSelector: requiredSelector(record, 'passwordSelector'),
-    credentialsSubmitSelector: requiredSelector(
+    version: 2,
+    cieTabSelector: requiredString(record, 'cieTabSelector'),
+    enterWithCieSelector: requiredString(record, 'enterWithCieSelector'),
+    usernameSelector: requiredString(record, 'usernameSelector'),
+    passwordSelector: requiredString(record, 'passwordSelector'),
+    credentialsSubmitSelector: requiredString(
       record,
       'credentialsSubmitSelector',
     ),
-    waitingMfaMarker: optionalSelector(record, 'waitingMfaMarker'),
-    postMfaContinueSelector: optionalSelector(
+    postMfaContinueSelector: requiredString(
       record,
       'postMfaContinueSelector',
     ),
-    authenticatedMarker: requiredSelector(record, 'authenticatedMarker'),
+    serviceSearchSelector: requiredString(record, 'serviceSearchSelector'),
+    serviceLinkSelector: requiredString(record, 'serviceLinkSelector'),
+    serviceAccessButtonSelector: requiredString(
+      record,
+      'serviceAccessButtonSelector',
+    ),
+    workProfileRadioSelector: requiredString(
+      record,
+      'workProfileRadioSelector',
+    ),
+    workProfileProceedSelector: requiredString(
+      record,
+      'workProfileProceedSelector',
+    ),
+    workProfileSelectLabel: requiredString(record, 'workProfileSelectLabel'),
+    workProfileConfirmSelector: requiredString(
+      record,
+      'workProfileConfirmSelector',
+    ),
+    finalMarker: optionalString(record, 'finalMarker'),
   };
 }
 
