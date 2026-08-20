@@ -26,16 +26,17 @@ const ownerAuth: AuthContext = {
 
 function makeService(query: jest.Mock) {
   const database = { pool: { query } } as unknown as DatabaseService;
+  const assertLocation = jest.fn().mockResolvedValue({
+    organizationId,
+    locationId,
+    timezone: 'Europe/Rome',
+  });
   const locationAccess = {
-    assert: jest.fn().mockResolvedValue({
-      organizationId,
-      locationId,
-      timezone: 'Europe/Rome',
-    }),
+    assert: assertLocation,
   } as unknown as LocationAccessService;
   return {
     service: new FiscalProfilesService(database, locationAccess),
-    locationAccess,
+    assertLocation,
   };
 }
 
@@ -73,11 +74,11 @@ describe('FiscalProfilesService merchant/platform separation', () => {
           },
         ],
       });
-    const { service, locationAccess } = makeService(query);
+    const { service, assertLocation } = makeService(query);
 
     const result = await service.getMerchantStatus(ownerAuth, locationId);
 
-    expect(locationAccess.assert).toHaveBeenCalledWith(ownerAuth, locationId);
+    expect(assertLocation).toHaveBeenCalledWith(ownerAuth, locationId);
     expect(result).toMatchObject({
       locationId,
       state: 'ACTIVE',
