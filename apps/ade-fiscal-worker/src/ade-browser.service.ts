@@ -115,11 +115,10 @@ export class AdeBrowserService implements OnApplicationShutdown {
         input.navigationTimeoutMs,
         'ADE_PORTAL_FLOW_MISMATCH',
       );
-      await this.clickRequired(
+      await this.clickButtonInsideList(
         page,
-        input.profile.serviceAccessButtonSelector,
+        input.profile.serviceAccessListText,
         input.navigationTimeoutMs,
-        'ADE_PORTAL_FLOW_MISMATCH',
       );
       await this.checkRequired(
         page,
@@ -250,6 +249,27 @@ export class AdeBrowserService implements OnApplicationShutdown {
         'Autorizzazione CIE non completata entro il tempo previsto.',
         'ADE_CIE_MFA_TIMEOUT',
         'AUTH_REQUIRED',
+        false,
+      );
+    }
+  }
+
+  private async clickButtonInsideList(
+    page: Page,
+    listText: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    try {
+      const list = page.getByRole('list').filter({ hasText: listText }).first();
+      await list.waitFor({ state: 'visible', timeout: timeoutMs });
+      const button = list.getByRole('button').first();
+      await button.waitFor({ state: 'visible', timeout: timeoutMs });
+      await button.click();
+    } catch {
+      throw new AdeAutomationError(
+        'Accesso al servizio Fatture e Corrispettivi non disponibile.',
+        'ADE_PORTAL_FLOW_MISMATCH',
+        'SELECTOR_MISMATCH',
         false,
       );
     }
