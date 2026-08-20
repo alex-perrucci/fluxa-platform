@@ -53,8 +53,9 @@ function safeUrl(raw: string): string {
   }
 }
 
-function formatEuroInput(cents: number): string {
-  return (cents / 100).toFixed(2);
+function formatEuroInput(cents: number, decimalSeparator: '.' | ',' = '.'): string {
+  const value = (cents / 100).toFixed(2);
+  return decimalSeparator === ',' ? value.replace('.', ',') : value;
 }
 
 function parseEuroInputToCents(value: string): number | null {
@@ -70,6 +71,15 @@ function containsEuroAmount(text: string, cents: number): boolean {
   const comma = fixed.replace('.', ',');
   const compact = text.replace(/\u00a0/g, ' ');
   return compact.includes(fixed) || compact.includes(comma);
+}
+
+function documentFlowError(message: string): AdeAutomationError {
+  return new AdeAutomationError(
+    message,
+    'ADE_DOCUMENT_FLOW_MISMATCH',
+    'SELECTOR_MISMATCH',
+    false,
+  );
 }
 
 @Injectable()
@@ -226,31 +236,70 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
 
     try {
       await quantity.waitFor({ state: 'visible', timeout: timeoutMs });
+      await quantity.click();
       await quantity.fill(String(item.quantity));
-      await description.fill(item.description);
-      await price.fill(formatEuroInput(item.grossUnitPriceCents));
-      await vat.selectOption(String(item.vatRate));
-
-      const quantityValue = Number(await quantity.inputValue());
-      const descriptionValue = (await description.inputValue()).trim();
-      const priceValue = parseEuroInputToCents(await price.inputValue());
-      const vatValue = await vat.inputValue();
-
-      if (
-        quantityValue !== item.quantity ||
-        descriptionValue !== item.description ||
-        priceValue !== item.grossUnitPriceCents ||
-        vatValue !== String(item.vatRate)
-      ) {
-        throw new Error('row verification mismatch');
+      if (Number(await quantity.inputValue()) !== item.quantity) {
+        throw documentFlowError(`Verifica quantità riga ${row} non riuscita.`);
       }
-    } catch {
-      throw new AdeAutomationError(
-        `Compilazione o verifica della riga ${row} non riuscita.`,
-        'ADE_DOCUMENT_FLOW_MISMATCH',
-        'SELECTOR_MISMATCH',
-        false,
-      );
+    } catch (error) {
+      if (error instanceof AdeAutomationError) throw error;
+      throw documentFlowError(`Campo quantità riga ${row} non compilabile.`);
+    }
+
+    try {
+      await description.waitFor({ state: 'visible', timeout: timeoutMs });
+      await description.click();
+      await description.fill(item.description);
+      if ((await description.inputValue()).trim() !== item.description) {
+        throw documentFlowError(`Verifica descrizione riga ${row} non riuscita.`);
+      }
+    } catch (error) {
+      if (error instanceof AdeAutomationError) throw error;
+      throw documentFlowError(`Campo descrizione riga ${row} non compilabile.`);
+    }
+
+    await this.fillMoneyField(
+      price,
+      item.grossUnitPriceCents,
+      timeoutMs,
+      `prezzo lordo riga ${row}`,
+    );
+
+    try {
+      await vat.waitFor({ state: 'visible', timeout: timeoutMs });
+      await vat.selectOption(String(item.vatRate));
+      if ((await vat.inputValue()) !== String(item.vatRate)) {
+        throw documentFlowError(`Verifica aliquota IVA riga ${row} non riuscita.`);
+      }
+    } catch (error) {
+      if (error instanceof AdeAutomationError) throw error;
+      throw documentFlowError(`Aliquota IVA riga ${row} non selezionabile.`);
+    }
+  }
+
+  private async fillMoneyField(
+    locator: Locator,
+    cents: number,
+    timeoutMs: number,
+    fieldName: string,
+  ): Promise<void> {
+    try {
+      await locator.waitFor({ state: 'visible', timeout: timeoutMs });
+      await locator.click();
+
+      // The AdE DCO UI is locale-sensitive. Prefer the Italian comma form,
+      // then retry with a dot if the page/input mask normalizes differently.
+      for (const separator of [',', '.'] as const) {
+        await locator.fill(formatEuroInput(cents, separator));
+        await locator.blur().catch(() => undefined);
+        const parsed = parseEuroInputToCents(await locator.inputValue());
+        if (parsed === cents) return;
+      }
+
+      throw documentFlowError(`Verifica ${fieldName} non riuscita.`);
+    } catch (error) {
+      if (error instanceof AdeAutomationError) throw error;
+      throw documentFlowError(`Campo ${fieldName} non compilabile.`);
     }
   }
 
@@ -269,34 +318,47 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
       })
       .first();
 
-    try {
-      await cash.waitFor({ state: 'visible', timeout: timeoutMs });
-      await electronic.waitFor({ state: 'visible', timeout: timeoutMs });
-
-      await cash.fill(
-        payment.cashCents > 0 ? formatEuroInput(payment.cashCents) : '',
+    if (payment.cashCents > 0) {
+      await this.fillMoneyField(
+        cash,
+        payment.cashCents,
+        timeoutMs,
+        'pagamento in contanti',
       );
-      await electronic.fill(
-        payment.electronicCents > 0
-          ? formatEuroInput(payment.electronicCents)
-          : '',
-      );
-
-      const cashValue = parseEuroInputToCents(await cash.inputValue());
-      const electronicValue = parseEuroInputToCents(await electronic.inputValue());
-      if (
-        cashValue !== payment.cashCents ||
-        electronicValue !== payment.electronicCents
-      ) {
-        throw new Error('payment verification mismatch');
+    } else {
+      try {
+        await cash.waitFor({ state: 'visible', timeout: timeoutMs });
+        await cash.fill('');
+      } catch {
+        throw documentFlowError('Campo pagamento in contanti non compilabile.');
       }
-    } catch {
-      throw new AdeAutomationError(
-        'Compilazione o verifica dei pagamenti non riuscita.',
-        'ADE_DOCUMENT_FLOW_MISMATCH',
-        'SELECTOR_MISMATCH',
-        false,
+    }
+
+    if (payment.electronicCents > 0) {
+      await this.fillMoneyField(
+        electronic,
+        payment.electronicCents,
+        timeoutMs,
+        'pagamento con strumenti elettronici',
       );
+    } else {
+      try {
+        await electronic.waitFor({ state: 'visible', timeout: timeoutMs });
+        await electronic.fill('');
+      } catch {
+        throw documentFlowError(
+          'Campo pagamento con strumenti elettronici non compilabile.',
+        );
+      }
+    }
+
+    const cashValue = parseEuroInputToCents(await cash.inputValue());
+    const electronicValue = parseEuroInputToCents(await electronic.inputValue());
+    if (
+      cashValue !== payment.cashCents ||
+      electronicValue !== payment.electronicCents
+    ) {
+      throw documentFlowError('Verifica dei pagamenti non riuscita.');
     }
   }
 
@@ -348,12 +410,7 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
       await target.waitFor({ state: 'visible', timeout: timeoutMs });
       await target.click();
     } catch {
-      throw new AdeAutomationError(
-        message,
-        'ADE_DOCUMENT_FLOW_MISMATCH',
-        'SELECTOR_MISMATCH',
-        false,
-      );
+      throw documentFlowError(message);
     }
   }
 
