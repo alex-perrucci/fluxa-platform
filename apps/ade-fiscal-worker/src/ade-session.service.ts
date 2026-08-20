@@ -1,4 +1,5 @@
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
 import { Injectable } from '@nestjs/common';
 import { AdeAutomationError } from './ade-automation-error';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
@@ -68,6 +69,38 @@ export class AdeSessionService {
         'La sessione Agenzia delle Entrate non è valida o leggibile.',
         'ADE_SESSION_INVALID',
         'AUTH_REQUIRED',
+        false,
+      );
+    }
+  }
+
+  storageStatePathForWrite(): string {
+    const path = this.config.read().storageStatePath;
+    if (!path) {
+      throw new AdeAutomationError(
+        'Percorso sessione Agenzia delle Entrate non configurato.',
+        'ADE_SESSION_PATH_REQUIRED',
+        'CONFIGURATION',
+        false,
+      );
+    }
+    const parent = dirname(path);
+    try {
+      if (!existsSync(parent) || !statSync(parent).isDirectory()) {
+        throw new Error('session directory missing');
+      }
+      if (existsSync(path)) {
+        const stat = lstatSync(path);
+        if (!stat.isFile() || stat.isSymbolicLink()) {
+          throw new Error('storage state target must be a regular file');
+        }
+      }
+      return path;
+    } catch {
+      throw new AdeAutomationError(
+        'Il percorso della sessione Agenzia delle Entrate non è scrivibile in sicurezza.',
+        'ADE_SESSION_PATH_INVALID',
+        'CONFIGURATION',
         false,
       );
     }
