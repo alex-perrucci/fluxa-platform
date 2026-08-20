@@ -7,7 +7,15 @@ import { StatusBadge } from '@/components/control-center/status-badge';
 export type FiscalProvider =
   | 'MOCK'
   | 'ACUBE_SMART_RECEIPTS'
-  | 'OPENAPI_SMART_RECEIPTS';
+  | 'OPENAPI_SMART_RECEIPTS'
+  | 'ADE_WEB';
+
+export const FISCAL_PROVIDERS: readonly FiscalProvider[] = [
+  'MOCK',
+  'ACUBE_SMART_RECEIPTS',
+  'OPENAPI_SMART_RECEIPTS',
+  'ADE_WEB',
+];
 
 export type FiscalEnvironment = 'SANDBOX' | 'PRODUCTION';
 
@@ -62,12 +70,14 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-function providerLabel(provider: FiscalProvider) {
+export function providerLabel(provider: FiscalProvider) {
   switch (provider) {
     case 'ACUBE_SMART_RECEIPTS':
       return 'A-Cube Smart Receipts';
     case 'OPENAPI_SMART_RECEIPTS':
       return 'OpenAPI Smart Receipts';
+    case 'ADE_WEB':
+      return 'Agenzia delle Entrate';
     default:
       return 'Mock (solo test)';
   }
@@ -207,13 +217,7 @@ export function FiscalProfileConsole({
                 disabled={!canManage || pending}
                 name="provider"
               >
-                {(
-                  [
-                    'MOCK',
-                    'ACUBE_SMART_RECEIPTS',
-                    'OPENAPI_SMART_RECEIPTS',
-                  ] as FiscalProvider[]
-                ).map((item) => (
+                {FISCAL_PROVIDERS.map((item) => (
                   <option key={item} value={item}>
                     {providerLabel(item)}
                   </option>
