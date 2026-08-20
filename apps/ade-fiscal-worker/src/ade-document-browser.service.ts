@@ -53,7 +53,10 @@ function safeUrl(raw: string): string {
   }
 }
 
-function formatEuroInput(cents: number, decimalSeparator: '.' | ',' = '.'): string {
+function formatEuroInput(
+  cents: number,
+  decimalSeparator: '.' | ',' = '.',
+): string {
   const value = (cents / 100).toFixed(2);
   return decimalSeparator === ',' ? value.replace('.', ',') : value;
 }
@@ -86,11 +89,15 @@ function documentFlowError(message: string): AdeAutomationError {
 export class AdeDocumentBrowserService implements OnApplicationShutdown {
   private browserPromise: Promise<Browser> | null = null;
 
-  async dryRun(input: AdeDocumentBrowserInput): Promise<AdeDocumentBrowserResult> {
+  async dryRun(
+    input: AdeDocumentBrowserInput,
+  ): Promise<AdeDocumentBrowserResult> {
     const browser = await this.browser();
     let context: BrowserContext;
     try {
-      context = await browser.newContext({ storageState: input.storageStatePath });
+      context = await browser.newContext({
+        storageState: input.storageStatePath,
+      });
     } catch {
       throw new AdeAutomationError(
         'Impossibile caricare la sessione browser Agenzia delle Entrate.',
@@ -113,13 +120,21 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
         'Documento Commerciale on line non disponibile.',
       );
       await this.clickRequired(
-        page.getByRole('link', { name: 'Genera il tuo documento', exact: false }),
+        page.getByRole('link', {
+          name: 'Genera il tuo documento',
+          exact: false,
+        }),
         input.timeoutMs,
         'Generazione documento commerciale non disponibile.',
       );
 
       for (let index = 0; index < input.items.length; index += 1) {
-        await this.fillItem(page, index + 1, input.items[index], input.timeoutMs);
+        await this.fillItem(
+          page,
+          index + 1,
+          input.items[index],
+          input.timeoutMs,
+        );
         await this.clickRequired(
           page.getByRole('button', { name: 'Aggiungi riga', exact: false }),
           input.timeoutMs,
@@ -142,11 +157,7 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
         input.timeoutMs,
       );
 
-      await this.advanceToConfirmation(
-        page,
-        input.payment,
-        input.timeoutMs,
-      );
+      await this.advanceToConfirmation(page, input.payment, input.timeoutMs);
 
       await this.clickRequired(
         page.getByRole('button', { name: 'Conferma', exact: true }),
@@ -248,7 +259,9 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
       await description.click();
       await description.fill(item.description);
       if ((await description.inputValue()).trim() !== item.description) {
-        throw documentFlowError(`Verifica descrizione riga ${row} non riuscita.`);
+        throw documentFlowError(
+          `Verifica descrizione riga ${row} non riuscita.`,
+        );
       }
     } catch (error) {
       if (error instanceof AdeAutomationError) throw error;
@@ -266,7 +279,9 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
       await vat.waitFor({ state: 'visible', timeout: timeoutMs });
       await vat.selectOption(String(item.vatRate));
       if ((await vat.inputValue()) !== String(item.vatRate)) {
-        throw documentFlowError(`Verifica aliquota IVA riga ${row} non riuscita.`);
+        throw documentFlowError(
+          `Verifica aliquota IVA riga ${row} non riuscita.`,
+        );
       }
     } catch (error) {
       if (error instanceof AdeAutomationError) throw error;
@@ -350,7 +365,9 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
     }
 
     const cashValue = parseEuroInputToCents(await cash.inputValue());
-    const electronicValue = parseEuroInputToCents(await electronic.inputValue());
+    const electronicValue = parseEuroInputToCents(
+      await electronic.inputValue(),
+    );
     if (
       cashValue !== payment.cashCents ||
       electronicValue !== payment.electronicCents
@@ -487,9 +504,16 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
     }
   }
 
-  private async goto(page: Page, url: string, timeoutMs: number): Promise<void> {
+  private async goto(
+    page: Page,
+    url: string,
+    timeoutMs: number,
+  ): Promise<void> {
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+      await page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: timeoutMs,
+      });
     } catch (error) {
       throw new AdeAutomationError(
         error instanceof Error ? error.message : 'Navigazione AdE fallita.',
@@ -502,15 +526,19 @@ export class AdeDocumentBrowserService implements OnApplicationShutdown {
 
   private async browser(): Promise<Browser> {
     if (!this.browserPromise) {
-      this.browserPromise = chromium.launch({ headless: true }).catch((error) => {
-        this.browserPromise = null;
-        throw new AdeAutomationError(
-          error instanceof Error ? error.message : 'Chromium non disponibile.',
-          'ADE_BROWSER_UNAVAILABLE',
-          'BROWSER',
-          true,
-        );
-      });
+      this.browserPromise = chromium
+        .launch({ headless: true })
+        .catch((error) => {
+          this.browserPromise = null;
+          throw new AdeAutomationError(
+            error instanceof Error
+              ? error.message
+              : 'Chromium non disponibile.',
+            'ADE_BROWSER_UNAVAILABLE',
+            'BROWSER',
+            true,
+          );
+        });
     }
 
     const browser = await this.browserPromise;
