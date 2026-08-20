@@ -67,9 +67,9 @@ export class AdeAuthService {
     try {
       const config = this.config.read();
       const authUrl = this.config.validatedAuthEntryUrl();
-      if (!authUrl) {
+      if (!authUrl || !config.incaricanteCf) {
         throw new AdeAutomationError(
-          'URL di autenticazione AdE non configurato o non valido.',
+          'Configurazione autenticazione AdE incompleta o non valida.',
           'ADE_CONFIGURATION_INVALID',
           'CONFIGURATION',
           false,
@@ -84,6 +84,7 @@ export class AdeAuthService {
         authEntryUrl: authUrl.toString(),
         username: credentials.username,
         password: credentials.password,
+        incaricanteCf: config.incaricanteCf,
         profile,
         storageStatePath,
         navigationTimeoutMs: config.navigationTimeoutMs,
