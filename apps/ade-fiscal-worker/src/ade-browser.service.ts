@@ -1,7 +1,11 @@
 import { existsSync } from 'node:fs';
 import { Injectable, OnApplicationShutdown } from '@nestjs/common';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
-import { AdeAutomationError } from './ade-automation-error';
+import {
+  AdeAutomationError,
+  type AdeAutomationErrorCategory,
+  type AdeAutomationErrorCode,
+} from './ade-automation-error';
 import type { AdeAuthProfile } from './ade-auth-profile.service';
 import type { AdeSelectorProfile } from './ade-selector-profile.service';
 
@@ -188,7 +192,13 @@ export class AdeBrowserService implements OnApplicationShutdown {
     let postMfaClicked = false;
 
     while (Date.now() < deadline) {
-      if (await page.locator(profile.authenticatedMarker).first().isVisible().catch(() => false)) {
+      if (
+        await page
+          .locator(profile.authenticatedMarker)
+          .first()
+          .isVisible()
+          .catch(() => false)
+      ) {
         return;
       }
       if (profile.postMfaContinueSelector && !postMfaClicked) {
@@ -226,7 +236,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     page: Page,
     selector: string,
     timeoutMs: number,
-    code: string,
+    code: AdeAutomationErrorCode,
   ): Promise<void> {
     try {
       const locator = page.locator(selector).first();
@@ -247,7 +257,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
     selector: string,
     value: string,
     timeoutMs: number,
-    code: string,
+    code: AdeAutomationErrorCode,
   ): Promise<void> {
     try {
       const locator = page.locator(selector).first();
@@ -267,12 +277,15 @@ export class AdeBrowserService implements OnApplicationShutdown {
     page: Page,
     selector: string,
     timeoutMs: number,
-    code: string,
-    category: 'AUTH_REQUIRED' | 'SELECTOR_MISMATCH',
+    code: AdeAutomationErrorCode,
+    category: AdeAutomationErrorCategory,
     retrySafe: boolean,
   ): Promise<void> {
     try {
-      await page.locator(selector).first().waitFor({ state: 'visible', timeout: timeoutMs });
+      await page
+        .locator(selector)
+        .first()
+        .waitFor({ state: 'visible', timeout: timeoutMs });
     } catch {
       throw new AdeAutomationError(
         'Marker atteso nel flusso CIE non trovato.',
@@ -290,7 +303,9 @@ export class AdeBrowserService implements OnApplicationShutdown {
         .catch((error) => {
           this.browserPromise = null;
           throw new AdeAutomationError(
-            error instanceof Error ? error.message : 'Chromium non disponibile.',
+            error instanceof Error
+              ? error.message
+              : 'Chromium non disponibile.',
             'ADE_BROWSER_UNAVAILABLE',
             'BROWSER',
             true,
