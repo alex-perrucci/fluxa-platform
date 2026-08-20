@@ -9,6 +9,7 @@ import {
 import { AdeAutomationError } from './ade-automation-error';
 import { AdeDocumentDryRunService } from './ade-document-dry-run.service';
 import { AdeInternalAuthGuard } from './ade-internal-auth.guard';
+import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 
 function statusFor(error: AdeAutomationError): HttpStatus {
   switch (error.code) {
@@ -63,25 +64,54 @@ function publicMessage(error: AdeAutomationError): string {
 @Controller('internal/document')
 @UseGuards(AdeInternalAuthGuard)
 export class AdeDocumentDryRunController {
-  constructor(private readonly dryRun: AdeDocumentDryRunService) {}
+  constructor(
+    private readonly dryRun: AdeDocumentDryRunService,
+    private readonly config: AdeRuntimeConfigService,
+  ) {}
 
   @Post('dry-run')
   async run(@Body() body: unknown) {
     try {
       return await this.dryRun.run(body);
     } catch (error) {
-      if (!(error instanceof AdeAutomationError)) throw error;
-      throw new HttpException(
-        {
-          code: error.code,
-          category: error.category,
-          message: publicMessage(error),
-          retrySafe: error.retrySafe,
-          submitAttempted: false,
-          canSubmit: false,
-        },
-        statusFor(error),
-      );
+      this.rethrow(error);
     }
+  }
+
+  @Post('submit-preflight')
+  async submitPreflight(@Body() body: unknown) {
+    try {
+      const result = await this.dryRun.run(body);
+      return {
+        status: 'SUBMIT_PREFLIGHT_READY' as const,
+        submitEnabled: this.config.read().submitEnabled,
+        finalUrl: result.finalUrl,
+        confirmationBoundarySeen: result.confirmationBoundarySeen,
+        cancelledAtBoundary: result.cancelledAtBoundary,
+        itemCount: result.itemCount,
+        grossTotalCents: result.grossTotalCents,
+        paymentTotalCents: result.paymentTotalCents,
+        readyForSubmit: true as const,
+        submitAttempted: false as const,
+        canSubmit: false as const,
+      };
+    } catch (error) {
+      this.rethrow(error);
+    }
+  }
+
+  private rethrow(error: unknown): never {
+    if (!(error instanceof AdeAutomationError)) throw error;
+    throw new HttpException(
+      {
+        code: error.code,
+        category: error.category,
+        message: publicMessage(error),
+        retrySafe: error.retrySafe,
+        submitAttempted: false,
+        canSubmit: false,
+      },
+      statusFor(error),
+    );
   }
 }
