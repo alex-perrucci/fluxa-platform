@@ -22,7 +22,7 @@ jobs:
           flutter-version: 3.32.5
           channel: stable
           cache: true
-      - name: Apply small patch to original advanced screen
+      - name: Apply focused advanced-mode patch
         shell: python
         run: |
           from pathlib import Path
@@ -39,17 +39,110 @@ jobs:
               raise SystemExit('import anchor not found')
           text = text.replace(old, new, 1)
 
-          old = "              _AgentCard(controller: controller),\n              const SizedBox(height: 12),\n              SizedBox(height: mobilePaneHeight, child: selectedPane),"
-          new = "              _AgentCard(controller: controller),\n              const SizedBox(height: 12),\n              PaymentReceiptRoutingCard(\n                locationId: location.id,\n                locationName: location.name,\n                printers: controller.printers,\n                canManage: canManageJobs,\n              ),\n              const SizedBox(height: 12),\n              SizedBox(height: mobilePaneHeight, child: selectedPane),"
+          old = """    return PrintingView(
+      controller: controller,
+      location: location,
+      canManageJobs: _isManagerRole(session.role),
+    );"""
+          new = """    final canManageJobs = _isManagerRole(session.role);
+    return PrintingView(
+      controller: controller,
+      location: location,
+      canManageJobs: canManageJobs,
+      onConfigureReceipts: () => showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Ricevute automatiche'),
+          content: SizedBox(
+            width: 620,
+            child: PaymentReceiptRoutingCard(
+              locationId: location.id,
+              locationName: location.name,
+              printers: controller.printers,
+              canManage: canManageJobs,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Chiudi'),
+            ),
+          ],
+        ),
+      ),
+    );"""
           if old not in text:
-              raise SystemExit('mobile anchor not found')
+              raise SystemExit('PrintingScreen anchor not found')
           text = text.replace(old, new, 1)
 
-          old = "              _AgentCard(controller: controller),\n              const SizedBox(height: 12),\n              Expanded("
-          new = "              _AgentCard(controller: controller),\n              const SizedBox(height: 12),\n              PaymentReceiptRoutingCard(\n                locationId: location.id,\n                locationName: location.name,\n                printers: controller.printers,\n                canManage: canManageJobs,\n              ),\n              const SizedBox(height: 12),\n              Expanded("
+          old = """  const PrintingView({
+    required this.controller,
+    required this.location,
+    required this.canManageJobs,
+    super.key,
+  });
+
+  final PrintingController controller;
+  final OperationalLocation location;
+  final bool canManageJobs;"""
+          new = """  const PrintingView({
+    required this.controller,
+    required this.location,
+    required this.canManageJobs,
+    this.onConfigureReceipts,
+    super.key,
+  });
+
+  final PrintingController controller;
+  final OperationalLocation location;
+  final bool canManageJobs;
+  final VoidCallback? onConfigureReceipts;"""
           if old not in text:
-              raise SystemExit('desktop anchor not found')
+              raise SystemExit('PrintingView constructor anchor not found')
           text = text.replace(old, new, 1)
+
+          old = "_Header(controller: controller, location: location)"
+          new = "_Header(\n                controller: controller,\n                location: location,\n                onConfigureReceipts: onConfigureReceipts,\n              )"
+          if text.count(old) != 2:
+              raise SystemExit(f'expected 2 header calls, got {text.count(old)}')
+          text = text.replace(old, new)
+
+          old = """class _Header extends StatelessWidget {
+  const _Header({required this.controller, required this.location});
+
+  final PrintingController controller;
+  final OperationalLocation location;"""
+          new = """class _Header extends StatelessWidget {
+  const _Header({
+    required this.controller,
+    required this.location,
+    this.onConfigureReceipts,
+  });
+
+  final PrintingController controller;
+  final OperationalLocation location;
+  final VoidCallback? onConfigureReceipts;"""
+          if old not in text:
+              raise SystemExit('header class anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = """      IconButton.filledTonal(
+        key: const Key('printing-refresh-button'),"""
+          new = """      if (onConfigureReceipts != null) ...[
+        FilledButton.tonalIcon(
+          key: const Key('printing-receipt-routing-button'),
+          onPressed: onConfigureReceipts,
+          icon: const Icon(Icons.receipt_long_outlined),
+          label: const Text('Ricevute'),
+        ),
+        const SizedBox(width: 8),
+      ],
+      IconButton.filledTonal(
+        key: const Key('printing-refresh-button'),"""
+          if old not in text:
+              raise SystemExit('header action anchor not found')
+          text = text.replace(old, new, 1)
+
           target.write_text(text, encoding='utf-8')
           source.unlink()
       - name: Format, analyze and test POS printing
