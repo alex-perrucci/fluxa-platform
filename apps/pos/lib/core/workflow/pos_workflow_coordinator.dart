@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../features/fiscal/data/fiscal_api.dart';
 import '../../features/fiscal/domain/fiscal_models.dart';
+import '../../features/fiscal/domain/fiscal_runtime.dart';
 import '../../features/fiscal/platform/fiscal_receipt_pdf_handler.dart';
 import '../../features/fiscal/presentation/fiscal_controller.dart';
 import '../../features/hospitality/presentation/table_controller.dart';
@@ -291,16 +292,43 @@ class PosWorkflowCoordinator extends ChangeNotifier {
       await _fiscal.bindLocation(locationId);
     }
 
-    final profile = _fiscal.profile;
-    if (profile == null || !profile.enabled) {
+    final runtime = _fiscal.runtime;
+    if (runtime == null ||
+        runtime.status == FiscalRuntimeStatus.verificationError) {
+      _setAttention(
+        'Vendita pagata. Impossibile verificare lo stato fiscale: controlla la connessione o riprova da Fiscale.',
+      );
+      return null;
+    }
+    if (runtime.status == FiscalRuntimeStatus.notConfigured) {
       _setAttention(
         'Vendita pagata. La fiscalizzazione non è configurata per questa sede.',
       );
       return null;
     }
+    if (runtime.status == FiscalRuntimeStatus.disabled) {
+      _setAttention(
+        'Vendita pagata. La fiscalizzazione è disabilitata per questa sede.',
+      );
+      return null;
+    }
+    if (runtime.status == FiscalRuntimeStatus.authRequired) {
+      _setAttention(
+        'Vendita pagata. È necessario ripristinare l’accesso fiscale prima dell’emissione.',
+      );
+      return null;
+    }
+    if (!runtime.isOperationallyConfigured) {
+      _setAttention(
+        'Vendita pagata. La configurazione fiscale della sede richiede verifica.',
+      );
+      return null;
+    }
 
     var document = _fiscal.documentForOrder(orderId);
-    if (document == null && !profile.autoIssueOnPaid && !allowManualIssue) {
+    if (document == null &&
+        !runtime.autoIssueOnPaid &&
+        !allowManualIssue) {
       _setAttention(
         'Vendita pagata. L’emissione automatica dello scontrino è disattivata per questa sede.',
       );
