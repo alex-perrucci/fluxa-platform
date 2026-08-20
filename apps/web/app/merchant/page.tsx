@@ -14,6 +14,15 @@ import { requireMerchantSession } from '@/lib/auth/session';
 import type { LocationSummary } from '@/lib/control-center/types';
 import type { MerchantDashboardOverview } from '@/lib/control-center/merchant-dashboard-types';
 
+type HealthStatus = 'OK' | 'DEGRADED' | 'DOWN' | 'NOT_CONFIGURED' | 'UNKNOWN';
+type MerchantHealth = {
+  overallStatus: HealthStatus;
+  printers: { status: HealthStatus; items: Array<{ name: string; status: HealthStatus }> };
+  fiscal: { status: HealthStatus };
+  paymentTerminal: { status: HealthStatus };
+  suggestions: string[];
+};
+
 function euro(cents: string | number) {
   return new Intl.NumberFormat('it-IT', {
     style: 'currency',
@@ -28,6 +37,41 @@ function date(value: string) {
   }).format(new Date(value));
 }
 
+function healthCopy(health: MerchantHealth | null, aggregate: boolean) {
+  if (aggregate) {
+    return {
+      title: 'Seleziona una sede',
+      description: 'Per verificare stampanti e fiscalizzazione scegli una sede dal selettore.',
+      attention: false,
+    };
+  }
+  if (!health) {
+    return {
+      title: 'Stato non disponibile',
+      description: 'Le vendite sono accessibili, ma non siamo riusciti a verificare i servizi del locale.',
+      attention: true,
+    };
+  }
+  if (health.overallStatus === 'OK') {
+    return {
+      title: 'Tutto operativo',
+      description: 'POS, servizi e configurazioni principali non richiedono attenzione.',
+      attention: false,
+    };
+  }
+  const printerIssue = health.printers.status === 'DOWN' || health.printers.status === 'DEGRADED';
+  const fiscalIssue = health.fiscal.status === 'DOWN' || health.fiscal.status === 'DEGRADED' || health.fiscal.status === 'NOT_CONFIGURED';
+  return {
+    title: 'Serve attenzione',
+    description: printerIssue
+      ? 'Una stampante o il servizio di stampa richiede verifica.'
+      : fiscalIssue
+        ? 'La fiscalizzazione richiede verifica o assistenza.'
+        : health.suggestions[0] ?? 'Uno dei servizi del locale richiede verifica.',
+    attention: true,
+  };
+}
+
 export default async function MerchantDashboardPage({
   searchParams,
 }: {
@@ -39,28 +83,36 @@ export default async function MerchantDashboardPage({
   const cookieName = `fluxa-dashboard-location-${organizationId}`;
   const cookieStore = await cookies();
   const savedSelection = cookieStore.get(cookieName)?.value;
-  const locations =
-    await authenticatedFluxaFetch<LocationSummary[]>('/locations');
+  const locations = await authenticatedFluxaFetch<LocationSummary[]>('/locations');
   const accessibleIds = new Set(locations.map((location) => location.id));
 
-  const requestedSelection = params.locationId ?? savedSelection ?? 'all';
-  const selected = accessibleIds.has(requestedSelection)
-    ? requestedSelection
-    : 'all';
-  const overviewPath =
-    selected === 'all'
-      ? '/control-center/merchant-overview'
-      : `/control-center/merchant-overview?locationId=${selected}`;
-  const overview =
-    await authenticatedFluxaFetch<MerchantDashboardOverview>(overviewPath);
+  const fallbackSelection = locations.length === 1 ? locations[0].id : 'all';
+  const requestedSelection = params.locationId ?? savedSelection ?? fallbackSelection;
+  const selected = accessibleIds.has(requestedSelection) ? requestedSelection : 'all';
+  const overviewPath = selected === 'all'
+    ? '/control-center/merchant-overview'
+    : `/control-center/merchant-overview?locationId=${selected}`;
+  const overview = await authenticatedFluxaFetch<MerchantDashboardOverview>(overviewPath);
   const aggregate = overview.scope.kind === 'ALL';
+
+  let health: MerchantHealth | null = null;
+  if (!aggregate) {
+    try {
+      health = await authenticatedFluxaFetch<MerchantHealth>(
+        `/control-center/merchant/health?locationId=${encodeURIComponent(selected)}`,
+      );
+    } catch {
+      health = null;
+    }
+  }
+  const readiness = healthCopy(health, aggregate);
 
   if (overview.scope.locations.length === 0) {
     return (
       <div className="glass-panel">
         <EmptyState
-          description="Assegna almeno una sede attiva al tuo account per aprire il Control Center."
-          title="Nessuna sede operativa"
+          description="Assegna almeno una sede attiva al tuo account per iniziare a configurare e vendere."
+          title="Non hai ancora una sede operativa"
         />
       </div>
     );
@@ -70,17 +122,9 @@ export default async function MerchantDashboardPage({
     <>
       <section className="glass-panel panel-padding dashboard-scope-panel">
         <div>
-          <span className="eyebrow">Perimetro operativo</span>
-          <h2>
-            {aggregate
-              ? 'Tutte le sedi accessibili'
-              : overview.scope.location?.name}
-          </h2>
-          <p>
-            {aggregate
-              ? 'Metriche aggregate esclusivamente sulle sedi assegnate al tuo account.'
-              : `${overview.scope.location?.city} · ${overview.scope.location?.timezone}`}
-          </p>
+          <span className="eyebrow">Home</span>
+          <h2>{aggregate ? 'La tua attività' : overview.scope.location?.name}</h2>
+          <p>{aggregate ? 'Panoramica delle sedi che puoi gestire.' : `${overview.scope.location?.city} · ${overview.scope.location?.timezone}`}</p>
         </div>
         <DashboardLocationSelector
           cookieName={cookieName}
@@ -89,151 +133,116 @@ export default async function MerchantDashboardPage({
         />
       </section>
 
+      <section className={`glass-panel panel-padding mt-5 ${readiness.attention ? 'border-amber-200' : 'border-emerald-200'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <span className="eyebrow">Posso lavorare?</span>
+            <h2 className="mt-1 text-2xl font-semibold">{readiness.title}</h2>
+            <p className="muted mt-1">{readiness.description}</p>
+          </div>
+          {!aggregate ? (
+            <Link className="button-secondary" href="/merchant/health">
+              {readiness.attention ? 'Come risolvere' : 'Controlla stato'}
+            </Link>
+          ) : null}
+        </div>
+      </section>
+
       <div className="metrics-grid">
-        <MetricCard
-          accent="blue"
-          hint={`${overview.metrics.upcomingEvents} in programma`}
-          icon="calendar"
-          label="Eventi"
-          value={overview.metrics.events}
-        />
-        <MetricCard
-          accent="violet"
-          hint={`${overview.metrics.publishedEvents} pubblicati`}
-          icon="ticket"
-          label="Prenotazioni"
-          value={overview.metrics.reservations}
-        />
-        <MetricCard
-          accent="cyan"
-          hint="Confermati e serviti"
-          icon="users"
-          label="Ospiti"
-          value={overview.metrics.confirmedGuests}
-        />
-        <MetricCard
-          accent={overview.metrics.refundPending > 0 ? 'rose' : 'blue'}
-          hint={`${overview.metrics.refundPending} rimborsi da gestire`}
-          icon="money"
-          label="Depositi prenotazioni"
-          value={euro(overview.metrics.bookingDepositsCents)}
-        />
-        <MetricCard
-          accent="blue"
-          hint="Ordini POS pagati"
-          icon="money"
-          label="Vendite POS"
-          value={overview.metrics.posOrders}
-        />
         <MetricCard
           accent="cyan"
           hint="Pagamenti POS acquisiti"
           icon="money"
-          label="Incasso POS"
+          label="Vendite"
           value={euro(overview.metrics.posSalesCents)}
+        />
+        <MetricCard
+          accent="blue"
+          hint="Ordini POS pagati"
+          icon="ticket"
+          label="Ordini"
+          value={overview.metrics.posOrders}
+        />
+        <MetricCard
+          accent="violet"
+          hint={`${overview.metrics.confirmedGuests} ospiti confermati`}
+          icon="users"
+          label="Prenotazioni"
+          value={overview.metrics.reservations}
+        />
+        <MetricCard
+          accent={readiness.attention ? 'rose' : 'blue'}
+          hint={readiness.attention ? 'Apri lo stato del sistema' : 'Nessun intervento richiesto'}
+          icon="activity"
+          label="Problemi"
+          value={readiness.attention ? 1 : 0}
         />
       </div>
 
       <div className="dashboard-grid">
         <section className="glass-panel panel-padding">
-          <SectionHeading
-            action={
-              <Link className="button-secondary" href="/merchant/events">
-                Tutti gli eventi
-              </Link>
-            }
-            eyebrow="Live portfolio"
-            title="Eventi recenti"
-          />
-
-          {overview.recentEvents.length ? (
-            <div className="data-list">
-              {overview.recentEvents.map((event) => (
-                <Link
-                  className="data-row"
-                  href={`/merchant/events/${event.id}`}
-                  key={event.id}
-                >
-                  <div className="event-title-cell">
-                    <div className="event-thumb">
-                      {event.coverImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img alt="" src={event.coverImageUrl} />
-                      ) : null}
-                    </div>
-                    <div>
-                      <strong>{event.title}</strong>
-                      <small>
-                        {aggregate ? `${event.locationName} · ` : ''}
-                        {date(event.startsAt)}
-                      </small>
-                    </div>
-                  </div>
-                  <div>
-                    <span>{event.capacity} posti</span>
-                    <small>{euro(event.bookingAmountCents)}</small>
-                  </div>
-                  <StatusBadge status={event.status} />
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              action={
-                <Link className="button-primary" href="/merchant/events/new">
-                  Crea il primo evento
-                </Link>
-              }
-              description="Configura tavoli, regole e deposito in un unico flusso."
-              title="Il calendario è ancora vuoto"
-            />
-          )}
+          <SectionHeading eyebrow="Azioni rapide" title="Cosa vuoi fare?" />
+          <div className="quick-action-grid">
+            <Link className="quick-action" href="/merchant/catalog">
+              <div><Icon name="plus" /></div>
+              <div><strong>Nuovo prodotto</strong><span>Aggiungi qualcosa al menu</span></div>
+            </Link>
+            <Link className="quick-action" href="/merchant/floor-plan">
+              <div><Icon name="location" /></div>
+              <div><strong>Nuovo tavolo</strong><span>Gestisci sale e tavoli</span></div>
+            </Link>
+            <Link className="quick-action" href="/merchant/sales">
+              <div><Icon name="money" /></div>
+              <div><strong>Apri vendite</strong><span>Ordini e incassi POS</span></div>
+            </Link>
+            <Link className="quick-action" href="/merchant/catalog">
+              <div><Icon name="dashboard" /></div>
+              <div><strong>Gestisci menu</strong><span>Prezzi e disponibilità</span></div>
+            </Link>
+          </div>
         </section>
 
         <aside className="glass-panel panel-padding">
-          <SectionHeading eyebrow="Next move" title="Azioni rapide" />
-          <div className="quick-action-grid">
-            <Link className="quick-action" href="/merchant/events/new">
-              <div>
-                <Icon name="plus" />
-              </div>
-              <div>
-                <strong>Nuovo evento</strong>
-                <span>Apri l’Event Studio</span>
-              </div>
-            </Link>
-            <Link className="quick-action" href="/merchant/reservations">
-              <div>
-                <Icon name="ticket" />
-              </div>
-              <div>
-                <strong>Prenotazioni</strong>
-                <span>Clienti, tavoli e stati</span>
-              </div>
-            </Link>
-          </div>
-
-          <SectionHeading eyebrow="Latest" title="Ultime prenotazioni" />
-          <div className="data-list">
-            {overview.recentReservations.slice(0, 5).map((reservation) => (
-              <div className="data-row" key={reservation.id}>
-                <div>
-                  <strong>{reservation.customerName}</strong>
-                  <small>
-                    {aggregate ? `${reservation.locationName} · ` : ''}
-                    {reservation.eventTitle}
-                  </small>
+          <SectionHeading
+            action={<Link className="button-secondary" href="/merchant/reservations">Vedi tutte</Link>}
+            eyebrow="Oggi e prossimi servizi"
+            title="Prenotazioni recenti"
+          />
+          {overview.recentReservations.length ? (
+            <div className="data-list">
+              {overview.recentReservations.slice(0, 5).map((reservation) => (
+                <div className="data-row" key={reservation.id}>
+                  <div>
+                    <strong>{reservation.customerName}</strong>
+                    <small>{aggregate ? `${reservation.locationName} · ` : ''}{reservation.eventTitle}</small>
+                  </div>
+                  <div><span>{reservation.partySize} persone</span><small>{reservation.tableName ?? 'Tavolo da assegnare'}</small></div>
+                  <StatusBadge status={reservation.status} />
                 </div>
-                <div>
-                  <span>{reservation.partySize} persone</span>
-                  <small>{reservation.tableName ?? 'Auto-assign'}</small>
-                </div>
-                <StatusBadge status={reservation.status} />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : <p className="muted">Nessuna prenotazione recente.</p>}
         </aside>
       </div>
+
+      {overview.recentEvents.length ? (
+        <section className="glass-panel panel-padding mt-5">
+          <SectionHeading
+            action={<Link className="button-secondary" href="/merchant/events">Tutti gli eventi</Link>}
+            eyebrow="Secondario"
+            title="Eventi recenti"
+          />
+          <div className="data-list">
+            {overview.recentEvents.slice(0, 4).map((event) => (
+              <Link className="data-row" href={`/merchant/events/${event.id}`} key={event.id}>
+                <div><strong>{event.title}</strong><small>{aggregate ? `${event.locationName} · ` : ''}{date(event.startsAt)}</small></div>
+                <div><span>{event.capacity} posti</span><small>{euro(event.bookingAmountCents)}</small></div>
+                <StatusBadge status={event.status} />
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </>
   );
 }
