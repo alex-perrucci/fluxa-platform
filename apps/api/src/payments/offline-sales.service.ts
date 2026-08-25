@@ -124,7 +124,9 @@ export class OfflineSalesService {
     return this.withTransaction(async (client) => {
       await client.query(
         'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-        [`offline-sale:${access.organizationId}:${auth.deviceId}:${dto.saleId}`],
+        [
+          `offline-sale:${access.organizationId}:${auth.deviceId}:${dto.saleId}`,
+        ],
       );
 
       const duplicate = await client.query<ReplayRow>(
@@ -204,10 +206,16 @@ export class OfflineSalesService {
               updated_at = NOW()
             RETURNING last_value AS "lastValue"
           `,
-          [randomUUID(), access.organizationId, access.locationId, businessDate],
+          [
+            randomUUID(),
+            access.organizationId,
+            access.locationId,
+            businessDate,
+          ],
         );
         const lastValue = sequence.rows[0]?.lastValue;
-        if (!lastValue) throw new Error('Unable to allocate offline order sequence.');
+        if (!lastValue)
+          throw new Error('Unable to allocate offline order sequence.');
 
         orderId = randomUUID();
         orderNumber = formatOrderNumber(businessDate, lastValue);
@@ -311,7 +319,13 @@ export class OfflineSalesService {
 
       const vatGroups = new Map<
         string,
-        { rate: number; nature: string | null; gross: number; net: number; tax: number }
+        {
+          rate: number;
+          nature: string | null;
+          gross: number;
+          net: number;
+          tax: number;
+        }
       >();
       for (const line of lines) {
         const nature = line.input.vatNatureCodeSnapshot ?? null;
@@ -417,17 +431,29 @@ export class OfflineSalesService {
           changeCents,
         ],
       );
-      await this.paymentEvent(client, access.organizationId, paymentId, 'CREATED', {
-        method: 'CASH',
-        provider: 'CASH',
-        amountCents: totals.gross,
-        source: 'OFFLINE_REPLAY',
-      });
-      await this.paymentEvent(client, access.organizationId, paymentId, 'CAPTURED', {
-        amountCents: totals.gross,
-        changeCents,
-        source: 'OFFLINE_REPLAY',
-      });
+      await this.paymentEvent(
+        client,
+        access.organizationId,
+        paymentId,
+        'CREATED',
+        {
+          method: 'CASH',
+          provider: 'CASH',
+          amountCents: totals.gross,
+          source: 'OFFLINE_REPLAY',
+        },
+      );
+      await this.paymentEvent(
+        client,
+        access.organizationId,
+        paymentId,
+        'CAPTURED',
+        {
+          amountCents: totals.gross,
+          changeCents,
+          source: 'OFFLINE_REPLAY',
+        },
+      );
 
       await client.query(
         `UPDATE orders SET status='PAID', version=3, updated_at=NOW() WHERE id=$1`,
@@ -614,7 +640,8 @@ export class OfflineSalesService {
     existing: ExistingOrderRow,
     dto: ReplayOfflineSaleDto,
   ): void {
-    const sameNote = (existing.customerNote ?? null) === (dto.customerNote ?? null);
+    const sameNote =
+      (existing.customerNote ?? null) === (dto.customerNote ?? null);
     if (
       existing.locationId !== dto.locationId ||
       existing.serviceMode !== dto.serviceMode ||

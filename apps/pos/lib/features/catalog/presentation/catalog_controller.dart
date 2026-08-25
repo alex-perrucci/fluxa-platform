@@ -8,10 +8,8 @@ import '../domain/catalog_models.dart';
 enum CatalogLoadStatus { idle, loading, ready, failure }
 
 class CatalogController extends ChangeNotifier {
-  CatalogController(
-    this._gateway, {
-    CatalogSnapshotCache? cache,
-  }) : _cache = cache;
+  CatalogController(this._gateway, {CatalogSnapshotCache? cache})
+    : _cache = cache;
 
   final CatalogGateway _gateway;
   final CatalogSnapshotCache? _cache;

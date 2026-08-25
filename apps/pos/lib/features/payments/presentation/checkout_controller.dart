@@ -18,10 +18,8 @@ enum CardPaymentFlowOutcome {
 }
 
 class CheckoutController extends ChangeNotifier {
-  CheckoutController(
-    this._gateway, {
-    TerminalBridgeGateway? terminalBridge,
-  }) : _terminalBridge = terminalBridge;
+  CheckoutController(this._gateway, {TerminalBridgeGateway? terminalBridge})
+    : _terminalBridge = terminalBridge;
 
   final PaymentsGateway _gateway;
   final TerminalBridgeGateway? _terminalBridge;
@@ -295,9 +293,8 @@ class CheckoutController extends ChangeNotifier {
     }
 
     final bridge = _terminalBridge;
-    final bridgeReady = bridge != null &&
-        bridge.isEnabled &&
-        await bridge.preflight();
+    final bridgeReady =
+        bridge != null && bridge.isEnabled && await bridge.preflight();
 
     if (!bridgeReady) {
       final created = await addTerminalPayment(
@@ -339,7 +336,9 @@ class CheckoutController extends ChangeNotifier {
   ) async {
     if (payment.status != PaymentStatus.pending ||
         payment.provider != PaymentProvider.externalTerminal) {
-      _setFailure('Il pagamento selezionato non è da verificare sul terminale.');
+      _setFailure(
+        'Il pagamento selezionato non è da verificare sul terminale.',
+      );
       return CardPaymentFlowOutcome.failed;
     }
     final bridge = _terminalBridge;
@@ -379,7 +378,8 @@ class CheckoutController extends ChangeNotifier {
         final failed = await failPayment(
           payment: payment,
           failureCode: 'TERMINAL_DECLINED',
-          failureMessage: result.message ?? 'Pagamento rifiutato dal terminale.',
+          failureMessage:
+              result.message ?? 'Pagamento rifiutato dal terminale.',
           providerEventId: result.providerEventId,
         );
         return failed

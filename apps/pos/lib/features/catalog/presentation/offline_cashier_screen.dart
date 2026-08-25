@@ -167,7 +167,9 @@ class _OfflineCashierScreenState extends ConsumerState<OfflineCashierScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Totale: ${formatCatalogMoney(result.totalCents, currency)}'),
-            Text('Ricevuto: ${formatCatalogMoney(result.tenderedCents, currency)}'),
+            Text(
+              'Ricevuto: ${formatCatalogMoney(result.tenderedCents, currency)}',
+            ),
             Text(
               'Resto: ${formatCatalogMoney(result.changeCents, currency)}',
               style: Theme.of(context).textTheme.titleMedium,
@@ -219,7 +221,9 @@ class _OfflineBanner extends StatelessWidget {
                   'MODALITÀ OFFLINE',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
-                Text('Catalogo locale attivo · vendite consentite solo in contanti'),
+                Text(
+                  'Catalogo locale attivo · vendite consentite solo in contanti',
+                ),
               ],
             ),
           ),
@@ -262,7 +266,9 @@ class _OfflineCatalogPane extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Cassa', style: Theme.of(context).textTheme.headlineMedium),
-        const Text('Tocca un prodotto: il carrello viene salvato sul dispositivo.'),
+        const Text(
+          'Tocca un prodotto: il carrello viene salvato sul dispositivo.',
+        ),
         const SizedBox(height: 10),
         TextField(
           key: const Key('offline-cashier-search'),
@@ -506,7 +512,8 @@ class _OfflineCartPane extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Tooltip(
-              message: 'La carta richiede un esito verificabile dal terminale online.',
+              message:
+                  'La carta richiede un esito verificabile dal terminale online.',
               child: SizedBox(
                 height: 48,
                 child: OutlinedButton.icon(
@@ -562,10 +569,7 @@ class _OfflineCartLine extends StatelessWidget {
           ),
           SizedBox(
             width: 38,
-            child: Text(
-              '${line.quantityAmount}',
-              textAlign: TextAlign.center,
-            ),
+            child: Text('${line.quantityAmount}', textAlign: TextAlign.center),
           ),
           IconButton.filledTonal(
             tooltip: 'Uno in più',
@@ -586,7 +590,10 @@ class _OfflineCartLine extends StatelessWidget {
 }
 
 class _ProductSelection {
-  const _ProductSelection({required this.variant, required this.quantityAmount});
+  const _ProductSelection({
+    required this.variant,
+    required this.quantityAmount,
+  });
 
   final CatalogVariant? variant;
   final int quantityAmount;
@@ -667,7 +674,9 @@ Future<_ProductSelection?> _showProductOptions(
               ),
               if (selectedPrice == null) ...[
                 const SizedBox(height: 8),
-                const Text('Questa selezione non ha un prezzo offline disponibile.'),
+                const Text(
+                  'Questa selezione non ha un prezzo offline disponibile.',
+                ),
               ],
             ],
           ),
@@ -717,8 +726,7 @@ Future<int?> _showCashDialog(
     dueCents,
     if (roundedFive > dueCents) roundedFive,
     ...[1000, 2000, 5000, 10000, 20000].where((value) => value > dueCents),
-  }.toList()
-    ..sort();
+  }.toList()..sort();
 
   return showDialog<int>(
     context: context,
@@ -750,7 +758,9 @@ Future<int?> _showCashDialog(
             ),
             const SizedBox(height: 14),
             TextField(
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 labelText: 'Altro importo ricevuto',
                 prefixIcon: const Icon(Icons.euro),

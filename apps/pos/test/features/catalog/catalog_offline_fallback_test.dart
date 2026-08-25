@@ -25,10 +25,7 @@ void main() {
     final cached = CatalogSnapshot.fromJson(_catalogJson());
     final controller = CatalogController(
       _FailingCatalogGateway(
-        const BackendError(
-          message: 'Sessione scaduta',
-          statusCode: 401,
-        ),
+        const BackendError(message: 'Sessione scaduta', statusCode: 401),
       ),
       cache: _MemoryCatalogCache(cached),
     );

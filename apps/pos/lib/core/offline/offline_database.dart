@@ -180,10 +180,8 @@ class OfflineDatabase extends _$OfflineDatabase {
     return row?.read<String>('payload_json');
   }
 
-  Future<void> deleteCache(String key) => customStatement(
-    'DELETE FROM offline_cache WHERE cache_key=?',
-    [key],
-  );
+  Future<void> deleteCache(String key) =>
+      customStatement('DELETE FROM offline_cache WHERE cache_key=?', [key]);
 
   Future<void> _setStatus(
     String id,

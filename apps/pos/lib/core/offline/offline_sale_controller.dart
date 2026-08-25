@@ -81,10 +81,12 @@ class OfflineSaleController extends ChangeNotifier {
     }
     _setBusy();
     try {
-      final current = _draft ?? OfflineSaleDraft.empty(
-        locationId: snapshot.locationId,
-        currency: snapshot.currency,
-      );
+      final current =
+          _draft ??
+          OfflineSaleDraft.empty(
+            locationId: snapshot.locationId,
+            currency: snapshot.currency,
+          );
       final candidate = OfflineSaleLine.fromCatalog(
         snapshot: snapshot,
         product: product,
@@ -278,5 +280,6 @@ class OfflineSaleController extends ChangeNotifier {
     notifyListeners();
   }
 
-  static String _draftKey(String locationId) => 'offline-sale-draft:$locationId';
+  static String _draftKey(String locationId) =>
+      'offline-sale-draft:$locationId';
 }

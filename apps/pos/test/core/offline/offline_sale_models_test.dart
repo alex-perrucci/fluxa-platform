@@ -34,18 +34,19 @@ void main() {
 
   test('draft serialization preserves stable replay identifiers', () {
     final snapshot = CatalogSnapshot.fromJson(_catalogJson());
-    final original = OfflineSaleDraft.empty(
-      locationId: snapshot.locationId,
-      currency: snapshot.currency,
-    ).copyWith(
-      items: [
-        OfflineSaleLine.fromCatalog(
-          snapshot: snapshot,
-          product: snapshot.products.single,
-          quantityAmount: 1,
-        ),
-      ],
-    );
+    final original =
+        OfflineSaleDraft.empty(
+          locationId: snapshot.locationId,
+          currency: snapshot.currency,
+        ).copyWith(
+          items: [
+            OfflineSaleLine.fromCatalog(
+              snapshot: snapshot,
+              product: snapshot.products.single,
+              quantityAmount: 1,
+            ),
+          ],
+        );
 
     final restored = OfflineSaleDraft.fromJson(original.toJson());
 
@@ -53,7 +54,10 @@ void main() {
     expect(restored.clientOrderId, original.clientOrderId);
     expect(restored.clientCheckoutId, original.clientCheckoutId);
     expect(restored.clientPaymentId, original.clientPaymentId);
-    expect(restored.items.single.clientItemId, original.items.single.clientItemId);
+    expect(
+      restored.items.single.clientItemId,
+      original.items.single.clientItemId,
+    );
   });
 }
 

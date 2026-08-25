@@ -48,7 +48,9 @@ String encodeCatalogSnapshot(CatalogSnapshot snapshot) => jsonEncode({
           'code': category.code,
           'name': category.name,
           'sortOrder': category.sortOrder,
-          'products': category.products.map(_productToJson).toList(growable: false),
+          'products': category.products
+              .map(_productToJson)
+              .toList(growable: false),
         },
       )
       .toList(growable: false),

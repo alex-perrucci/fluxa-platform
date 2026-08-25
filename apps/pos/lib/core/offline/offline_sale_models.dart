@@ -42,7 +42,9 @@ class OfflineSaleLine {
       }
     }
     if (category == null) {
-      throw StateError('Categoria prodotto non disponibile nel catalogo offline.');
+      throw StateError(
+        'Categoria prodotto non disponibile nel catalogo offline.',
+      );
     }
     final price = variant?.price ?? product.price;
     if (price == null) {
@@ -77,33 +79,34 @@ class OfflineSaleLine {
     );
   }
 
-  factory OfflineSaleLine.fromJson(Map<String, Object?> json) => OfflineSaleLine(
-    clientItemId: _requiredString(json, 'clientItemId'),
-    productId: _requiredString(json, 'productId'),
-    variantId: _optionalString(json['variantId']),
-    productCodeSnapshot: _requiredString(json, 'productCodeSnapshot'),
-    productNameSnapshot: _requiredString(json, 'productNameSnapshot'),
-    variantCodeSnapshot: _optionalString(json['variantCodeSnapshot']),
-    variantNameSnapshot: _optionalString(json['variantNameSnapshot']),
-    skuSnapshot: _optionalString(json['skuSnapshot']),
-    barcodeSnapshot: _optionalString(json['barcodeSnapshot']),
-    categoryIdSnapshot: _requiredString(json, 'categoryIdSnapshot'),
-    categoryCodeSnapshot: _requiredString(json, 'categoryCodeSnapshot'),
-    categoryNameSnapshot: _requiredString(json, 'categoryNameSnapshot'),
-    unitSnapshot: _requiredString(json, 'unitSnapshot'),
-    quantityAmount: _requiredInt(json, 'quantityAmount'),
-    quantityScale: _requiredInt(json, 'quantityScale'),
-    unitPriceCents: _requiredInt(json, 'unitPriceCents'),
-    vatRateIdSnapshot: _requiredString(json, 'vatRateIdSnapshot'),
-    vatCodeSnapshot: _requiredString(json, 'vatCodeSnapshot'),
-    vatRateBasisPointsSnapshot: _requiredInt(
-      json,
-      'vatRateBasisPointsSnapshot',
-    ),
-    vatNatureCodeSnapshot: _optionalString(json['vatNatureCodeSnapshot']),
-    priceListIdSnapshot: _requiredString(json, 'priceListIdSnapshot'),
-    note: _optionalString(json['note']),
-  );
+  factory OfflineSaleLine.fromJson(Map<String, Object?> json) =>
+      OfflineSaleLine(
+        clientItemId: _requiredString(json, 'clientItemId'),
+        productId: _requiredString(json, 'productId'),
+        variantId: _optionalString(json['variantId']),
+        productCodeSnapshot: _requiredString(json, 'productCodeSnapshot'),
+        productNameSnapshot: _requiredString(json, 'productNameSnapshot'),
+        variantCodeSnapshot: _optionalString(json['variantCodeSnapshot']),
+        variantNameSnapshot: _optionalString(json['variantNameSnapshot']),
+        skuSnapshot: _optionalString(json['skuSnapshot']),
+        barcodeSnapshot: _optionalString(json['barcodeSnapshot']),
+        categoryIdSnapshot: _requiredString(json, 'categoryIdSnapshot'),
+        categoryCodeSnapshot: _requiredString(json, 'categoryCodeSnapshot'),
+        categoryNameSnapshot: _requiredString(json, 'categoryNameSnapshot'),
+        unitSnapshot: _requiredString(json, 'unitSnapshot'),
+        quantityAmount: _requiredInt(json, 'quantityAmount'),
+        quantityScale: _requiredInt(json, 'quantityScale'),
+        unitPriceCents: _requiredInt(json, 'unitPriceCents'),
+        vatRateIdSnapshot: _requiredString(json, 'vatRateIdSnapshot'),
+        vatCodeSnapshot: _requiredString(json, 'vatCodeSnapshot'),
+        vatRateBasisPointsSnapshot: _requiredInt(
+          json,
+          'vatRateBasisPointsSnapshot',
+        ),
+        vatNatureCodeSnapshot: _optionalString(json['vatNatureCodeSnapshot']),
+        priceListIdSnapshot: _requiredString(json, 'priceListIdSnapshot'),
+        note: _optionalString(json['note']),
+      );
 
   final String clientItemId;
   final String productId;
@@ -128,10 +131,8 @@ class OfflineSaleLine {
   final String priceListIdSnapshot;
   final String? note;
 
-  int get grossCents => _roundRatio(
-    unitPriceCents * quantityAmount,
-    _pow10(quantityScale),
-  );
+  int get grossCents =>
+      _roundRatio(unitPriceCents * quantityAmount, _pow10(quantityScale));
 
   int get taxCents {
     if (vatRateBasisPointsSnapshot == 0) {

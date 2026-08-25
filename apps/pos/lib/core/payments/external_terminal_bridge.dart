@@ -20,29 +20,29 @@ class TerminalBridgeResult {
 
     return switch (status) {
       'APPROVED' when reference != null => TerminalBridgeResult(
-          decision: TerminalBridgeDecision.approved,
-          providerReference: reference,
-          providerEventId: eventId,
-          message: message,
-        ),
+        decision: TerminalBridgeDecision.approved,
+        providerReference: reference,
+        providerEventId: eventId,
+        message: message,
+      ),
       'DECLINED' => TerminalBridgeResult(
-          decision: TerminalBridgeDecision.declined,
-          providerReference: reference,
-          providerEventId: eventId,
-          message: message,
-        ),
+        decision: TerminalBridgeDecision.declined,
+        providerReference: reference,
+        providerEventId: eventId,
+        message: message,
+      ),
       'PENDING' => TerminalBridgeResult(
-          decision: TerminalBridgeDecision.pending,
-          providerReference: reference,
-          providerEventId: eventId,
-          message: message,
-        ),
+        decision: TerminalBridgeDecision.pending,
+        providerReference: reference,
+        providerEventId: eventId,
+        message: message,
+      ),
       _ => TerminalBridgeResult(
-          decision: TerminalBridgeDecision.unknown,
-          providerReference: reference,
-          providerEventId: eventId,
-          message: message,
-        ),
+        decision: TerminalBridgeDecision.unknown,
+        providerReference: reference,
+        providerEventId: eventId,
+        message: message,
+      ),
     };
   }
 
@@ -72,17 +72,18 @@ abstract interface class TerminalBridgeGateway {
 
 class ExternalTerminalBridge implements TerminalBridgeGateway {
   ExternalTerminalBridge({required AppConfig config, Dio? dio})
-      : _baseUrl = config.terminalBridgeUrl,
-        _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: config.terminalBridgeDioBaseUrl,
-                connectTimeout: config.terminalBridgeTimeout,
-                receiveTimeout: config.terminalBridgeTimeout,
-                sendTimeout: config.terminalBridgeTimeout,
-                headers: const {'content-type': 'application/json'},
-              ),
-            );
+    : _baseUrl = config.terminalBridgeUrl,
+      _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: config.terminalBridgeDioBaseUrl,
+              connectTimeout: config.terminalBridgeTimeout,
+              receiveTimeout: config.terminalBridgeTimeout,
+              sendTimeout: config.terminalBridgeTimeout,
+              headers: const {'content-type': 'application/json'},
+            ),
+          );
 
   final String? _baseUrl;
   final Dio _dio;

@@ -233,7 +233,9 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
   }
 
   Future<void> _confirmManualCard(PaymentRecord payment) async {
-    final success = await ref.read(checkoutControllerProvider).capturePayment(
+    final success = await ref
+        .read(checkoutControllerProvider)
+        .capturePayment(
           payment: payment,
           providerReference: 'POS-MANUAL-${UuidV4.generate()}',
         );
@@ -241,17 +243,18 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
   }
 
   Future<void> _cancelManualCard(PaymentRecord payment) async {
-    await ref.read(checkoutControllerProvider).cancelPayment(
-          payment,
-          reason: 'Pagamento non riuscito sul terminale',
-        );
+    await ref
+        .read(checkoutControllerProvider)
+        .cancelPayment(payment, reason: 'Pagamento non riuscito sul terminale');
   }
 
   Future<void> _finishIfCompleted() async {
     final checkout = ref.read(checkoutControllerProvider).checkout;
     if (checkout?.isCompleted != true || !mounted) return;
     setState(() => _finishing = true);
-    await ref.read(posWorkflowCoordinatorProvider).completePaidSale(
+    await ref
+        .read(posWorkflowCoordinatorProvider)
+        .completePaidSale(
           locationId: widget.order.header.locationId,
           orderId: widget.order.header.id,
         );
@@ -285,44 +288,44 @@ class _PaymentMethodStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
+    children: [
+      Text('Come paga?', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 12),
+      Row(
         children: [
-          Text('Come paga?', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 72,
-                  child: FilledButton.icon(
-                    key: const Key('quick-payment-cash'),
-                    onPressed: busy ? null : onCash,
-                    icon: const Icon(Icons.payments_outlined),
-                    label: const Text('CONTANTI'),
-                  ),
-                ),
+          Expanded(
+            child: SizedBox(
+              height: 72,
+              child: FilledButton.icon(
+                key: const Key('quick-payment-cash'),
+                onPressed: busy ? null : onCash,
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('CONTANTI'),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 72,
-                  child: FilledButton.icon(
-                    key: const Key('quick-payment-card'),
-                    onPressed: busy ? null : onCard,
-                    icon: const Icon(Icons.credit_card),
-                    label: const Text('CARTA'),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 10),
-          TextButton.icon(
-            onPressed: busy ? null : onAdvanced,
-            icon: const Icon(Icons.tune),
-            label: const Text('Pagamento parziale o altro'),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SizedBox(
+              height: 72,
+              child: FilledButton.icon(
+                key: const Key('quick-payment-card'),
+                onPressed: busy ? null : onCard,
+                icon: const Icon(Icons.credit_card),
+                label: const Text('CARTA'),
+              ),
+            ),
           ),
         ],
-      );
+      ),
+      const SizedBox(height: 10),
+      TextButton.icon(
+        onPressed: busy ? null : onAdvanced,
+        icon: const Icon(Icons.tune),
+        label: const Text('Pagamento parziale o altro'),
+      ),
+    ],
+  );
 }
 
 class _CashTenderStep extends StatelessWidget {
@@ -344,37 +347,35 @@ class _CashTenderStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Quanto ricevi?',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 64,
-            child: FilledButton.icon(
-              key: const Key('quick-cash-exact'),
-              onPressed: busy ? null : () => onTendered(dueCents),
-              icon: const Icon(Icons.check_circle_outline),
-              label: Text(
-                'ESATTO · ${formatPaymentMoney(dueCents, currency)}',
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: busy ? null : onOther,
-            icon: const Icon(Icons.dialpad),
-            label: const Text('Altro importo ricevuto'),
-          ),
-          TextButton(
-            onPressed: busy ? null : onBack,
-            child: const Text('Cambia metodo di pagamento'),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        'Quanto ricevi?',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 14),
+      SizedBox(
+        height: 64,
+        child: FilledButton.icon(
+          key: const Key('quick-cash-exact'),
+          onPressed: busy ? null : () => onTendered(dueCents),
+          icon: const Icon(Icons.check_circle_outline),
+          label: Text('ESATTO · ${formatPaymentMoney(dueCents, currency)}'),
+        ),
+      ),
+      const SizedBox(height: 10),
+      OutlinedButton.icon(
+        onPressed: busy ? null : onOther,
+        icon: const Icon(Icons.dialpad),
+        label: const Text('Altro importo ricevuto'),
+      ),
+      TextButton(
+        onPressed: busy ? null : onBack,
+        child: const Text('Cambia metodo di pagamento'),
+      ),
+    ],
+  );
 }
 
 class _ManualCardConfirmation extends StatelessWidget {
@@ -392,34 +393,34 @@ class _ManualCardConfirmation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Icon(Icons.credit_card, size: 52),
-          const SizedBox(height: 8),
-          Text(
-            'Passa la carta sul POS bancario',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          Text(amount, textAlign: TextAlign.center),
-          const SizedBox(height: 18),
-          SizedBox(
-            height: 60,
-            child: FilledButton.icon(
-              key: const Key('quick-payment-card-success'),
-              onPressed: busy ? null : onSuccess,
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('PAGAMENTO RIUSCITO'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: busy ? null : onFailure,
-            icon: const Icon(Icons.close),
-            label: const Text('Non è riuscito'),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Icon(Icons.credit_card, size: 52),
+      const SizedBox(height: 8),
+      Text(
+        'Passa la carta sul POS bancario',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      Text(amount, textAlign: TextAlign.center),
+      const SizedBox(height: 18),
+      SizedBox(
+        height: 60,
+        child: FilledButton.icon(
+          key: const Key('quick-payment-card-success'),
+          onPressed: busy ? null : onSuccess,
+          icon: const Icon(Icons.check_circle_outline),
+          label: const Text('PAGAMENTO RIUSCITO'),
+        ),
+      ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        onPressed: busy ? null : onFailure,
+        icon: const Icon(Icons.close),
+        label: const Text('Non è riuscito'),
+      ),
+    ],
+  );
 }
 
 class _ExternalTerminalPending extends StatelessWidget {
@@ -435,33 +436,33 @@ class _ExternalTerminalPending extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Icon(Icons.credit_card, size: 52),
-          const SizedBox(height: 8),
-          Text(
-            'Pagamento carta da verificare',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          Text(amount, textAlign: TextAlign.center),
-          const SizedBox(height: 10),
-          const Text(
-            'Fluxa mantiene la stessa operazione. Non ripassare la carta e non creare un secondo pagamento.',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            height: 60,
-            child: FilledButton.icon(
-              key: const Key('quick-payment-card-verify'),
-              onPressed: busy ? null : onVerify,
-              icon: const Icon(Icons.refresh),
-              label: const Text('VERIFICA ESITO'),
-            ),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Icon(Icons.credit_card, size: 52),
+      const SizedBox(height: 8),
+      Text(
+        'Pagamento carta da verificare',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      Text(amount, textAlign: TextAlign.center),
+      const SizedBox(height: 10),
+      const Text(
+        'Fluxa mantiene la stessa operazione. Non ripassare la carta e non creare un secondo pagamento.',
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 18),
+      SizedBox(
+        height: 60,
+        child: FilledButton.icon(
+          key: const Key('quick-payment-card-verify'),
+          onPressed: busy ? null : onVerify,
+          icon: const Icon(Icons.refresh),
+          label: const Text('VERIFICA ESITO'),
+        ),
+      ),
+    ],
+  );
 }
 
 class _MessageBox extends StatelessWidget {
@@ -472,15 +473,15 @@ class _MessageBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: error
-            ? Theme.of(context).colorScheme.errorContainer
-            : Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(text, textAlign: TextAlign.center),
-        ),
-      );
+    color: error
+        ? Theme.of(context).colorScheme.errorContainer
+        : Theme.of(context).colorScheme.secondaryContainer,
+    borderRadius: BorderRadius.circular(12),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(text, textAlign: TextAlign.center),
+    ),
+  );
 }
 
 Future<int?> _showTenderedDialog(
@@ -503,8 +504,9 @@ Future<int?> _showTenderedDialog(
             const SizedBox(height: 12),
             TextField(
               autofocus: true,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               onChanged: (value) => raw = value,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.euro),
