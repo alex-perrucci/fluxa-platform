@@ -37,6 +37,7 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
   bool _bootstrapped = false;
   bool _finishing = false;
   bool _cashMode = false;
+  bool _cardBusy = false;
   String? _requestedMethod;
 
   @override
@@ -47,28 +48,15 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
   }
 
   Future<void> _bootstrap() async {
-    if (_bootstrapped || !mounted) {
-      return;
-    }
+    if (_bootstrapped || !mounted) return;
     _bootstrapped = true;
-    final checkout = ref.read(checkoutControllerProvider);
-    await checkout.bindLocation(widget.order.header.locationId);
-    final opened = await checkout.openForOrder(widget.order);
-    if (!mounted) {
-      return;
-    }
+    final controller = ref.read(checkoutControllerProvider);
+    await controller.bindLocation(widget.order.header.locationId);
+    final opened = await controller.openForOrder(widget.order);
+    if (!mounted) return;
     setState(() {});
-    if (!opened) {
-      return;
-    }
-    await _runRequestedMethod();
-  }
-
-  Future<void> _runRequestedMethod() async {
+    if (!opened) return;
     final method = _requestedMethod;
-    if (method == null || !mounted) {
-      return;
-    }
     _requestedMethod = null;
     if (method == 'cash') {
       setState(() => _cashMode = true);
@@ -79,10 +67,67 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final checkoutController = ref.watch(checkoutControllerProvider);
-    final checkout = checkoutController.checkout;
+    final controller = ref.watch(checkoutControllerProvider);
+    final checkout = controller.checkout;
     final pendingCard = _pendingCard(checkout);
+    final busy = controller.busy || _cardBusy;
     final theme = Theme.of(context);
+
+    Widget body;
+    if (!_bootstrapped || controller.status == CheckoutLoadStatus.loading) {
+      body = const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else if (checkout == null) {
+      body = _MessageBox(
+        text: controller.errorMessage ?? 'Impossibile preparare il pagamento.',
+        error: true,
+      );
+    } else if (_finishing) {
+      body = const Column(
+        children: [
+          Icon(Icons.check_circle, size: 64),
+          SizedBox(height: 8),
+          Text('Fatto'),
+          SizedBox(height: 12),
+          LinearProgressIndicator(),
+        ],
+      );
+    } else if (pendingCard?.provider == PaymentProvider.externalTerminal) {
+      body = _ExternalTerminalPending(
+        amount: formatPaymentMoney(pendingCard!.amountCents, checkout.currency),
+        busy: busy,
+        onVerify: () => _verifyExternalCard(pendingCard),
+      );
+    } else if (pendingCard != null) {
+      body = _ManualCardConfirmation(
+        amount: formatPaymentMoney(pendingCard.amountCents, checkout.currency),
+        busy: busy,
+        onSuccess: () => _confirmManualCard(pendingCard),
+        onFailure: () => _cancelManualCard(pendingCard),
+      );
+    } else if (_cashMode) {
+      body = _CashTenderStep(
+        dueCents: checkout.availableCents,
+        currency: checkout.currency,
+        busy: busy,
+        onTendered: _payCash,
+        onOther: () => _askCashTendered(checkout),
+        onBack: () => setState(() => _cashMode = false),
+      );
+    } else {
+      body = _PaymentMethodStep(
+        busy: busy,
+        onCash: () => setState(() => _cashMode = true),
+        onCard: _startCard,
+        onAdvanced: () {
+          final router = GoRouter.of(context);
+          Navigator.pop(context, false);
+          router.push('/checkout-advanced/${widget.order.header.id}');
+        },
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -115,104 +160,14 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
                 ),
               ),
               const SizedBox(height: 18),
-              if (!_bootstrapped ||
-                  checkoutController.status == CheckoutLoadStatus.loading)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (checkout == null)
-                _ErrorBox(
-                  text:
-                      checkoutController.errorMessage ??
-                      'Impossibile preparare il pagamento.',
-                )
-              else if (_finishing)
-                const Column(
-                  children: [
-                    Icon(Icons.check_circle, size: 64),
-                    SizedBox(height: 8),
-                    Text('Fatto'),
-                    SizedBox(height: 12),
-                    LinearProgressIndicator(),
-                  ],
-                )
-              else if (pendingCard != null)
-                _CardConfirmation(
-                  amount: formatPaymentMoney(
-                    pendingCard.amountCents,
-                    checkout.currency,
-                  ),
-                  busy: checkoutController.busy,
-                  onSuccess: () => _confirmCard(pendingCard),
-                  onFailure: () => _cancelCard(pendingCard),
-                )
-              else if (_cashMode)
-                _CashTenderStep(
-                  dueCents: checkout.availableCents,
-                  currency: checkout.currency,
-                  busy: checkoutController.busy,
-                  onTendered: _payCash,
-                  onOther: () => _askCashTendered(checkout),
-                  onBack: () => setState(() => _cashMode = false),
-                )
-              else ...[
-                Text(
-                  'Come paga?',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 72,
-                        child: FilledButton.icon(
-                          key: const Key('quick-payment-cash'),
-                          onPressed: checkoutController.busy
-                              ? null
-                              : () => setState(() => _cashMode = true),
-                          icon: const Icon(Icons.payments_outlined),
-                          label: const Text('CONTANTI'),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 72,
-                        child: FilledButton.icon(
-                          key: const Key('quick-payment-card'),
-                          onPressed: checkoutController.busy
-                              ? null
-                              : _startCard,
-                          icon: const Icon(Icons.credit_card),
-                          label: const Text('CARTA'),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              body,
+              if (controller.noticeMessage != null && checkout != null) ...[
                 const SizedBox(height: 10),
-                TextButton.icon(
-                  onPressed: checkoutController.busy
-                      ? null
-                      : () {
-                          final router = GoRouter.of(context);
-                          Navigator.pop(context, false);
-                          router.push(
-                            '/checkout-advanced/${widget.order.header.id}',
-                          );
-                        },
-                  icon: const Icon(Icons.tune),
-                  label: const Text('Pagamento parziale o altro'),
-                ),
+                _MessageBox(text: controller.noticeMessage!, error: false),
               ],
-              if (checkoutController.errorMessage != null &&
-                  checkout != null) ...[
+              if (controller.errorMessage != null && checkout != null) ...[
                 const SizedBox(height: 10),
-                _ErrorBox(text: checkoutController.errorMessage!),
+                _MessageBox(text: controller.errorMessage!, error: true),
               ],
             ],
           ),
@@ -233,10 +188,7 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
       amountCents: checkout.availableCents,
       tenderedCents: tenderedCents,
     );
-    if (!success || !mounted) {
-      return;
-    }
-    await _finishIfCompleted();
+    if (success && mounted) await _finishIfCompleted();
   }
 
   Future<void> _askCashTendered(CheckoutSession checkout) async {
@@ -245,64 +197,69 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
       dueCents: checkout.availableCents,
       currency: checkout.currency,
     );
-    if (tendered != null && mounted) {
-      await _payCash(tendered);
-    }
+    if (tendered != null && mounted) await _payCash(tendered);
   }
 
   Future<void> _startCard() async {
     final controller = ref.read(checkoutControllerProvider);
     final checkout = controller.checkout;
-    if (checkout == null || checkout.availableCents <= 0) {
-      return;
+    if (checkout == null || checkout.availableCents <= 0 || _cardBusy) return;
+    setState(() => _cardBusy = true);
+    try {
+      final outcome = await controller.startCardPayment(
+        amountCents: checkout.availableCents,
+      );
+      if (mounted && outcome == CardPaymentFlowOutcome.approved) {
+        await _finishIfCompleted();
+      }
+    } finally {
+      if (mounted) setState(() => _cardBusy = false);
     }
-    await controller.addTerminalPayment(
-      method: PaymentMethod.card,
-      provider: PaymentProvider.manualTerminal,
-      amountCents: checkout.availableCents,
-    );
   }
 
-  Future<void> _confirmCard(PaymentRecord payment) async {
-    final controller = ref.read(checkoutControllerProvider);
-    final success = await controller.capturePayment(
-      payment: payment,
-      providerReference: 'POS-MANUAL-${UuidV4.generate()}',
-    );
-    if (!success || !mounted) {
-      return;
+  Future<void> _verifyExternalCard(PaymentRecord payment) async {
+    if (_cardBusy) return;
+    setState(() => _cardBusy = true);
+    try {
+      final outcome = await ref
+          .read(checkoutControllerProvider)
+          .verifyExternalTerminalPayment(payment);
+      if (mounted && outcome == CardPaymentFlowOutcome.approved) {
+        await _finishIfCompleted();
+      }
+    } finally {
+      if (mounted) setState(() => _cardBusy = false);
     }
-    await _finishIfCompleted();
   }
 
-  Future<void> _cancelCard(PaymentRecord payment) async {
-    await ref
-        .read(checkoutControllerProvider)
-        .cancelPayment(payment, reason: 'Pagamento non riuscito sul terminale');
+  Future<void> _confirmManualCard(PaymentRecord payment) async {
+    final success = await ref.read(checkoutControllerProvider).capturePayment(
+          payment: payment,
+          providerReference: 'POS-MANUAL-${UuidV4.generate()}',
+        );
+    if (success && mounted) await _finishIfCompleted();
+  }
+
+  Future<void> _cancelManualCard(PaymentRecord payment) async {
+    await ref.read(checkoutControllerProvider).cancelPayment(
+          payment,
+          reason: 'Pagamento non riuscito sul terminale',
+        );
   }
 
   Future<void> _finishIfCompleted() async {
     final checkout = ref.read(checkoutControllerProvider).checkout;
-    if (checkout?.isCompleted != true || !mounted) {
-      return;
-    }
+    if (checkout?.isCompleted != true || !mounted) return;
     setState(() => _finishing = true);
-    await ref
-        .read(posWorkflowCoordinatorProvider)
-        .completePaidSale(
+    await ref.read(posWorkflowCoordinatorProvider).completePaidSale(
           locationId: widget.order.header.locationId,
           orderId: widget.order.header.id,
         );
-    if (!mounted) {
-      return;
-    }
-    Navigator.pop(context, true);
+    if (mounted) Navigator.pop(context, true);
   }
 
   PaymentRecord? _pendingCard(CheckoutSession? checkout) {
-    if (checkout == null) {
-      return null;
-    }
+    if (checkout == null) return null;
     for (final payment in checkout.payments.reversed) {
       if (payment.status == PaymentStatus.pending &&
           payment.method == PaymentMethod.card) {
@@ -311,6 +268,61 @@ class _QuickPaymentSheetState extends ConsumerState<_QuickPaymentSheet> {
     }
     return null;
   }
+}
+
+class _PaymentMethodStep extends StatelessWidget {
+  const _PaymentMethodStep({
+    required this.busy,
+    required this.onCash,
+    required this.onCard,
+    required this.onAdvanced,
+  });
+
+  final bool busy;
+  final VoidCallback onCash;
+  final VoidCallback onCard;
+  final VoidCallback onAdvanced;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          Text('Come paga?', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 72,
+                  child: FilledButton.icon(
+                    key: const Key('quick-payment-cash'),
+                    onPressed: busy ? null : onCash,
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('CONTANTI'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 72,
+                  child: FilledButton.icon(
+                    key: const Key('quick-payment-card'),
+                    onPressed: busy ? null : onCard,
+                    icon: const Icon(Icons.credit_card),
+                    label: const Text('CARTA'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: busy ? null : onAdvanced,
+            icon: const Icon(Icons.tune),
+            label: const Text('Pagamento parziale o altro'),
+          ),
+        ],
+      );
 }
 
 class _CashTenderStep extends StatelessWidget {
@@ -331,81 +343,42 @@ class _CashTenderStep extends StatelessWidget {
   final VoidCallback onBack;
 
   @override
-  Widget build(BuildContext context) {
-    final suggestions = _cashSuggestions(dueCents);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Quanto ricevi?',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 14),
-        SizedBox(
-          height: 64,
-          child: FilledButton.icon(
-            key: const Key('quick-cash-exact'),
-            onPressed: busy ? null : () => onTendered(dueCents),
-            icon: const Icon(Icons.check_circle_outline),
-            label: Text('ESATTO · ${formatPaymentMoney(dueCents, currency)}'),
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Quanto ricevi?',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
-        ),
-        if (suggestions.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 64,
+            child: FilledButton.icon(
+              key: const Key('quick-cash-exact'),
+              onPressed: busy ? null : () => onTendered(dueCents),
+              icon: const Icon(Icons.check_circle_outline),
+              label: Text(
+                'ESATTO · ${formatPaymentMoney(dueCents, currency)}',
+              ),
+            ),
+          ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: suggestions
-                .map(
-                  (value) => SizedBox(
-                    width: 170,
-                    height: 64,
-                    child: FilledButton.tonal(
-                      onPressed: busy ? null : () => onTendered(value),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(formatPaymentMoney(value, currency)),
-                          Text(
-                            'Resto ${formatPaymentMoney(value - dueCents, currency)}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
+          OutlinedButton.icon(
+            onPressed: busy ? null : onOther,
+            icon: const Icon(Icons.dialpad),
+            label: const Text('Altro importo ricevuto'),
+          ),
+          TextButton(
+            onPressed: busy ? null : onBack,
+            child: const Text('Cambia metodo di pagamento'),
           ),
         ],
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: busy ? null : onOther,
-          icon: const Icon(Icons.dialpad),
-          label: const Text('Altro importo ricevuto'),
-        ),
-        TextButton(
-          onPressed: busy ? null : onBack,
-          child: const Text('Cambia metodo di pagamento'),
-        ),
-      ],
-    );
-  }
-
-  static List<int> _cashSuggestions(int dueCents) {
-    const common = [500, 1000, 2000, 5000, 10000, 20000];
-    final roundedFive = ((dueCents + 499) ~/ 500) * 500;
-    final values = <int>{
-      if (roundedFive > dueCents) roundedFive,
-      ...common.where((value) => value > dueCents),
-    }.toList()..sort();
-    return values.take(3).toList(growable: false);
-  }
+      );
 }
 
-class _CardConfirmation extends StatelessWidget {
-  const _CardConfirmation({
+class _ManualCardConfirmation extends StatelessWidget {
+  const _ManualCardConfirmation({
     required this.amount,
     required this.busy,
     required this.onSuccess,
@@ -419,55 +392,95 @@ class _CardConfirmation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const Icon(Icons.credit_card, size: 52),
-      const SizedBox(height: 8),
-      Text(
-        'Passa la carta sul POS bancario',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
-      const SizedBox(height: 4),
-      Text(
-        amount,
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const SizedBox(height: 18),
-      SizedBox(
-        height: 60,
-        child: FilledButton.icon(
-          key: const Key('quick-payment-card-success'),
-          onPressed: busy ? null : onSuccess,
-          icon: const Icon(Icons.check_circle_outline),
-          label: const Text('PAGAMENTO RIUSCITO'),
-        ),
-      ),
-      const SizedBox(height: 8),
-      OutlinedButton.icon(
-        onPressed: busy ? null : onFailure,
-        icon: const Icon(Icons.close),
-        label: const Text('Non è riuscito'),
-      ),
-    ],
-  );
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.credit_card, size: 52),
+          const SizedBox(height: 8),
+          Text(
+            'Passa la carta sul POS bancario',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          Text(amount, textAlign: TextAlign.center),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 60,
+            child: FilledButton.icon(
+              key: const Key('quick-payment-card-success'),
+              onPressed: busy ? null : onSuccess,
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('PAGAMENTO RIUSCITO'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : onFailure,
+            icon: const Icon(Icons.close),
+            label: const Text('Non è riuscito'),
+          ),
+        ],
+      );
 }
 
-class _ErrorBox extends StatelessWidget {
-  const _ErrorBox({required this.text});
+class _ExternalTerminalPending extends StatelessWidget {
+  const _ExternalTerminalPending({
+    required this.amount,
+    required this.busy,
+    required this.onVerify,
+  });
+
+  final String amount;
+  final bool busy;
+  final VoidCallback onVerify;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.credit_card, size: 52),
+          const SizedBox(height: 8),
+          Text(
+            'Pagamento carta da verificare',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          Text(amount, textAlign: TextAlign.center),
+          const SizedBox(height: 10),
+          const Text(
+            'Fluxa mantiene la stessa operazione. Non ripassare la carta e non creare un secondo pagamento.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 60,
+            child: FilledButton.icon(
+              key: const Key('quick-payment-card-verify'),
+              onPressed: busy ? null : onVerify,
+              icon: const Icon(Icons.refresh),
+              label: const Text('VERIFICA ESITO'),
+            ),
+          ),
+        ],
+      );
+}
+
+class _MessageBox extends StatelessWidget {
+  const _MessageBox({required this.text, required this.error});
 
   final String text;
+  final bool error;
 
   @override
   Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.errorContainer,
-    borderRadius: BorderRadius.circular(12),
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Text(text, textAlign: TextAlign.center),
-    ),
-  );
+        color: error
+            ? Theme.of(context).colorScheme.errorContainer
+            : Theme.of(context).colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(text, textAlign: TextAlign.center),
+        ),
+      );
 }
 
 Future<int?> _showTenderedDialog(
@@ -490,9 +503,8 @@ Future<int?> _showTenderedDialog(
             const SizedBox(height: 12),
             TextField(
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               onChanged: (value) => raw = value,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.euro),
@@ -518,7 +530,7 @@ Future<int?> _showTenderedDialog(
               }
               Navigator.pop(dialogContext, cents);
             },
-            child: const Text('CONFERMA'),
+            child: const Text('Conferma'),
           ),
         ],
       ),

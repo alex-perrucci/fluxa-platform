@@ -34,6 +34,7 @@ import '../network/session_expiry_bus.dart';
 import '../offline/offline_database.dart';
 import '../offline/offline_replay_service.dart';
 import '../offline/offline_sync_controller.dart';
+import '../payments/external_terminal_bridge.dart';
 import '../platform/installation_identity.dart';
 import '../routing/app_router.dart';
 import '../storage/secure_store.dart';
@@ -98,6 +99,9 @@ final printingApiProvider = Provider<PrintingApi>(
 final printerSetupApiProvider = Provider<PrinterSetupApi>(
   (ref) => PrinterSetupApi(ref.watch(apiClientProvider).dio),
 );
+final terminalBridgeProvider = Provider<TerminalBridgeGateway>(
+  (ref) => ExternalTerminalBridge(config: ref.watch(appConfigProvider)),
+);
 final localPrinterMappingStoreProvider = Provider<LocalPrinterMappingStore>(
   (ref) => LocalPrinterMappingStore(ref.watch(secureStoreProvider)),
 );
@@ -149,7 +153,10 @@ final orderControllerProvider = ChangeNotifierProvider<OrderController>(
   (ref) => OrderController(ref.watch(ordersApiProvider)),
 );
 final checkoutControllerProvider = ChangeNotifierProvider<CheckoutController>(
-  (ref) => CheckoutController(ref.watch(paymentsApiProvider)),
+  (ref) => CheckoutController(
+    ref.watch(paymentsApiProvider),
+    terminalBridge: ref.watch(terminalBridgeProvider),
+  ),
 );
 final tableControllerProvider = ChangeNotifierProvider<TableController>(
   (ref) => TableController(
