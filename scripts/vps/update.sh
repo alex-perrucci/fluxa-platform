@@ -12,6 +12,24 @@ load_deploy_env
 
 TARGET_REF="${1:-main}"
 CURRENT_SHA="$(current_release_sha)"
+ROLLBACK_ARMED=false
+
+rollback_failed_release() {
+  local exit_code="$?"
+  trap - ERR
+
+  if [[ "${ROLLBACK_ARMED}" == "true" ]]; then
+    log "Target release failed validation; restoring ${CURRENT_SHA}"
+    if bash "${SCRIPT_DIR}/rollback.sh" "${CURRENT_SHA}"; then
+      log "Automatic application rollback completed"
+    else
+      printf 'CRITICAL: automatic rollback failed. Run %s/doctor.sh and restore %s manually.\n' \
+        "${SCRIPT_DIR}" "${CURRENT_SHA}" >&2
+    fi
+  fi
+
+  exit "${exit_code}"
+}
 
 log "Creating the pre-update backup"
 bash "${SCRIPT_DIR}/backup.sh"
@@ -31,6 +49,9 @@ fi
 
 mkdir -p "${STATE_DIR}"
 printf '%s\n' "${CURRENT_SHA}" > "${STATE_DIR}/previous-release"
+trap rollback_failed_release ERR
+ROLLBACK_ARMED=true
+
 git -C "${REPO_ROOT}" checkout --detach "${TARGET_SHA}"
 set_env_value RELEASE_SHA "${TARGET_SHA}"
 set_env_value RELEASE_VERSION "$(current_release_version)"
@@ -58,7 +79,10 @@ fluxa_tools_compose run --rm migrate
 log "Starting the target release"
 fluxa_compose up -d --remove-orphans
 
-log "Running diagnostics"
+log "Running release-alignment diagnostics"
 bash "${SCRIPT_DIR}/doctor.sh"
+
+ROLLBACK_ARMED=false
+trap - ERR
 docker image prune --force >/dev/null
 printf 'Fluxa updated from %s to %s.\n' "${CURRENT_SHA}" "${TARGET_SHA}"

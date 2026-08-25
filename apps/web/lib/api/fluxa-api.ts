@@ -1,4 +1,4 @@
-import { getServerEnv } from '@/lib/config/env';
+import { getFluxaServerApiBaseUrl } from '@/lib/config/env';
 
 interface FluxaErrorBody {
   code?: unknown;
@@ -18,7 +18,7 @@ export class FluxaApiError extends Error {
 }
 
 function buildUrl(path: string): URL {
-  const base = getServerEnv().FLUXA_API_BASE_URL.replace(/\/+$/, '');
+  const base = getFluxaServerApiBaseUrl();
   const normalizedPath = path.replace(/^\/+/, '');
   return new URL(`${base}/${normalizedPath}`);
 }

@@ -247,6 +247,9 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: 3000
       FLUXA_API_BASE_URL: https://${API_DOMAIN}/api/v1
+      FLUXA_INTERNAL_API_BASE_URL: http://api:3000/api/v1
+      FLUXA_RELEASE_SHA: ${RELEASE_SHA}
+      FLUXA_RELEASE_VERSION: ${RELEASE_VERSION}
     networks:
       - app
     depends_on:
@@ -256,7 +259,7 @@ services:
       test:
         - CMD-SHELL
         - >-
-          node -e "fetch('http://127.0.0.1:3000/health')
+          node -e "fetch('http://127.0.0.1:3000/api/health')
           .then((response) => process.exit(response.ok ? 0 : 1))
           .catch(() => process.exit(1))"
       interval: 10s
