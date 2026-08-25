@@ -73,7 +73,8 @@ class OfflineSyncController extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
-    _database.close();
+    // OfflineDatabase is shared by catalog cache, local sales and sync. The
+    // provider owns its lifecycle and closes it only when the app container dies.
     super.dispose();
   }
 }

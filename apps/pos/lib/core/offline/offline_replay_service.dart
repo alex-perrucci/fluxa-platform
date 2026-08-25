@@ -17,13 +17,19 @@ class OfflineReplayService {
       throw const FormatException('Payload offline non valido.');
     }
     final payload = Map<String, Object?>.from(decoded);
-    final method = payload['method']?.toString().toUpperCase();
-    final path = payload['path']?.toString();
-    final data = payload['data'];
-    if (path == null || path.isEmpty || method == null) {
-      throw const FormatException('Metodo o percorso offline mancante.');
-    }
+
     try {
+      if (operation.kind == OfflineOperationKind.completeCashSale) {
+        await _dio.post<Object?>('offline-sales/replay', data: payload);
+        return;
+      }
+
+      final method = payload['method']?.toString().toUpperCase();
+      final path = payload['path']?.toString();
+      final data = payload['data'];
+      if (path == null || path.isEmpty || method == null) {
+        throw const FormatException('Metodo o percorso offline mancante.');
+      }
       await _dio.request<Object?>(
         path,
         data: data,

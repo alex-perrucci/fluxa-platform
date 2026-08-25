@@ -3,13 +3,17 @@ import 'package:fluxa_pos/core/offline/offline_models.dart';
 import 'package:fluxa_pos/core/offline/offline_policy.dart';
 
 void main() {
-  test('queues only reversible order mutations', () {
+  test('queues an atomic offline cash sale but not raw financial mutations', () {
     expect(
       OfflineSafetyPolicy.isQueueable(OfflineOperationKind.createOrder),
       isTrue,
     );
     expect(
       OfflineSafetyPolicy.isQueueable(OfflineOperationKind.addOrderItem),
+      isTrue,
+    );
+    expect(
+      OfflineSafetyPolicy.isQueueable(OfflineOperationKind.completeCashSale),
       isTrue,
     );
     expect(

@@ -53,20 +53,36 @@ class OfflineDatabase extends _$OfflineDatabase {
       throw StateError('${kind.name} richiede una connessione online.');
     }
     final timestamp = now ?? DateTime.now().toUtc();
-    await customStatement(
-      '''INSERT INTO offline_outbox
-         (id,kind,status,payload_json,attempts,next_attempt_at,created_at,updated_at)
-         VALUES (?,?,?,?,0,?,?,?)''',
-      [
-        id,
-        kind.name,
-        OfflineOperationStatus.queued.name,
-        payloadJson,
-        timestamp.millisecondsSinceEpoch,
-        timestamp.millisecondsSinceEpoch,
-        timestamp.millisecondsSinceEpoch,
-      ],
-    );
+    await transaction(() async {
+      final existing = await customSelect(
+        'SELECT kind, payload_json FROM offline_outbox WHERE id=?',
+        variables: [Variable.withString(id)],
+      ).getSingleOrNull();
+      if (existing != null) {
+        final existingKind = existing.read<String>('kind');
+        final existingPayload = existing.read<String>('payload_json');
+        if (existingKind == kind.name && existingPayload == payloadJson) {
+          return;
+        }
+        throw StateError(
+          'Identificativo operazione offline già usato con dati differenti.',
+        );
+      }
+      await customStatement(
+        '''INSERT INTO offline_outbox
+           (id,kind,status,payload_json,attempts,next_attempt_at,created_at,updated_at)
+           VALUES (?,?,?,?,0,?,?,?)''',
+        [
+          id,
+          kind.name,
+          OfflineOperationStatus.queued.name,
+          payloadJson,
+          timestamp.millisecondsSinceEpoch,
+          timestamp.millisecondsSinceEpoch,
+          timestamp.millisecondsSinceEpoch,
+        ],
+      );
+    });
   }
 
   Future<List<OfflineOperation>> listOperations() async {
@@ -163,6 +179,11 @@ class OfflineDatabase extends _$OfflineDatabase {
     ).getSingleOrNull();
     return row?.read<String>('payload_json');
   }
+
+  Future<void> deleteCache(String key) => customStatement(
+    'DELETE FROM offline_cache WHERE cache_key=?',
+    [key],
+  );
 
   Future<void> _setStatus(
     String id,

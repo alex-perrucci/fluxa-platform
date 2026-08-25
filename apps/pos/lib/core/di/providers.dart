@@ -8,6 +8,7 @@ import '../../features/auth/data/auth_api.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/catalog/data/catalog_api.dart';
+import '../../features/catalog/data/catalog_snapshot_cache.dart';
 import '../../features/catalog/presentation/catalog_controller.dart';
 import '../../features/device/data/device_api.dart';
 import '../../features/fiscal/data/fiscal_api.dart';
@@ -33,6 +34,7 @@ import '../network/api_client.dart';
 import '../network/session_expiry_bus.dart';
 import '../offline/offline_database.dart';
 import '../offline/offline_replay_service.dart';
+import '../offline/offline_sale_controller.dart';
 import '../offline/offline_sync_controller.dart';
 import '../payments/external_terminal_bridge.dart';
 import '../platform/installation_identity.dart';
@@ -120,9 +122,11 @@ final authRepositoryProvider = Provider<AuthRepository>(
   ),
 );
 
-final offlineDatabaseProvider = Provider<OfflineDatabase>(
-  (_) => OfflineDatabase(),
-);
+final offlineDatabaseProvider = Provider<OfflineDatabase>((ref) {
+  final database = OfflineDatabase();
+  ref.onDispose(database.close);
+  return database;
+});
 final offlineReplayServiceProvider = Provider<OfflineReplayService>(
   (ref) => OfflineReplayService(ref.watch(apiClientProvider).dio),
 );
@@ -135,6 +139,10 @@ final offlineSyncControllerProvider =
       unawaited(controller.start());
       return controller;
     });
+final offlineSaleControllerProvider =
+    ChangeNotifierProvider<OfflineSaleController>(
+      (ref) => OfflineSaleController(ref.watch(offlineDatabaseProvider)),
+    );
 
 final authControllerProvider = ChangeNotifierProvider<AuthController>(
   (ref) => AuthController(
@@ -146,7 +154,10 @@ final authControllerProvider = ChangeNotifierProvider<AuthController>(
 );
 
 final catalogControllerProvider = ChangeNotifierProvider<CatalogController>(
-  (ref) => CatalogController(ref.watch(catalogApiProvider)),
+  (ref) => CatalogController(
+    ref.watch(catalogApiProvider),
+    cache: OfflineCatalogSnapshotCache(ref.watch(offlineDatabaseProvider)),
+  ),
 );
 
 final orderControllerProvider = ChangeNotifierProvider<OrderController>(
