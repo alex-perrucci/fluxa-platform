@@ -4,6 +4,7 @@ import './globals.css';
 import './minimal-cut.css';
 import './floor-plan.css';
 import './merchant-dashboard.css';
+import './control-center-hardening.css';
 
 export const metadata: Metadata = {
   title: {
