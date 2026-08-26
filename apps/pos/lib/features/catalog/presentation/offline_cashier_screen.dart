@@ -631,7 +631,7 @@ Future<_ProductSelection?> _showProductOptions(
             children: [
               if (product.variants.isNotEmpty) ...[
                 DropdownButtonFormField<String>(
-                  initialValue: selectedKey.isEmpty ? null : selectedKey,
+                  value: selectedKey.isEmpty ? null : selectedKey,
                   decoration: const InputDecoration(
                     labelText: 'Variante',
                     border: OutlineInputBorder(),
