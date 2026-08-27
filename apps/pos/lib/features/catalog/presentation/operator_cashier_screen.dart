@@ -468,8 +468,22 @@ class _OrderPane extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider).state;
     final order = orders.activeOrder;
-    final role = ref.watch(authControllerProvider).state.session?.role;
+    final role = auth.session?.role;
+    final hasKitchen =
+        auth.session?.organizationEntitlements?.has('KITCHEN') == true;
+    final location = auth.deviceAssignment?.location;
+    final kitchen = ref.watch(kitchenControllerProvider);
+    final canDispatch =
+        hasKitchen &&
+        location != null &&
+        order != null &&
+        order.items.isNotEmpty &&
+        order.header.status == OrderStatus.open &&
+        !orders.busy &&
+        !kitchen.busy;
+
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -488,7 +502,7 @@ class _OrderPane extends ConsumerWidget {
                 if (order != null && canQuickCancelOrder(order.header, role))
                   TextButton.icon(
                     key: const Key('cancel-current-order'),
-                    onPressed: orders.busy
+                    onPressed: orders.busy || kitchen.busy
                         ? null
                         : () => confirmAndCancelOrder(
                             context,
@@ -509,6 +523,21 @@ class _OrderPane extends ConsumerWidget {
               Text(
                 orders.errorMessage!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ] else if (kitchen.errorMessage != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                kitchen.errorMessage!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ] else if (kitchen.noticeMessage != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                kitchen.noticeMessage!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
             const SizedBox(height: 8),
@@ -546,6 +575,30 @@ class _OrderPane extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 10),
+              if (hasKitchen && order.header.status == OrderStatus.open) ...[
+                SizedBox(
+                  height: 52,
+                  child: FilledButton.tonalIcon(
+                    key: const Key('operator-dispatch-kitchen'),
+                    onPressed: canDispatch
+                        ? () => kitchen.dispatchOrder(
+                            locationId: location.id,
+                            orderId: order.header.id,
+                          )
+                        : null,
+                    icon: kitchen.busy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.soup_kitchen_outlined),
+                    label: Text(
+                      kitchen.busy ? 'INVIO IN CORSO…' : 'INVIA IN CUCINA',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               if (order.header.status == OrderStatus.open)
                 Row(
                   children: [
@@ -554,7 +607,7 @@ class _OrderPane extends ConsumerWidget {
                         height: 58,
                         child: FilledButton.icon(
                           key: const Key('operator-cash'),
-                          onPressed: orders.busy
+                          onPressed: orders.busy || kitchen.busy
                               ? null
                               : () => _pay(context, order, 'cash'),
                           icon: const Icon(Icons.payments_outlined),
@@ -568,7 +621,7 @@ class _OrderPane extends ConsumerWidget {
                         height: 58,
                         child: FilledButton.icon(
                           key: const Key('operator-card'),
-                          onPressed: orders.busy
+                          onPressed: orders.busy || kitchen.busy
                               ? null
                               : () => _pay(context, order, 'card'),
                           icon: const Icon(Icons.credit_card),
@@ -586,7 +639,9 @@ class _OrderPane extends ConsumerWidget {
                 )
               else
                 FilledButton.icon(
-                  onPressed: orders.busy ? null : orders.discardCurrentView,
+                  onPressed: orders.busy || kitchen.busy
+                      ? null
+                      : orders.discardCurrentView,
                   icon: const Icon(Icons.add_shopping_cart),
                   label: const Text('NUOVA VENDITA'),
                 ),

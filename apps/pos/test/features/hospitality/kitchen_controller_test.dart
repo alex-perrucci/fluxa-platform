@@ -28,16 +28,95 @@ void main() {
 
     expect(dispatched, isTrue);
     expect(gateway.dispatchCalls, 1);
+    expect(gateway.dispatchBatchIds.single, isNotEmpty);
     expect(controller.noticeMessage, contains('Comanda'));
   });
 
-  test('reloads ticket after optimistic concurrency conflict', () async {
-    final gateway = FakeHospitalityGateway()
-      ..transitionError = const BackendError(
-        code: 'KITCHEN_TICKET_VERSION_CONFLICT',
-        message: 'Conflitto.',
+  test('reuses the same batch id after an ambiguous server failure', () async {
+    final gateway = FakeHospitalityGateway();
+    gateway.dispatchError = const BackendError(
+      message: 'Server temporarily unavailable.',
+      statusCode: 503,
+    );
+    final controller = KitchenController(gateway);
+
+    await controller.bindLocation('location-1');
+    final first = await controller.dispatchOrder(
+      locationId: 'location-1',
+      orderId: 'order-1',
+    );
+    final firstBatchId = gateway.dispatchBatchIds.single;
+
+    gateway.dispatchError = null;
+    final second = await controller.dispatchOrder(
+      locationId: 'location-1',
+      orderId: 'order-1',
+    );
+
+    expect(first, isFalse);
+    expect(second, isTrue);
+    expect(gateway.dispatchBatchIds, hasLength(2));
+    expect(gateway.dispatchBatchIds.last, firstBatchId);
+  });
+
+  test(
+    'drops the batch id after a deterministic configuration failure',
+    () async {
+      final gateway = FakeHospitalityGateway();
+      gateway.dispatchError = const BackendError(
+        code: 'KITCHEN_CATEGORY_NOT_ROUTED',
+        message: 'Routing mancante.',
         statusCode: 409,
       );
+      final controller = KitchenController(gateway);
+
+      await controller.bindLocation('location-1');
+      final first = await controller.dispatchOrder(
+        locationId: 'location-1',
+        orderId: 'order-1',
+      );
+      final firstBatchId = gateway.dispatchBatchIds.single;
+
+      expect(first, isFalse);
+      expect(controller.errorMessage, contains('postazione cucina attiva'));
+
+      gateway.dispatchError = null;
+      final second = await controller.dispatchOrder(
+        locationId: 'location-1',
+        orderId: 'order-1',
+      );
+
+      expect(second, isTrue);
+      expect(gateway.dispatchBatchIds.last, isNot(firstBatchId));
+    },
+  );
+
+  test('explains when kitchen is not included in the active plan', () async {
+    final gateway = FakeHospitalityGateway();
+    gateway.dispatchError = const BackendError(
+      code: 'FEATURE_NOT_INCLUDED',
+      message: 'Feature unavailable.',
+      statusCode: 403,
+    );
+    final controller = KitchenController(gateway);
+
+    await controller.bindLocation('location-1');
+    final dispatched = await controller.dispatchOrder(
+      locationId: 'location-1',
+      orderId: 'order-1',
+    );
+
+    expect(dispatched, isFalse);
+    expect(controller.errorMessage, contains('piano attivo'));
+  });
+
+  test('reloads ticket after optimistic concurrency conflict', () async {
+    final gateway = FakeHospitalityGateway();
+    gateway.transitionError = const BackendError(
+      code: 'KITCHEN_TICKET_VERSION_CONFLICT',
+      message: 'Conflitto.',
+      statusCode: 409,
+    );
     final controller = KitchenController(gateway);
 
     await controller.bindLocation('location-1');

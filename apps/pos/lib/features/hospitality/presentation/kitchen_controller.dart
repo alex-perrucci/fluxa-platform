@@ -22,6 +22,8 @@ class KitchenController extends ChangeNotifier {
   bool _busy = false;
   String? _errorMessage;
   String? _noticeMessage;
+  String? _pendingDispatchOrderId;
+  String? _pendingDispatchBatchId;
   int _requestVersion = 0;
 
   String? get locationId => _locationId;
@@ -56,6 +58,7 @@ class KitchenController extends ChangeNotifier {
     _busy = false;
     _errorMessage = null;
     _noticeMessage = null;
+    _clearPendingDispatch();
     notifyListeners();
     await refresh();
   }
@@ -72,6 +75,7 @@ class KitchenController extends ChangeNotifier {
     _busy = false;
     _errorMessage = null;
     _noticeMessage = null;
+    _clearPendingDispatch();
     notifyListeners();
   }
 
@@ -198,30 +202,41 @@ class KitchenController extends ChangeNotifier {
     if (_locationId != locationId) {
       await bindLocation(locationId);
     }
+    if (_busy) {
+      return false;
+    }
+
+    final clientBatchId = _dispatchBatchIdFor(orderId);
     _setBusy();
     try {
       final batch = await _gateway.dispatchOrderToKitchen(
         orderId: orderId,
-        clientBatchId: UuidV4.generate(),
+        clientBatchId: clientBatchId,
       );
-      if (batch.locationId != locationId) {
+      if (batch.locationId != locationId || batch.orderId != orderId) {
         throw const BackendError(
-          message: 'L’invio cucina appartiene a una location diversa.',
+          message: 'L’invio cucina appartiene a un ordine o una sede diversi.',
         );
       }
+      _clearPendingDispatch();
       _noticeMessage = batch.tickets.length == 1
           ? 'Comanda ${batch.tickets.first.number} inviata in cucina.'
-          : '${batch.tickets.length} comande inviate alle postazioni.';
+          : '${batch.tickets.length} comande inviate in cucina.';
       await _refreshTicketsSilently();
       return true;
     } on BackendError catch (error) {
-      _errorMessage = error.message;
+      if (!_shouldReuseDispatchId(error)) {
+        _clearPendingDispatch();
+      }
+      _errorMessage = _dispatchErrorMessage(error);
       return false;
     } on FormatException {
-      _errorMessage = 'Il backend ha restituito un invio cucina non valido.';
+      _errorMessage =
+          'Risposta cucina non valida. Riprova: Fluxa riutilizzerà lo stesso invio per evitare duplicati.';
       return false;
     } catch (_) {
-      _errorMessage = 'Impossibile inviare l’ordine in cucina.';
+      _errorMessage =
+          'Invio cucina non confermato. Riprova: Fluxa eviterà una doppia comanda.';
       return false;
     } finally {
       _finishBusy();
@@ -282,6 +297,54 @@ class KitchenController extends ChangeNotifier {
     _errorMessage = null;
     _noticeMessage = null;
     notifyListeners();
+  }
+
+  String _dispatchBatchIdFor(String orderId) {
+    if (_pendingDispatchOrderId == orderId) {
+      final pendingBatchId = _pendingDispatchBatchId;
+      if (pendingBatchId != null) {
+        return pendingBatchId;
+      }
+    }
+    final batchId = UuidV4.generate();
+    _pendingDispatchOrderId = orderId;
+    _pendingDispatchBatchId = batchId;
+    return batchId;
+  }
+
+  void _clearPendingDispatch() {
+    _pendingDispatchOrderId = null;
+    _pendingDispatchBatchId = null;
+  }
+
+  bool _shouldReuseDispatchId(BackendError error) {
+    final status = error.statusCode;
+    if (status == null) {
+      return true;
+    }
+    return status == 408 || status == 425 || status == 429 || status >= 500;
+  }
+
+  String _dispatchErrorMessage(BackendError error) {
+    switch (error.code) {
+      case 'FEATURE_NOT_INCLUDED':
+        return 'La cucina non è inclusa nel piano attivo. Aggiorna il piano per inviare comande.';
+      case 'SUBSCRIPTION_SUSPENDED':
+        return 'L’abbonamento è sospeso: l’invio in cucina non è disponibile.';
+      case 'SUBSCRIPTION_NOT_PROVISIONED':
+        return 'Il piano del locale non è ancora configurato per usare la cucina.';
+      case 'KITCHEN_ORDER_EMPTY':
+        return 'Aggiungi almeno un prodotto prima di inviare la comanda.';
+      case 'KITCHEN_ORDER_NOT_DISPATCHABLE':
+      case 'ORDER_NOT_DISPATCHABLE':
+        return 'Solo un ordine aperto può essere inviato in cucina.';
+      case 'KITCHEN_CATEGORY_NOT_ROUTED':
+        return 'Configura una postazione cucina attiva e l’instradamento delle categorie prima di inviare la comanda.';
+      case 'KITCHEN_NOTHING_TO_SEND':
+        return 'Tutte le quantità dell’ordine sono già state inviate in cucina.';
+      default:
+        return error.message;
+    }
   }
 
   Future<void> _reloadTicketAfterConflict(

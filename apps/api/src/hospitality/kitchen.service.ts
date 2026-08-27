@@ -272,15 +272,20 @@ export class KitchenService {
           message: 'Ordine non trovato.',
         });
       await this.access.assertLocation(auth, order.locationId);
-      if (!['OPEN', 'HELD'].includes(order.status))
+      if (order.status !== 'OPEN')
         throw new ConflictException({
-          code: 'ORDER_NOT_DISPATCHABLE',
-          message: 'Lo stato dell’ordine non consente nuove comande.',
+          code: 'KITCHEN_ORDER_NOT_DISPATCHABLE',
+          message: 'Solo un ordine aperto può essere inviato in cucina.',
         });
       const itemResult = await client.query<DispatchItemRow>(
-        `SELECT oi.id,oi.product_name_snapshot AS "productName",oi.variant_name_snapshot AS "variantName",oi.category_id_snapshot AS "categoryId",oi.quantity_amount AS "quantityAmount",oi.quantity_scale AS "quantityScale",oi.note,ksc.station_id AS "stationId",ks.name AS "stationName",COALESCE(SUM(CASE WHEN kt.status<>'CANCELLED' THEN kti.quantity_amount ELSE 0 END),0)::int AS "sentQuantity" FROM order_items oi LEFT JOIN kitchen_station_categories ksc ON ksc.organization_id=oi.organization_id AND ksc.location_id=$3 AND ksc.category_id=oi.category_id_snapshot LEFT JOIN kitchen_stations ks ON ks.id=ksc.station_id AND ks.status='ACTIVE' LEFT JOIN kitchen_ticket_items kti ON kti.order_item_id=oi.id LEFT JOIN kitchen_tickets kt ON kt.id=kti.kitchen_ticket_id WHERE oi.organization_id=$2 AND oi.order_id=$1 GROUP BY oi.id,ksc.station_id,ks.name ORDER BY oi.sort_order,oi.created_at`,
+        `SELECT oi.id,oi.product_name_snapshot AS "productName",oi.variant_name_snapshot AS "variantName",oi.category_id_snapshot AS "categoryId",oi.quantity_amount AS "quantityAmount",oi.quantity_scale AS "quantityScale",oi.note,ks.id AS "stationId",ks.name AS "stationName",COALESCE(SUM(CASE WHEN kt.status<>'CANCELLED' THEN kti.quantity_amount ELSE 0 END),0)::int AS "sentQuantity" FROM order_items oi LEFT JOIN kitchen_station_categories ksc ON ksc.organization_id=oi.organization_id AND ksc.location_id=$3 AND ksc.category_id=oi.category_id_snapshot LEFT JOIN kitchen_stations ks ON ks.id=ksc.station_id AND ks.organization_id=$2 AND ks.location_id=$3 AND ks.status='ACTIVE' LEFT JOIN kitchen_ticket_items kti ON kti.order_item_id=oi.id LEFT JOIN kitchen_tickets kt ON kt.id=kti.kitchen_ticket_id WHERE oi.organization_id=$2 AND oi.order_id=$1 GROUP BY oi.id,ks.id,ks.name ORDER BY oi.sort_order,oi.created_at`,
         [orderId, org, order.locationId],
       );
+      if (itemResult.rows.length === 0)
+        throw new ConflictException({
+          code: 'KITCHEN_ORDER_EMPTY',
+          message: 'Aggiungi almeno un prodotto prima di inviare la comanda.',
+        });
       const pending = itemResult.rows
         .map((item) => ({
           ...item,
@@ -300,7 +305,7 @@ export class KitchenService {
         throw new ConflictException({
           code: 'KITCHEN_CATEGORY_NOT_ROUTED',
           message:
-            'Una o più categorie non sono assegnate a una postazione cucina.',
+            'Configura una postazione cucina attiva e assegna le categorie prima di inviare la comanda.',
           orderItemIds: unrouted.map((item) => item.id),
         });
       const table = await client.query<
