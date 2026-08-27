@@ -151,10 +151,10 @@ export class SubscriptionsService {
       const current = currentResult.rows[0];
       const startsAt = dto.startsAt
         ? new Date(dto.startsAt)
-        : current?.startsAt ?? new Date();
+        : (current?.startsAt ?? new Date());
       const endsAt =
         dto.endsAt === undefined
-          ? current?.endsAt ?? null
+          ? (current?.endsAt ?? null)
           : dto.endsAt
             ? new Date(dto.endsAt)
             : null;
@@ -178,7 +178,7 @@ export class SubscriptionsService {
         [randomUUID(), organizationId, dto.plan, dto.status, startsAt, endsAt],
       );
 
-      const next = saved.rows[0]!;
+      const next = saved.rows[0];
       await client.query(
         `
           INSERT INTO audit_events (
