@@ -11,6 +11,7 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { RequiresEntitlement } from '../subscriptions/requires-entitlement.decorator';
 import { AttachOrderDto } from './dto/attach-order.dto';
 import { CloseTableSessionDto } from './dto/close-table-session.dto';
 import { MoveTableSessionDto } from './dto/move-table-session.dto';
@@ -18,10 +19,15 @@ import { OpenTableSessionDto } from './dto/open-table-session.dto';
 import { TableSessionListQueryDto } from './dto/table-session-list-query.dto';
 import { UpdateTableSessionDto } from './dto/update-table-session.dto';
 import { HospitalityService } from './hospitality.service';
+
+@RequiresEntitlement('TABLE_SERVICE')
 @Controller()
 export class TableSessionsController {
   constructor(private readonly service: HospitalityService) {}
-  @Get('floor') floor(
+
+  @RequiresEntitlement('FLOOR_PLAN')
+  @Get('floor')
+  floor(
     @CurrentAuth() auth: AuthContext,
     @Query('locationId', ParseUUIDPipe) locationId: string,
   ) {
