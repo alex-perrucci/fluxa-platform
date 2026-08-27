@@ -28,9 +28,7 @@ export class SubscriptionsController {
   @TenantOptional()
   @PlatformAdminOnly()
   @Get('platform/organizations/:organizationId/subscription')
-  platformGet(
-    @Param('organizationId', ParseUUIDPipe) organizationId: string,
-  ) {
+  platformGet(@Param('organizationId', ParseUUIDPipe) organizationId: string) {
     return this.subscriptions.getOrganizationEntitlements(organizationId);
   }
 
