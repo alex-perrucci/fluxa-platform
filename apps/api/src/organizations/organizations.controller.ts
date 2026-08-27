@@ -12,17 +12,17 @@ import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { PlatformAdminOnly } from '../auth/decorators/platform-admin.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { TenantOptional } from '../auth/decorators/tenant-optional.decorator';
-import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { CreateMemberDto } from './dto/create-member.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { OrganizationProvisioningService } from './organization-provisioning.service';
 import { OrganizationsService } from './organizations.service';
 
 @Controller('organizations')
 export class OrganizationsController {
   constructor(
     private readonly organizationsService: OrganizationsService,
-    private readonly subscriptions: SubscriptionsService,
+    private readonly provisioning: OrganizationProvisioningService,
   ) {}
 
   @TenantOptional()
@@ -34,17 +34,8 @@ export class OrganizationsController {
   @TenantOptional()
   @PlatformAdminOnly()
   @Post()
-  async create(
-    @CurrentAuth() auth: AuthContext,
-    @Body() dto: CreateOrganizationDto,
-  ) {
-    const result = await this.organizationsService.create(auth, dto);
-    const subscription = await this.subscriptions.setSubscription(
-      auth,
-      result.organization.id,
-      { plan: dto.plan, status: 'ACTIVE' },
-    );
-    return { ...result, subscription };
+  create(@CurrentAuth() auth: AuthContext, @Body() dto: CreateOrganizationDto) {
+    return this.provisioning.create(auth, dto);
   }
 
   @Get('current')
