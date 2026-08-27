@@ -1,3 +1,4 @@
+import '../../../core/entitlements/pos_entitlement_context.dart';
 import '../../../core/network/token_refresh_coordinator.dart';
 import '../../../core/storage/session_store.dart';
 import '../../device/data/device_api.dart';
@@ -40,6 +41,10 @@ class AuthRepository {
   Future<AuthSession> currentSession() async {
     final me = await _authApi.me();
     final device = await _deviceApi.current();
+    final entitlements = me.organizationId == null
+        ? null
+        : await _authApi.entitlements();
+    PosEntitlementContext.replace(entitlements?.entitlements);
     return AuthSession(
       user: me.user,
       device: device,
@@ -48,6 +53,7 @@ class AuthRepository {
       organizationId: me.organizationId,
       membershipId: me.membershipId,
       role: me.role,
+      organizationEntitlements: entitlements,
     );
   }
 
@@ -95,9 +101,13 @@ class AuthRepository {
         await _authApi.logout();
       }
     } finally {
+      PosEntitlementContext.clear();
       await _sessionStore.clearSession();
     }
   }
 
-  Future<void> clearLocalSession() => _sessionStore.clearSession();
+  Future<void> clearLocalSession() async {
+    PosEntitlementContext.clear();
+    await _sessionStore.clearSession();
+  }
 }

@@ -5,6 +5,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsEmail,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -15,6 +16,10 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import {
+  SUBSCRIPTION_PLANS,
+  type SubscriptionPlan,
+} from '../../subscriptions/entitlements';
 
 export class PlatformOnboardingTableDto {
   @IsString()
@@ -42,6 +47,9 @@ export class PlatformOnboardingDto {
   @Length(3, 80)
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   organizationSlug!: string;
+
+  @IsIn(SUBSCRIPTION_PLANS)
+  plan!: SubscriptionPlan;
 
   @IsEmail()
   @MaxLength(320)

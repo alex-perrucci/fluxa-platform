@@ -10,6 +10,9 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { assertOrganizationScope } from '../auth/tenant-scope';
+import { RequiresEntitlement } from '../subscriptions/requires-entitlement.decorator';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { CancelPrintJobDto } from './dto/cancel-print-job.dto';
 import { PrintJobListQueryDto } from './dto/print-job-list-query.dto';
 import { PrintJobMutationDto } from './dto/print-job-mutation.dto';
@@ -24,19 +27,39 @@ export class PrintJobsController {
     private readonly jobs: PrintJobsService,
     private readonly producer: PrintProducerService,
     private readonly paymentReceiptPrinter: PaymentReceiptPrinterService,
+    private readonly subscriptions: SubscriptionsService,
   ) {}
 
   @Get('print-jobs')
-  list(@CurrentAuth() auth: AuthContext, @Query() query: PrintJobListQueryDto) {
-    return this.jobs.list(auth, query);
+  async list(
+    @CurrentAuth() auth: AuthContext,
+    @Query() query: PrintJobListQueryDto,
+  ) {
+    const result = await this.jobs.list(auth, query);
+    if (
+      await this.subscriptions.hasEntitlement(
+        assertOrganizationScope(auth),
+        'KITCHEN_PRINTING',
+      )
+    ) {
+      return result;
+    }
+    return {
+      ...result,
+      items: result.items.filter(
+        (job) => job.documentType !== 'KITCHEN_TICKET',
+      ),
+    };
   }
 
   @Get('print-jobs/:jobId')
-  get(
+  async get(
     @CurrentAuth() auth: AuthContext,
     @Param('jobId', ParseUUIDPipe) jobId: string,
   ) {
-    return this.jobs.get(auth, jobId);
+    const job = await this.jobs.get(auth, jobId);
+    await this.assertKitchenJob(auth, job.documentType);
+    return job;
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
@@ -80,6 +103,7 @@ export class PrintJobsController {
       : this.producer.requestPaymentReceipt(auth, checkoutId, dto);
   }
 
+  @RequiresEntitlement('KITCHEN_PRINTING')
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
   @Post('kitchen-tickets/:ticketId/reprint')
   kitchenTicket(
@@ -92,21 +116,37 @@ export class PrintJobsController {
 
   @Roles('OWNER', 'ADMIN', 'MANAGER')
   @Post('print-jobs/:jobId/retry')
-  retry(
+  async retry(
     @CurrentAuth() auth: AuthContext,
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @Body() dto: PrintJobMutationDto,
   ) {
+    const job = await this.jobs.get(auth, jobId);
+    await this.assertKitchenJob(auth, job.documentType);
     return this.jobs.retry(auth, jobId, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER')
   @Post('print-jobs/:jobId/cancel')
-  cancel(
+  async cancel(
     @CurrentAuth() auth: AuthContext,
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @Body() dto: CancelPrintJobDto,
   ) {
+    const job = await this.jobs.get(auth, jobId);
+    await this.assertKitchenJob(auth, job.documentType);
     return this.jobs.cancel(auth, jobId, dto);
+  }
+
+  private async assertKitchenJob(
+    auth: AuthContext,
+    documentType: string,
+  ): Promise<void> {
+    if (documentType === 'KITCHEN_TICKET') {
+      await this.subscriptions.assertEntitlement(
+        assertOrganizationScope(auth),
+        'KITCHEN_PRINTING',
+      );
+    }
   }
 }

@@ -13,9 +13,12 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { RequiresEntitlement } from '../subscriptions/requires-entitlement.decorator';
 import { CreateKitchenStationDto } from './dto/create-kitchen-station.dto';
 import { UpdateKitchenStationDto } from './dto/update-kitchen-station.dto';
 import { KitchenService } from './kitchen.service';
+
+@RequiresEntitlement('KITCHEN')
 @Controller('kitchen-stations')
 export class KitchenStationsController {
   constructor(private readonly service: KitchenService) {}
@@ -38,6 +41,7 @@ export class KitchenStationsController {
   ) {
     return this.service.updateStation(auth, id, dto);
   }
+  @RequiresEntitlement('KITCHEN_ROUTING')
   @Roles('OWNER', 'ADMIN', 'MANAGER')
   @Put(':stationId/categories/:categoryId')
   route(
@@ -47,6 +51,7 @@ export class KitchenStationsController {
   ) {
     return this.service.routeCategory(auth, stationId, categoryId);
   }
+  @RequiresEntitlement('KITCHEN_ROUTING')
   @Roles('OWNER', 'ADMIN', 'MANAGER')
   @Delete(':stationId/categories/:categoryId')
   unroute(

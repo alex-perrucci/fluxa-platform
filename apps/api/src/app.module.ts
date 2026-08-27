@@ -28,6 +28,8 @@ import { PlatformModule } from './platform/platform.module';
 import { PrintingModule } from './printing/printing.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { RootController } from './root.controller';
+import { EntitlementGuard } from './subscriptions/entitlement.guard';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -64,6 +66,7 @@ import { RootController } from './root.controller';
     DatabaseModule,
     QueueModule,
     AuthModule,
+    SubscriptionsModule,
     HealthModule,
     EventsModule,
     FiscalModule,
@@ -98,6 +101,10 @@ import { RootController } from './root.controller';
     {
       provide: APP_GUARD,
       useClass: AuthorizationGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: EntitlementGuard,
     },
   ],
 })

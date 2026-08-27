@@ -2,7 +2,10 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as schema from './schema';
+import * as coreSchema from './schema';
+import * as subscriptionSchema from './subscriptions.schema';
+
+const schema = { ...coreSchema, ...subscriptionSchema };
 
 @Injectable()
 export class DatabaseService implements OnModuleDestroy {

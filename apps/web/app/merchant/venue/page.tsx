@@ -1,12 +1,19 @@
 import Link from 'next/link';
 import { EmptyState, SectionHeading } from '@/components/control-center/shell';
 import { FloorPlanEditor } from '@/components/floor-plan/floor-plan-editor';
-import type { DiningArea, DiningTable, MerchantLocation } from '@/components/merchant/location-console';
+import type {
+  DiningArea,
+  DiningTable,
+  MerchantLocation,
+} from '@/components/merchant/location-console';
 import { VenueConsole } from '@/components/merchant/venue-console';
+import { PlanFeatureGate } from '@/components/subscriptions/plan-feature-gate';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { requireMerchantSession } from '@/lib/auth/session';
 import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
 import type { FloorPlanLocation, FloorPlanView } from '@/lib/floor-plan/types';
+import { getMerchantEntitlements } from '@/lib/subscriptions/entitlements';
+import { merchantUiCapabilities } from '@/lib/subscriptions/merchant-ui-policy';
 
 export default async function MerchantVenuePage({
   searchParams,
@@ -14,37 +21,73 @@ export default async function MerchantVenuePage({
   searchParams: Promise<{ locationId?: string; view?: string; new?: string }>;
 }) {
   const session = await requireMerchantSession();
+  const subscription = await getMerchantEntitlements();
+  const capabilities = merchantUiCapabilities(subscription.entitlements);
   const params = await searchParams;
   const view = params.view === 'map' ? 'map' : 'spaces';
   const membership = session.availableOrganizations.find(
-    (organization) => organization.organizationId === session.session.organizationId,
+    (organization) =>
+      organization.organizationId === session.session.organizationId,
   );
+
+  const blocked =
+    (view === 'spaces' && !capabilities.tables) ||
+    (view === 'map' && !capabilities.floorPlan);
 
   return (
     <>
       <section className="glass-panel panel-padding">
         <SectionHeading eyebrow="Locale" title="Spazi e tavoli" />
         <p className="muted max-w-3xl">
-          Qui gestisci la parte fisica del locale: sede, sale, tavoli e piantina. Non devi passare tra sezioni diverse per configurare lo stesso spazio.
+          Qui gestisci la parte fisica del locale: sede, sale, tavoli e piantina.
+          Non devi passare tra sezioni diverse per configurare lo stesso spazio.
         </p>
-        <nav className="mt-5 flex flex-wrap gap-2" aria-label="Sezioni del locale">
-          <Link
-            className={view === 'spaces' ? 'button-primary' : 'button-secondary'}
-            href={`/merchant/venue${params.locationId ? `?locationId=${encodeURIComponent(params.locationId)}` : ''}`}
+        {capabilities.tables || capabilities.floorPlan ? (
+          <nav
+            className="mt-5 flex flex-wrap gap-2"
+            aria-label="Sezioni del locale"
           >
-            Sale e tavoli
-          </Link>
-          <Link
-            className={view === 'map' ? 'button-primary' : 'button-secondary'}
-            href={`/merchant/venue?view=map${params.locationId ? `&locationId=${encodeURIComponent(params.locationId)}` : ''}`}
-          >
-            Piantina
-          </Link>
-        </nav>
+            {capabilities.tables ? (
+              <Link
+                className={
+                  view === 'spaces' ? 'button-primary' : 'button-secondary'
+                }
+                href={`/merchant/venue${
+                  params.locationId
+                    ? `?locationId=${encodeURIComponent(params.locationId)}`
+                    : ''
+                }`}
+              >
+                Sale e tavoli
+              </Link>
+            ) : null}
+            {capabilities.floorPlan ? (
+              <Link
+                className={
+                  view === 'map' ? 'button-primary' : 'button-secondary'
+                }
+                href={`/merchant/venue?view=map${
+                  params.locationId
+                    ? `&locationId=${encodeURIComponent(params.locationId)}`
+                    : ''
+                }`}
+              >
+                Piantina
+              </Link>
+            ) : null}
+          </nav>
+        ) : null}
       </section>
 
       <div className="mt-5">
-        {view === 'map' ? (
+        {blocked ? (
+          <PlanFeatureGate
+            description="La gestione di sale, tavoli e piantina è disponibile da Fluxa Sala. Il piano base continua a mantenere cassa, ordini, pagamenti, ricevute e fiscalizzazione."
+            planName={subscription.planName}
+            title="Gestione sala non inclusa nel piano"
+            upgradePlanName={subscription.upgrade?.planName}
+          />
+        ) : view === 'map' ? (
           <FloorPlanViewSection
             defaultLocationId={membership?.defaultLocationId}
             requestedLocationId={params.locationId}
@@ -52,7 +95,13 @@ export default async function MerchantVenuePage({
         ) : (
           <SpacesView
             defaultLocationId={membership?.defaultLocationId}
-            initialAction={params.new === 'table' ? 'table' : params.new === 'area' ? 'area' : null}
+            initialAction={
+              params.new === 'table'
+                ? 'table'
+                : params.new === 'area'
+                  ? 'area'
+                  : null
+            }
             requestedLocationId={params.locationId}
           />
         )}
@@ -70,7 +119,8 @@ async function SpacesView({
   initialAction: 'table' | 'area' | null;
   requestedLocationId?: string;
 }) {
-  const locations = await authenticatedFluxaFetch<MerchantLocation[]>('/locations');
+  const locations =
+    await authenticatedFluxaFetch<MerchantLocation[]>('/locations');
   const initialLocation = resolveAdministrativeLocation({
     locations,
     requestedLocationId,
@@ -116,7 +166,8 @@ async function FloorPlanViewSection({
   defaultLocationId?: string | null;
   requestedLocationId?: string;
 }) {
-  const locations = await authenticatedFluxaFetch<FloorPlanLocation[]>('/floor-plans');
+  const locations =
+    await authenticatedFluxaFetch<FloorPlanLocation[]>('/floor-plans');
   if (!locations.length) {
     return (
       <section className="glass-panel">
@@ -134,7 +185,15 @@ async function FloorPlanViewSection({
     defaultLocationId,
   });
   const locationId = location?.id ?? locations[0].id;
-  const initialView = await authenticatedFluxaFetch<FloorPlanView>(`/floor-plans/${locationId}`);
+  const initialView = await authenticatedFluxaFetch<FloorPlanView>(
+    `/floor-plans/${locationId}`,
+  );
 
-  return <FloorPlanEditor initialView={initialView} locations={locations} mode="merchant" />;
+  return (
+    <FloorPlanEditor
+      initialView={initialView}
+      locations={locations}
+      mode="merchant"
+    />
+  );
 }

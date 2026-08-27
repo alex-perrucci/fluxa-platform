@@ -65,6 +65,35 @@ class OrganizationMembership {
   final String role;
 }
 
+class OrganizationEntitlements {
+  const OrganizationEntitlements({
+    required this.plan,
+    required this.status,
+    required this.entitlements,
+    required this.planName,
+    required this.planDescription,
+  });
+
+  factory OrganizationEntitlements.fromJson(Map<String, Object?> json) =>
+      OrganizationEntitlements(
+        plan: json['plan']!.toString(),
+        status: json['status']!.toString(),
+        entitlements: (json['entitlements'] as List? ?? const [])
+            .map((value) => value.toString())
+            .toSet(),
+        planName: json['planName']?.toString() ?? 'Fluxa',
+        planDescription: json['planDescription']?.toString() ?? '',
+      );
+
+  final String plan;
+  final String status;
+  final Set<String> entitlements;
+  final String planName;
+  final String planDescription;
+
+  bool has(String entitlement) => entitlements.contains(entitlement);
+}
+
 class DeviceIdentity {
   const DeviceIdentity({
     required this.installationId,
@@ -134,6 +163,7 @@ class AuthSession {
     this.organizationId,
     this.membershipId,
     this.role,
+    this.organizationEntitlements,
   });
 
   final UserProfile user;
@@ -143,6 +173,7 @@ class AuthSession {
   final String? organizationId;
   final String? membershipId;
   final String? role;
+  final OrganizationEntitlements? organizationEntitlements;
 
   OrganizationMembership? get activeOrganization {
     for (final organization in availableOrganizations) {
@@ -161,5 +192,6 @@ class AuthSession {
     organizationId: organizationId,
     membershipId: membershipId,
     role: role,
+    organizationEntitlements: organizationEntitlements,
   );
 }

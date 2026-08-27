@@ -1,11 +1,15 @@
 import Link from 'next/link';
 import { EmptyState, SectionHeading } from '@/components/control-center/shell';
-import { FiscalStatusPanel, type MerchantFiscalStatus } from '@/components/merchant/fiscal-status-panel';
+import {
+  FiscalStatusPanel,
+  type MerchantFiscalStatus,
+} from '@/components/merchant/fiscal-status-panel';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { FluxaApiError } from '@/lib/api/fluxa-api';
 import { requireMerchantSession } from '@/lib/auth/session';
 import { controlCenterErrorView } from '@/lib/control-center/error-policy';
 import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
+import { getMerchantEntitlements } from '@/lib/subscriptions/entitlements';
 
 interface LocationRow {
   id: string;
@@ -13,7 +17,13 @@ interface LocationRow {
   status: string;
 }
 
-const fiscalRoles = new Set(['OWNER', 'ADMIN', 'MANAGER', 'ACCOUNTANT', 'SUPPORT_READONLY']);
+const fiscalRoles = new Set([
+  'OWNER',
+  'ADMIN',
+  'MANAGER',
+  'ACCOUNTANT',
+  'SUPPORT_READONLY',
+]);
 
 export default async function SettingsPage({
   searchParams,
@@ -22,9 +32,13 @@ export default async function SettingsPage({
 }) {
   const session = await requireMerchantSession();
   const params = await searchParams;
-  const locations = await authenticatedFluxaFetch<LocationRow[]>('/locations');
+  const [locations, subscription] = await Promise.all([
+    authenticatedFluxaFetch<LocationRow[]>('/locations'),
+    getMerchantEntitlements(),
+  ]);
   const membership = session.availableOrganizations.find(
-    (organization) => organization.organizationId === session.session.organizationId,
+    (organization) =>
+      organization.organizationId === session.session.organizationId,
   );
   const initialLocation = resolveAdministrativeLocation({
     locations,
@@ -36,11 +50,14 @@ export default async function SettingsPage({
   let fiscalError: string | null = null;
   if (initialLocation && fiscalRoles.has(session.session.role ?? '')) {
     try {
-      fiscalStatus = await authenticatedFluxaFetch<MerchantFiscalStatus>(`/fiscal-profiles/${initialLocation.id}`);
+      fiscalStatus = await authenticatedFluxaFetch<MerchantFiscalStatus>(
+        `/fiscal-profiles/${initialLocation.id}`,
+      );
     } catch (error) {
-      fiscalError = error instanceof FluxaApiError
-        ? controlCenterErrorView(error.code, error.status).message
-        : 'Impossibile verificare la fiscalizzazione. Riprova tra poco.';
+      fiscalError =
+        error instanceof FluxaApiError
+          ? controlCenterErrorView(error.code, error.status).message
+          : 'Impossibile verificare la fiscalizzazione. Riprova tra poco.';
     }
   }
 
@@ -49,17 +66,38 @@ export default async function SettingsPage({
       <section className="glass-panel panel-padding">
         <SectionHeading eyebrow="Impostazioni" title="Il minimo indispensabile" />
         <p className="muted max-w-3xl">
-          Qui controlli solo ciò che serve al locale. Provider, ambienti, credenziali e configurazioni tecniche sono responsabilità di Fluxa.
+          Qui controlli solo ciò che serve al locale. Provider, ambienti,
+          credenziali e configurazioni tecniche sono responsabilità di Fluxa.
         </p>
+      </section>
+
+      <section className="glass-panel panel-padding mt-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <strong className="text-lg">Piano Fluxa</strong>
+            <p className="muted mt-1">
+              {subscription.planName} · {subscription.planDescription}
+            </p>
+          </div>
+          <Link className="button-secondary" href="/merchant/settings/plan">
+            Vedi piano e funzioni
+          </Link>
+        </div>
       </section>
 
       <section className="glass-panel panel-padding mt-5">
         <div className="mb-5">
           <strong className="text-lg">Fiscalizzazione</strong>
-          <p className="muted">Puoi verificarne lo stato, ma non devi configurare provider o credenziali.</p>
+          <p className="muted">
+            Puoi verificarne lo stato, ma non devi configurare provider o
+            credenziali.
+          </p>
         </div>
         {!fiscalRoles.has(session.session.role ?? '') ? (
-          <EmptyState description="Il tuo ruolo non consente di visualizzare lo stato fiscale." title="Accesso non disponibile" />
+          <EmptyState
+            description="Il tuo ruolo non consente di visualizzare lo stato fiscale."
+            title="Accesso non disponibile"
+          />
         ) : locations.length ? (
           <FiscalStatusPanel
             initialError={fiscalError}
@@ -68,7 +106,10 @@ export default async function SettingsPage({
             locations={locations}
           />
         ) : (
-          <EmptyState description="Configura prima una sede per poter attivare la fiscalizzazione." title="Nessuna sede disponibile" />
+          <EmptyState
+            description="Configura prima una sede per poter attivare la fiscalizzazione."
+            title="Nessuna sede disponibile"
+          />
         )}
       </section>
 
@@ -76,9 +117,14 @@ export default async function SettingsPage({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <strong className="text-lg">Assistenza</strong>
-            <p className="muted mt-1">Se qualcosa non funziona, Fluxa ti mostra solo il problema e come intervenire.</p>
+            <p className="muted mt-1">
+              Se qualcosa non funziona, Fluxa ti mostra solo il problema e come
+              intervenire.
+            </p>
           </div>
-          <Link className="button-secondary" href="/merchant/health">Controlla stato del locale</Link>
+          <Link className="button-secondary" href="/merchant/health">
+            Controlla stato del locale
+          </Link>
         </div>
       </section>
     </>

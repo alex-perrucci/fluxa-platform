@@ -236,6 +236,7 @@ export class PlatformService {
     const normalized = {
       organizationName: dto.organizationName.trim(),
       organizationSlug: dto.organizationSlug.trim().toLowerCase(),
+      plan: dto.plan,
       ownerEmail: dto.ownerEmail.trim().toLowerCase(),
       ownerDisplayName: dto.ownerDisplayName.trim(),
       legalName: dto.legalName.trim(),
@@ -296,6 +297,7 @@ export class PlatformService {
         }
 
         const organizationId = randomUUID();
+        const subscriptionId = randomUUID();
         const ownerUserId = randomUUID();
         const merchantId = randomUUID();
         const locationId = randomUUID();
@@ -319,6 +321,20 @@ export class PlatformService {
             normalized.organizationName,
             auth.userId,
           ],
+        );
+
+        await client.query(
+          `
+            INSERT INTO organization_subscriptions (
+              id,
+              organization_id,
+              plan,
+              status,
+              starts_at
+            )
+            VALUES ($1,$2,$3::subscription_plan,'ACTIVE',NOW())
+          `,
+          [subscriptionId, organizationId, normalized.plan],
         );
 
         await client.query(
@@ -487,6 +503,8 @@ export class PlatformService {
 
         const payload = {
           organizationId,
+          subscriptionId,
+          plan: normalized.plan,
           merchantId,
           locationId,
           ownerUserId,
@@ -541,6 +559,11 @@ export class PlatformService {
             id: organizationId,
             name: normalized.organizationName,
             slug: normalized.organizationSlug,
+            status: 'ACTIVE',
+          },
+          subscription: {
+            id: subscriptionId,
+            plan: normalized.plan,
             status: 'ACTIVE',
           },
           owner: {

@@ -15,11 +15,15 @@ import { TenantOptional } from '../auth/decorators/tenant-optional.decorator';
 import { CreateMemberDto } from './dto/create-member.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { OrganizationProvisioningService } from './organization-provisioning.service';
 import { OrganizationsService } from './organizations.service';
 
 @Controller('organizations')
 export class OrganizationsController {
-  constructor(private readonly organizationsService: OrganizationsService) {}
+  constructor(
+    private readonly organizationsService: OrganizationsService,
+    private readonly provisioning: OrganizationProvisioningService,
+  ) {}
 
   @TenantOptional()
   @Get()
@@ -31,7 +35,7 @@ export class OrganizationsController {
   @PlatformAdminOnly()
   @Post()
   create(@CurrentAuth() auth: AuthContext, @Body() dto: CreateOrganizationDto) {
-    return this.organizationsService.create(auth, dto);
+    return this.provisioning.create(auth, dto);
   }
 
   @Get('current')

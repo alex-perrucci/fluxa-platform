@@ -44,6 +44,19 @@ class AuthApi {
     }
   }
 
+  Future<OrganizationEntitlements> entitlements() async {
+    try {
+      final response = await _dio.get<Map<String, Object?>>('me/entitlements');
+      final data = response.data;
+      if (data == null) {
+        throw const BackendError(message: 'Risposta piano Fluxa vuota.');
+      }
+      return OrganizationEntitlements.fromJson(data);
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
   Future<TokenPair> switchOrganization(
     String organizationId,
     String refreshToken,
