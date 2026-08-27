@@ -41,7 +41,7 @@ describe('merchantNavigation', () => {
       '/merchant/location': '/merchant/venue',
       '/merchant/floor-plan': '/merchant/venue?view=map',
       '/merchant/kitchen-configuration': '/merchant/operations?view=printing',
-      '/merchant/pos-configuration': '/merchant/operations',
+      '/merchant/pos-configuration': '/merchant/operations?view=devices',
       '/merchant/fiscal-configuration': '/merchant/settings',
     });
 
