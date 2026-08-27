@@ -26,8 +26,8 @@ class KitchenController extends ChangeNotifier {
   KitchenLoadStatus _status = KitchenLoadStatus.idle;
   bool _busy = false;
   bool _pollInFlight = false;
+  bool _autoPollingEnabled = false;
   bool _autoPollingBlocked = false;
-  bool _suppressAutoPollingStart = false;
   String? _errorMessage;
   String? _noticeMessage;
   String? _pendingDispatchOrderId;
@@ -56,7 +56,6 @@ class KitchenController extends ChangeNotifier {
       if (_status == KitchenLoadStatus.idle) {
         await refresh();
       }
-      _ensureAutoPolling();
       return;
     }
     _requestVersion += 1;
@@ -73,10 +72,12 @@ class KitchenController extends ChangeNotifier {
     _errorMessage = null;
     _noticeMessage = null;
     _clearPendingDispatch();
-    _stopAutoPolling();
+    _cancelAutoPollTimer();
     notifyListeners();
     await refresh();
-    _ensureAutoPolling();
+    if (_autoPollingEnabled) {
+      _startAutoPolling(autoPollInterval);
+    }
   }
 
   void clearLocation() {
@@ -90,12 +91,28 @@ class KitchenController extends ChangeNotifier {
     _status = KitchenLoadStatus.idle;
     _busy = false;
     _pollInFlight = false;
+    _autoPollingEnabled = false;
     _autoPollingBlocked = false;
     _errorMessage = null;
     _noticeMessage = null;
     _clearPendingDispatch();
-    _stopAutoPolling();
+    _cancelAutoPollTimer();
     notifyListeners();
+  }
+
+  void startAutoPolling() {
+    _autoPollingEnabled = true;
+    if (_locationId == null || _autoPollTimer?.isActive == true) {
+      return;
+    }
+    _startAutoPolling(
+      _autoPollingBlocked ? subscriptionBackoffInterval : autoPollInterval,
+    );
+  }
+
+  void stopAutoPolling() {
+    _autoPollingEnabled = false;
+    _cancelAutoPollTimer();
   }
 
   Future<void> refresh() async {
@@ -293,13 +310,7 @@ class KitchenController extends ChangeNotifier {
       return false;
     }
     if (_locationId != locationId) {
-      final previousSuppression = _suppressAutoPollingStart;
-      _suppressAutoPollingStart = true;
-      try {
-        await bindLocation(locationId);
-      } finally {
-        _suppressAutoPollingStart = previousSuppression;
-      }
+      await bindLocation(locationId);
     }
     if (_busy) {
       return false;
@@ -464,35 +475,23 @@ class KitchenController extends ChangeNotifier {
       error.code == 'SUBSCRIPTION_SUSPENDED' ||
       error.code == 'SUBSCRIPTION_NOT_PROVISIONED';
 
-  void _ensureAutoPolling() {
-    if (_suppressAutoPollingStart || _locationId == null) {
-      return;
-    }
-    if (_autoPollTimer?.isActive == true) {
-      return;
-    }
-    _startAutoPolling(
-      _autoPollingBlocked ? subscriptionBackoffInterval : autoPollInterval,
-    );
-  }
-
   void _startAutoPolling(Duration interval) {
-    _autoPollTimer?.cancel();
-    if (_locationId == null || _suppressAutoPollingStart) {
-      _autoPollTimer = null;
+    _cancelAutoPollTimer();
+    if (!_autoPollingEnabled || _locationId == null) {
       return;
     }
     _autoPollTimer = Timer.periodic(interval, (_) => unawaited(pollTickets()));
   }
 
   void _enterSubscriptionBackoff() {
+    if (!_autoPollingEnabled) {
+      return;
+    }
     if (_autoPollingBlocked && _autoPollTimer?.isActive == true) {
       return;
     }
     _autoPollingBlocked = true;
-    if (!_suppressAutoPollingStart && _locationId != null) {
-      _startAutoPolling(subscriptionBackoffInterval);
-    }
+    _startAutoPolling(subscriptionBackoffInterval);
   }
 
   void _recoverAutoPollingIfNeeded() {
@@ -500,12 +499,12 @@ class KitchenController extends ChangeNotifier {
       return;
     }
     _autoPollingBlocked = false;
-    if (!_suppressAutoPollingStart && _locationId != null) {
+    if (_autoPollingEnabled) {
       _startAutoPolling(autoPollInterval);
     }
   }
 
-  void _stopAutoPolling() {
+  void _cancelAutoPollTimer() {
     _autoPollTimer?.cancel();
     _autoPollTimer = null;
   }
@@ -592,7 +591,8 @@ class KitchenController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _stopAutoPolling();
+    _autoPollingEnabled = false;
+    _cancelAutoPollTimer();
     super.dispose();
   }
 }
