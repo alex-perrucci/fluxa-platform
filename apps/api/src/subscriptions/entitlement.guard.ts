@@ -2,9 +2,7 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { AuthenticatedRequest } from '../auth/auth.types';
 import type { Entitlement } from './entitlements';
-import {
-  REQUIRED_ENTITLEMENT_KEY,
-} from './requires-entitlement.decorator';
+import { REQUIRED_ENTITLEMENT_KEY } from './requires-entitlement.decorator';
 import { SubscriptionsService } from './subscriptions.service';
 
 @Injectable()
