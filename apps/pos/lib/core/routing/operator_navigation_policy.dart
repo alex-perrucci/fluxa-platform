@@ -1,3 +1,5 @@
+import '../entitlements/pos_entitlement_context.dart';
+
 enum PosOperatorMode {
   auto('AUTO'),
   cashier('CASHIER'),
@@ -58,10 +60,11 @@ class PosNavigationPolicy {
       PosOperatorMode.auto => const <PosSection>[],
     };
 
-    if (entitlements == null) return roleSections;
+    final effectiveEntitlements = entitlements ?? PosEntitlementContext.current;
+    if (effectiveEntitlements == null) return roleSections;
 
     final filtered = roleSections
-        .where((section) => _hasEntitlement(section, entitlements))
+        .where((section) => _hasEntitlement(section, effectiveEntitlements))
         .toList(growable: false);
     return filtered.isEmpty ? const [PosSection.settings] : filtered;
   }
@@ -71,10 +74,13 @@ class PosNavigationPolicy {
     Set<String> entitlements,
   ) => switch (section) {
     PosSection.checkout => entitlements.contains('POS_CORE'),
-    PosSection.tables => entitlements.contains('TABLES'),
+    PosSection.tables =>
+      entitlements.contains('TABLES') &&
+          entitlements.contains('TABLE_SERVICE'),
     PosSection.orders => entitlements.contains('ORDERS'),
     PosSection.refunds => entitlements.contains('PAYMENTS'),
-    PosSection.kitchen => entitlements.contains('KITCHEN'),
+    PosSection.kitchen =>
+      entitlements.contains('KITCHEN') && entitlements.contains('KDS'),
     PosSection.printing => entitlements.contains('RECEIPT_PRINTING'),
     PosSection.fiscal => entitlements.contains('FISCAL'),
     PosSection.settings => true,
