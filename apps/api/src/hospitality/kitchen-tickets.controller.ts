@@ -10,10 +10,13 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { RequiresEntitlement } from '../subscriptions/requires-entitlement.decorator';
 import { DispatchKitchenTicketDto } from './dto/dispatch-kitchen-ticket.dto';
 import { KitchenTicketListQueryDto } from './dto/kitchen-ticket-list-query.dto';
 import { KitchenTicketMutationDto } from './dto/kitchen-ticket-mutation.dto';
 import { KitchenService } from './kitchen.service';
+
+@RequiresEntitlement('KITCHEN')
 @Controller()
 export class KitchenTicketsController {
   constructor(private readonly service: KitchenService) {}
