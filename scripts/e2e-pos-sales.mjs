@@ -129,6 +129,7 @@ const onboarding = await request('/platform/onboarding', {
   body: {
     organizationName: `Fluxa POS Sales ${suffix}`,
     organizationSlug: `fluxa-pos-sales-${suffix}`.slice(0, 78),
+    plan: 'PRO',
     ownerEmail,
     ownerDisplayName: 'Fluxa POS Sales Owner',
     ownerTemporaryPassword: ownerPassword,
@@ -150,8 +151,12 @@ const onboarding = await request('/platform/onboarding', {
 });
 const organizationId = onboarding?.organization?.id;
 const locationId = onboarding?.location?.id;
-if (!organizationId || !locationId) {
-  throw new Error('Onboarding response is incomplete.');
+if (
+  !organizationId ||
+  !locationId ||
+  onboarding?.subscription?.plan !== 'PRO'
+) {
+  throw new Error('Onboarding response is incomplete or missing PRO plan.');
 }
 
 const ownerLogin = await login(ownerEmail, ownerPassword, organizationId);
