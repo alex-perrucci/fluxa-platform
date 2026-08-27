@@ -17,6 +17,7 @@ class KitchenScreen extends ConsumerStatefulWidget {
 
 class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   String? _scheduledLocationId;
+  KitchenController? _pollingController;
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +26,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     final printingController = ref.watch(printingControllerProvider);
     final location = authController.state.deviceAssignment?.location;
     if (location == null) {
+      _stopPolling();
       return const FluxaEmptyView(
         icon: Icons.soup_kitchen_outlined,
         title: 'Location non disponibile',
@@ -35,6 +37,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     if (controller.locationId != location.id) {
       return const FluxaLoadingView(label: 'Allineamento cucina');
     }
+    _startPolling(controller);
     return KitchenView(
       controller: controller,
       location: location,
@@ -52,12 +55,34 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await controller.bindLocation(locationId);
+        if (mounted) {
+          _startPolling(controller);
+        }
       } finally {
         if (mounted && _scheduledLocationId == locationId) {
           setState(() => _scheduledLocationId = null);
         }
       }
     });
+  }
+
+  void _startPolling(KitchenController controller) {
+    if (!identical(_pollingController, controller)) {
+      _pollingController?.stopAutoPolling();
+      _pollingController = controller;
+    }
+    controller.startAutoPolling();
+  }
+
+  void _stopPolling() {
+    _pollingController?.stopAutoPolling();
+    _pollingController = null;
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    super.dispose();
   }
 }
 
@@ -530,13 +555,12 @@ class _TicketDetailPanel extends StatelessWidget {
   }
 }
 
-KitchenTicketStatus? _nextStatus(KitchenTicketStatus status) =>
-    switch (status) {
-      KitchenTicketStatus.queued => KitchenTicketStatus.inProgress,
-      KitchenTicketStatus.inProgress => KitchenTicketStatus.ready,
-      KitchenTicketStatus.ready => KitchenTicketStatus.served,
-      KitchenTicketStatus.served || KitchenTicketStatus.cancelled => null,
-    };
+KitchenTicketStatus? _nextStatus(KitchenTicketStatus status) => switch (status) {
+  KitchenTicketStatus.queued => KitchenTicketStatus.inProgress,
+  KitchenTicketStatus.inProgress => KitchenTicketStatus.ready,
+  KitchenTicketStatus.ready => KitchenTicketStatus.served,
+  KitchenTicketStatus.served || KitchenTicketStatus.cancelled => null,
+};
 
 String _nextLabel(KitchenTicketStatus status) => switch (status) {
   KitchenTicketStatus.inProgress => 'Inizia preparazione',
@@ -560,18 +584,17 @@ Future<void> _confirmCancelTicket(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Annulla comanda'),
+      title: const Text('Annullare la comanda?'),
       content: Text(
-        'Vuoi annullare ${ticket.number}? '
-        'Il backend consente l’annullamento soltanto quando è ancora in coda.',
+        'La comanda ${ticket.number} verrà annullata e le quantità potranno essere inviate di nuovo.',
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(dialogContext, false),
+          onPressed: () => Navigator.of(dialogContext).pop(false),
           child: const Text('Indietro'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(dialogContext, true),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
           child: const Text('Annulla comanda'),
         ),
       ],
@@ -581,6 +604,9 @@ Future<void> _confirmCancelTicket(
     await controller.transitionTicket(ticket, KitchenTicketStatus.cancelled);
   }
 }
+
+bool _isManagerRole(String? role) =>
+    role == 'OWNER' || role == 'ADMIN' || role == 'MANAGER';
 
 class _MessageCard extends StatelessWidget {
   const _MessageCard({
@@ -594,18 +620,15 @@ class _MessageCard extends StatelessWidget {
   final VoidCallback onDismiss;
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => Material(
+    color: error
+        ? Theme.of(context).colorScheme.errorContainer
+        : Theme.of(context).colorScheme.secondaryContainer,
+    borderRadius: BorderRadius.circular(12),
     child: ListTile(
       leading: Icon(error ? Icons.error_outline : Icons.check_circle_outline),
       title: Text(message),
-      trailing: IconButton(
-        tooltip: 'Chiudi',
-        onPressed: onDismiss,
-        icon: const Icon(Icons.close),
-      ),
+      trailing: IconButton(onPressed: onDismiss, icon: const Icon(Icons.close)),
     ),
   );
 }
-
-bool _isManagerRole(String? role) =>
-    const {'OWNER', 'ADMIN', 'MANAGER'}.contains(role);
