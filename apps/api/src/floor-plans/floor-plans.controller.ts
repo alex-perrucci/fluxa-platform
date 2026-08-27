@@ -9,11 +9,13 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { RequiresEntitlement } from '../subscriptions/requires-entitlement.decorator';
 import { PublishFloorPlanDto } from './dto/publish-floor-plan.dto';
 import { SaveFloorPlanDraftDto } from './dto/save-floor-plan-draft.dto';
 import { FloorPlanLocationsService } from './floor-plan-locations.service';
 import { FloorPlansService } from './floor-plans.service';
 
+@RequiresEntitlement('FLOOR_PLAN')
 @Roles('OWNER', 'ADMIN', 'MANAGER')
 @Controller('floor-plans')
 export class FloorPlansController {
