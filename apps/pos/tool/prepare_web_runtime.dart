@@ -41,7 +41,9 @@ Future<void> _ensureAsset(
   Directory webDirectory,
   WebRuntimeAsset asset,
 ) async {
-  final target = File('${webDirectory.path}${Platform.pathSeparator}${asset.fileName}');
+  final targetPath =
+      '${webDirectory.path}${Platform.pathSeparator}${asset.fileName}';
+  final target = File(targetPath);
 
   if (await target.exists()) {
     final digest = await _sha256(target);
@@ -59,7 +61,10 @@ Future<void> _ensureAsset(
 
   try {
     final request = await client.getUrl(Uri.parse(asset.url));
-    request.headers.set(HttpHeaders.userAgentHeader, 'Fluxa-POS-Web-Runtime/1.0');
+    request.headers.set(
+      HttpHeaders.userAgentHeader,
+      'Fluxa-POS-Web-Runtime/1.0',
+    );
     final response = await request.close();
     if (response.statusCode != HttpStatus.ok) {
       throw HttpException(
@@ -108,7 +113,11 @@ Future<void> _ensureAsset(
 
 Future<String> _sha256(File file) async {
   if (Platform.isWindows) {
-    final result = await Process.run('certutil', ['-hashfile', file.path, 'SHA256']);
+    final result = await Process.run('certutil', [
+      '-hashfile',
+      file.path,
+      'SHA256',
+    ]);
     if (result.exitCode != 0) {
       throw ProcessException(
         'certutil',
@@ -117,7 +126,9 @@ Future<String> _sha256(File file) async {
         result.exitCode,
       );
     }
-    final matches = RegExp(r'\b[0-9a-fA-F]{64}\b').allMatches(result.stdout.toString());
+    final matches = RegExp(
+      r'\b[0-9a-fA-F]{64}\b',
+    ).allMatches(result.stdout.toString());
     if (matches.isEmpty) {
       throw StateError('Unable to parse SHA-256 from certutil output.');
     }
@@ -125,7 +136,9 @@ Future<String> _sha256(File file) async {
   }
 
   final executable = Platform.isMacOS ? 'shasum' : 'sha256sum';
-  final arguments = Platform.isMacOS ? ['-a', '256', file.path] : [file.path];
+  final arguments = Platform.isMacOS
+      ? ['-a', '256', file.path]
+      : [file.path];
   final result = await Process.run(executable, arguments);
   if (result.exitCode != 0) {
     throw ProcessException(
