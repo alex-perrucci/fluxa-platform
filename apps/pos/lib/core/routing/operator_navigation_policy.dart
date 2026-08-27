@@ -37,9 +37,7 @@ class PosNavigationPolicy {
     required PosOperatorMode mode,
     Set<String>? entitlements,
   }) {
-    final effective = mode == PosOperatorMode.auto
-        ? _modeForRole(role)
-        : mode;
+    final effective = mode == PosOperatorMode.auto ? _modeForRole(role) : mode;
     final roleSections = switch (effective) {
       PosOperatorMode.cashier => const [
         PosSection.checkout,
@@ -71,22 +69,20 @@ class PosNavigationPolicy {
     return filtered.isEmpty ? const [PosSection.settings] : filtered;
   }
 
-  static bool _hasEntitlement(
-    PosSection section,
-    Set<String> entitlements,
-  ) => switch (section) {
-    PosSection.checkout => entitlements.contains('POS_CORE'),
-    PosSection.tables =>
-      entitlements.contains('TABLES') &&
-          entitlements.contains('TABLE_SERVICE'),
-    PosSection.orders => entitlements.contains('ORDERS'),
-    PosSection.refunds => entitlements.contains('PAYMENTS'),
-    PosSection.kitchen =>
-      entitlements.contains('KITCHEN') && entitlements.contains('KDS'),
-    PosSection.printing => entitlements.contains('RECEIPT_PRINTING'),
-    PosSection.fiscal => entitlements.contains('FISCAL'),
-    PosSection.settings => true,
-  };
+  static bool _hasEntitlement(PosSection section, Set<String> entitlements) =>
+      switch (section) {
+        PosSection.checkout => entitlements.contains('POS_CORE'),
+        PosSection.tables =>
+          entitlements.contains('TABLES') &&
+              entitlements.contains('TABLE_SERVICE'),
+        PosSection.orders => entitlements.contains('ORDERS'),
+        PosSection.refunds => entitlements.contains('PAYMENTS'),
+        PosSection.kitchen =>
+          entitlements.contains('KITCHEN') && entitlements.contains('KDS'),
+        PosSection.printing => entitlements.contains('RECEIPT_PRINTING'),
+        PosSection.fiscal => entitlements.contains('FISCAL'),
+        PosSection.settings => true,
+      };
 
   static PosOperatorMode _modeForRole(String? role) => switch (role) {
     'OWNER' || 'ADMIN' || 'MANAGER' => PosOperatorMode.manager,
