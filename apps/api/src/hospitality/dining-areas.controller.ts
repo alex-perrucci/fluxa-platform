@@ -11,9 +11,12 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { RequiresEntitlement } from '../subscriptions/requires-entitlement.decorator';
 import { CreateDiningAreaDto } from './dto/create-dining-area.dto';
 import { UpdateDiningAreaDto } from './dto/update-dining-area.dto';
 import { HospitalityService } from './hospitality.service';
+
+@RequiresEntitlement('TABLES')
 @Controller('dining-areas')
 export class DiningAreasController {
   constructor(private readonly service: HospitalityService) {}
