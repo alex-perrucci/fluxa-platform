@@ -30,9 +30,7 @@ void main() {
     await controller.bindLocation('location-1');
     final stationCallsAfterBind = gateway.stationCalls;
     final ticketCallsAfterBind = gateway.ticketCalls;
-    gateway.tickets = [
-      kitchenTicketFixture(status: 'IN_PROGRESS', version: 2),
-    ];
+    gateway.tickets = [kitchenTicketFixture(status: 'IN_PROGRESS', version: 2)];
 
     await controller.pollTickets();
 
