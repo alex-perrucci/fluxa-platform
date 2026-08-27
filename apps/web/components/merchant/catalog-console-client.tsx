@@ -85,6 +85,7 @@ export function CatalogConsole({
   const [search, setSearch] = useState('');
   const [showProductComposer, setShowProductComposer] = useState(false);
   const [showCategoryComposer, setShowCategoryComposer] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const prices = useMemo(
@@ -249,6 +250,7 @@ export function CatalogConsole({
         }),
       });
       await refresh();
+      setEditingProductId(null);
     }, 'Prodotto aggiornato.');
   }
 
@@ -429,7 +431,7 @@ export function CatalogConsole({
                 <label className="field"><span>Disponibilità</span><span className="flex items-center gap-2"><input className="h-4 w-4" name="trackAvailability" type="checkbox" /> Traccia disponibilità</span></label>
               </div>
             </details>
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button className="button-secondary" onClick={() => setShowProductComposer(false)} type="button">Annulla</button>
               <button className="button-primary" disabled={pending || !activeCategories.length} type="submit">Salva prodotto</button>
             </div>
@@ -457,8 +459,8 @@ export function CatalogConsole({
 
       <section className="glass-panel panel-padding">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="field min-w-[260px]"><span>Cerca</span><input onChange={(event) => setSearch(event.target.value)} placeholder="Cerca prodotto o categoria…" value={search} /></label>
-          <label className="field min-w-[220px]"><span>Prezzi mostrati</span><select disabled={pending} onChange={(event) => void loadPriceList(event.target.value)} value={priceList?.id ?? ''}><option value="">Menu principale</option>{priceLists.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="field w-full sm:w-auto sm:min-w-[260px]"><span>Cerca</span><input onChange={(event) => setSearch(event.target.value)} placeholder="Cerca prodotto o categoria…" value={search} /></label>
+          <label className="field w-full sm:w-auto sm:min-w-[220px]"><span>Prezzi mostrati</span><select disabled={pending} onChange={(event) => void loadPriceList(event.target.value)} value={priceList?.id ?? ''}><option value="">Menu principale</option>{priceLists.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         </div>
 
         {selected.size ? (
@@ -466,7 +468,7 @@ export function CatalogConsole({
             <strong>{selected.size} selezionati</strong>
             <button className="button-secondary" disabled={pending} onClick={() => void bulkUpdate('ACTIVE')} type="button">Attiva</button>
             <button className="button-secondary" disabled={pending} onClick={() => void bulkUpdate('INACTIVE')} type="button">Disattiva</button>
-            <select className="rounded-lg border px-3 py-2 text-sm" defaultValue="" disabled={pending} onChange={(event) => { if (event.target.value) void bulkUpdate('CATEGORY', event.target.value); }}><option value="">Sposta in categoria…</option>{activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+            <select className="min-w-0 max-w-full rounded-lg border px-3 py-2 text-sm" defaultValue="" disabled={pending} onChange={(event) => { if (event.target.value) void bulkUpdate('CATEGORY', event.target.value); }}><option value="">Sposta in categoria…</option>{activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
             <button className="button-secondary" onClick={() => setSelected(new Set())} type="button">Deseleziona</button>
           </div>
         ) : null}
@@ -475,49 +477,67 @@ export function CatalogConsole({
           {categories.filter((category) => productsByCategory.get(category.id)?.length || (!search && category.status === 'ACTIVE')).map((category) => {
             const categoryProducts = productsByCategory.get(category.id) ?? [];
             return (
-              <section className="rounded-2xl border border-neutral-200 bg-white" key={category.id}>
-                <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {category.colorHex ? <span className="h-3 w-3 rounded-full" style={{ backgroundColor: category.colorHex }} /> : null}
-                    <strong>{category.name}</strong>
-                    <span className="muted">{categoryProducts.length} prodotti</span>
+              <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white" key={category.id}>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-3">
+                    {category.colorHex ? <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: category.colorHex }} /> : null}
+                    <strong className="min-w-0 break-words">{category.name}</strong>
+                    <span className="muted whitespace-nowrap">{categoryProducts.length} prodotti</span>
                   </div>
-                  <span className="text-xs font-medium text-neutral-500">{category.status === 'ACTIVE' ? 'Attiva' : 'Nascosta'}</span>
+                  <span className="whitespace-nowrap text-xs font-medium text-neutral-500">{category.status === 'ACTIVE' ? 'Attiva' : 'Nascosta'}</span>
                 </div>
                 {categoryProducts.length ? (
                   <div className="divide-y divide-neutral-100">
                     {categoryProducts.map((product) => {
                       const price = prices.get(product.id);
+                      const editing = editingProductId === product.id;
                       return (
                         <div className="p-4" key={product.id}>
-                          <div className="grid items-center gap-3 md:grid-cols-[auto_minmax(180px,1fr)_170px_auto_auto]">
-                            {canManage ? <input aria-label={`Seleziona ${product.name}`} checked={selected.has(product.id)} className="h-4 w-4" onChange={() => toggleSelected(product.id)} type="checkbox" /> : <span />}
-                            <div><strong>{product.name}</strong><p className="muted">{product.vatCode} · {product.unit === 'EACH' ? 'pezzo' : product.unit === 'WEIGHT' ? 'peso' : 'volume'}</p></div>
-                            {canManage ? (
-                              <form className="flex items-end gap-2" onSubmit={(event) => void quickSavePrice(event, product.id)}>
-                                <label className="field"><span>Prezzo</span><input defaultValue={price ? (price.amountCents / 100).toFixed(2).replace('.', ',') : ''} inputMode="decimal" name="price" placeholder="0,00" /></label>
-                                <button className="button-secondary" disabled={pending || !priceList} type="submit">Salva</button>
-                              </form>
-                            ) : <strong>{euro(price?.amountCents)}</strong>}
-                            <button className={product.status === 'ACTIVE' ? 'button-secondary' : 'button-primary'} disabled={!canManage || pending} onClick={() => void toggleProduct(product)} type="button">{product.status === 'ACTIVE' ? 'Disponibile' : 'Non disponibile'}</button>
-                            <details className="relative">
-                              <summary className="button-secondary cursor-pointer list-none">Modifica</summary>
-                              <div className="mt-3 md:absolute md:right-0 md:z-20 md:w-[620px]">
-                                <form className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl" onSubmit={(event) => void saveProduct(event, product)}>
-                                  <div className="form-grid">
-                                    <label className="field"><span>Nome</span><input defaultValue={product.name} disabled={!canManage} name="name" required /></label>
-                                    <label className="field"><span>Categoria</span><select defaultValue={product.categoryId} disabled={!canManage} name="categoryId">{activeCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-                                    <label className="field"><span>IVA</span><select defaultValue={product.vatRateId} disabled={!canManage} name="vatRateId">{activeVatRates.map((item) => <option key={item.id} value={item.id}>{vatLabel(item)}</option>)}</select></label>
-                                    <label className="field"><span>Stato</span><select defaultValue={product.status} disabled={!canManage} name="status"><option value="ACTIVE">Disponibile</option><option value="INACTIVE">Non disponibile</option></select></label>
-                                    <label className="field"><span>Codice interno</span><input defaultValue={product.code} disabled={!canManage} name="code" required /></label>
-                                    <label className="field"><span>SKU</span><input defaultValue={product.sku ?? ''} disabled={!canManage} name="sku" /></label>
-                                    <label className="field"><span>Barcode</span><input defaultValue={product.barcode ?? ''} disabled={!canManage} name="barcode" /></label>
-                                  </div>
-                                  {canManage ? <div className="mt-4 flex justify-end"><button className="button-primary" disabled={pending} type="submit">Salva modifiche</button></div> : null}
-                                </form>
+                          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                            <div className="flex min-w-0 items-start gap-3">
+                              {canManage ? <input aria-label={`Seleziona ${product.name}`} checked={selected.has(product.id)} className="mt-1 h-4 w-4 shrink-0" onChange={() => toggleSelected(product.id)} type="checkbox" /> : null}
+                              <div className="min-w-0">
+                                <strong className="block break-words">{product.name}</strong>
+                                <p className="muted break-words">{product.vatCode} · {product.unit === 'EACH' ? 'pezzo' : product.unit === 'WEIGHT' ? 'peso' : 'volume'}</p>
                               </div>
-                            </details>
+                            </div>
+                            <div className="flex min-w-0 flex-wrap items-end gap-2 xl:justify-end">
+                              {canManage ? (
+                                <form className="flex min-w-0 flex-wrap items-end gap-2" onSubmit={(event) => void quickSavePrice(event, product.id)}>
+                                  <label className="field w-full min-w-0 sm:w-[150px]"><span>Prezzo</span><input defaultValue={price ? (price.amountCents / 100).toFixed(2).replace('.', ',') : ''} inputMode="decimal" name="price" placeholder="0,00" /></label>
+                                  <button className="button-secondary" disabled={pending || !priceList} type="submit">Salva</button>
+                                </form>
+                              ) : <strong>{euro(price?.amountCents)}</strong>}
+                              <button className={product.status === 'ACTIVE' ? 'button-secondary' : 'button-primary'} disabled={!canManage || pending} onClick={() => void toggleProduct(product)} type="button">{product.status === 'ACTIVE' ? 'Disponibile' : 'Non disponibile'}</button>
+                              <button
+                                aria-expanded={editing}
+                                className="button-secondary"
+                                disabled={!canManage}
+                                onClick={() => setEditingProductId((current) => current === product.id ? null : product.id)}
+                                type="button"
+                              >
+                                {editing ? 'Chiudi' : 'Modifica'}
+                              </button>
+                            </div>
                           </div>
+
+                          {editing ? (
+                            <form className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4" onSubmit={(event) => void saveProduct(event, product)}>
+                              <div className="form-grid">
+                                <label className="field"><span>Nome</span><input defaultValue={product.name} disabled={!canManage} name="name" required /></label>
+                                <label className="field"><span>Categoria</span><select defaultValue={product.categoryId} disabled={!canManage} name="categoryId">{activeCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                                <label className="field"><span>IVA</span><select defaultValue={product.vatRateId} disabled={!canManage} name="vatRateId">{activeVatRates.map((item) => <option key={item.id} value={item.id}>{vatLabel(item)}</option>)}</select></label>
+                                <label className="field"><span>Stato</span><select defaultValue={product.status} disabled={!canManage} name="status"><option value="ACTIVE">Disponibile</option><option value="INACTIVE">Non disponibile</option></select></label>
+                                <label className="field"><span>Codice interno</span><input defaultValue={product.code} disabled={!canManage} name="code" required /></label>
+                                <label className="field"><span>SKU</span><input defaultValue={product.sku ?? ''} disabled={!canManage} name="sku" /></label>
+                                <label className="field"><span>Barcode</span><input defaultValue={product.barcode ?? ''} disabled={!canManage} name="barcode" /></label>
+                              </div>
+                              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                                <button className="button-secondary" disabled={pending} onClick={() => setEditingProductId(null)} type="button">Annulla</button>
+                                <button className="button-primary" disabled={pending} type="submit">Salva modifiche</button>
+                              </div>
+                            </form>
+                          ) : null}
                         </div>
                       );
                     })}
@@ -538,15 +558,15 @@ export function CatalogConsole({
         <p className="muted mt-2">IVA, codici interni, listini e configurazioni usate meno spesso.</p>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-3">
-          <section className="rounded-2xl border border-neutral-200 bg-white p-4">
+          <section className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-4">
             <h3 className="font-semibold">Categorie</h3>
             <div className="mt-3 space-y-3">
               {categories.map((category) => (
-                <form className="rounded-xl border p-3" key={category.id} onSubmit={(event) => void saveCategory(event, category)}>
-                  <div className="grid gap-2">
+                <form className="min-w-0 rounded-xl border p-3" key={category.id} onSubmit={(event) => void saveCategory(event, category)}>
+                  <div className="grid min-w-0 gap-2">
                     <input defaultValue={category.name} disabled={!canManage} name="name" aria-label="Nome categoria" />
                     <input defaultValue={category.code} disabled={!canManage} name="code" aria-label="Codice categoria" />
-                    <div className="grid grid-cols-3 gap-2"><input defaultValue={category.colorHex ?? ''} disabled={!canManage} name="colorHex" placeholder="#000000" /><input defaultValue={category.sortOrder} disabled={!canManage} min="0" name="sortOrder" type="number" /><select defaultValue={category.status} disabled={!canManage} name="status"><option value="ACTIVE">Attiva</option><option value="INACTIVE">Nascosta</option></select></div>
+                    <div className="grid gap-2 sm:grid-cols-3"><input defaultValue={category.colorHex ?? ''} disabled={!canManage} name="colorHex" placeholder="#000000" /><input defaultValue={category.sortOrder} disabled={!canManage} min="0" name="sortOrder" type="number" /><select defaultValue={category.status} disabled={!canManage} name="status"><option value="ACTIVE">Attiva</option><option value="INACTIVE">Nascosta</option></select></div>
                     {canManage ? <button className="button-secondary" disabled={pending} type="submit">Salva</button> : null}
                   </div>
                 </form>
@@ -554,20 +574,20 @@ export function CatalogConsole({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-neutral-200 bg-white p-4">
+          <section className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-4">
             <h3 className="font-semibold">IVA</h3>
             <p className="muted mt-1">Il percorso standard usa automaticamente l’aliquota predefinita.</p>
             {canManage ? <form className="mt-3 grid gap-2" onSubmit={createVat}><input name="name" placeholder="IVA 10%" required /><input name="code" placeholder="Codice" required /><input inputMode="decimal" name="rate" placeholder="10" required /><input name="natureCode" placeholder="Natura (se serve)" /><label className="flex items-center gap-2 text-sm"><input name="isDefault" type="checkbox" /> Usa come predefinita</label><button className="button-secondary" disabled={pending} type="submit">Aggiungi aliquota</button></form> : null}
             <div className="mt-4 space-y-3">
               {vatRates.map((vat) => (
-                <form className="rounded-xl border p-3" key={vat.id} onSubmit={(event) => void saveVat(event, vat)}>
-                  <div className="grid gap-2"><input defaultValue={vat.name} disabled={!canManage} name="name" /><input defaultValue={vat.code} disabled={!canManage} name="code" /><div className="grid grid-cols-2 gap-2"><input defaultValue={(vat.rateBasisPoints / 100).toString().replace('.', ',')} disabled={!canManage} inputMode="decimal" name="rate" /><input defaultValue={vat.natureCode ?? ''} disabled={!canManage} name="natureCode" /></div><div className="flex items-center justify-between gap-2"><label className="flex items-center gap-2 text-sm"><input defaultChecked={vat.isDefault} disabled={!canManage} name="isDefault" type="checkbox" /> Predefinita</label><select defaultValue={vat.status} disabled={!canManage} name="status"><option value="ACTIVE">Attiva</option><option value="INACTIVE">Inattiva</option></select></div>{canManage ? <button className="button-secondary" disabled={pending} type="submit">Salva</button> : null}</div>
+                <form className="min-w-0 rounded-xl border p-3" key={vat.id} onSubmit={(event) => void saveVat(event, vat)}>
+                  <div className="grid min-w-0 gap-2"><input defaultValue={vat.name} disabled={!canManage} name="name" /><input defaultValue={vat.code} disabled={!canManage} name="code" /><div className="grid gap-2 sm:grid-cols-2"><input defaultValue={(vat.rateBasisPoints / 100).toString().replace('.', ',')} disabled={!canManage} inputMode="decimal" name="rate" /><input defaultValue={vat.natureCode ?? ''} disabled={!canManage} name="natureCode" /></div><div className="flex flex-wrap items-center justify-between gap-2"><label className="flex items-center gap-2 text-sm"><input defaultChecked={vat.isDefault} disabled={!canManage} name="isDefault" type="checkbox" /> Predefinita</label><select defaultValue={vat.status} disabled={!canManage} name="status"><option value="ACTIVE">Attiva</option><option value="INACTIVE">Inattiva</option></select></div>{canManage ? <button className="button-secondary" disabled={pending} type="submit">Salva</button> : null}</div>
                 </form>
               ))}
             </div>
           </section>
 
-          <section className="rounded-2xl border border-neutral-200 bg-white p-4">
+          <section className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-4">
             <h3 className="font-semibold">Listini</h3>
             <label className="field mt-3"><span>Sede</span><select onChange={(event) => setLocationId(event.target.value)} value={locationId}><option value="">Nessuna sede specifica</option>{initialLocations.filter((item) => item.status === 'ACTIVE').map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
             {canManage ? <form className="mt-3 grid gap-2" onSubmit={createPriceList}><input name="name" placeholder="Menu principale" required /><input name="code" placeholder="Codice automatico" /><input defaultValue="0" min="0" name="priority" type="number" /><button className="button-secondary" disabled={pending} type="submit">Aggiungi listino</button></form> : null}

@@ -15,10 +15,33 @@ import type {
 import { PosDevicesConsole } from '@/components/merchant/pos-devices-console';
 import { PlanFeatureGate } from '@/components/subscriptions/plan-feature-gate';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
+import { FluxaApiError } from '@/lib/api/fluxa-api';
 import { requireMerchantSession } from '@/lib/auth/session';
 import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
 import { getMerchantEntitlements } from '@/lib/subscriptions/entitlements';
 import { merchantUiCapabilities } from '@/lib/subscriptions/merchant-ui-policy';
+
+type OptionalLoad<T> = {
+  data: T;
+  error: string | null;
+};
+
+async function loadOptional<T>(path: string, fallback: T): Promise<OptionalLoad<T>> {
+  try {
+    return {
+      data: await authenticatedFluxaFetch<T>(path),
+      error: null,
+    };
+  } catch (error) {
+    if (error instanceof FluxaApiError) {
+      return {
+        data: fallback,
+        error: error.message,
+      };
+    }
+    throw error;
+  }
+}
 
 export default async function OperationsPage({
   searchParams,
@@ -44,7 +67,7 @@ export default async function OperationsPage({
         >
           <Link
             className={view === 'devices' ? 'button-primary' : 'button-secondary'}
-            href="/merchant/operations"
+            href="/merchant/operations?view=devices"
           >
             Dispositivi
           </Link>
@@ -105,12 +128,24 @@ export default async function OperationsPage({
 
 async function PrintingSection() {
   const session = await requireMerchantSession();
-  const [locations, categories] = await Promise.all([
-    authenticatedFluxaFetch<CatalogLocation[]>('/locations'),
-    authenticatedFluxaFetch<CatalogPage<CatalogCategory>>(
+  const [locationsResult, categoriesResult] = await Promise.all([
+    loadOptional<CatalogLocation[]>('/locations', []),
+    loadOptional<CatalogPage<CatalogCategory>>(
       '/categories?page=1&pageSize=100',
+      { items: [], total: 0, page: 1, pageSize: 100 },
     ),
   ]);
+  const locations = locationsResult.data;
+
+  if (locationsResult.error) {
+    return (
+      <EmptyState
+        description="Non siamo riusciti a caricare le sedi. Riprova tra poco: il resto della dashboard rimane disponibile."
+        title="Sedi non disponibili"
+      />
+    );
+  }
+
   const membership = session.availableOrganizations.find(
     (organization) =>
       organization.organizationId === session.session.organizationId,
@@ -130,21 +165,33 @@ async function PrintingSection() {
     );
   }
 
-  const [stationRows, routeRows, printerPage, printRouteRows] =
+  const encodedLocationId = encodeURIComponent(initialLocationId);
+  const [stationsResult, routesResult, printersResult, printRoutesResult] =
     await Promise.all([
-      authenticatedFluxaFetch<KitchenStation[]>(
-        `/kitchen-stations?locationId=${encodeURIComponent(initialLocationId)}`,
+      loadOptional<KitchenStation[]>(
+        `/kitchen-stations?locationId=${encodedLocationId}`,
+        [],
       ),
-      authenticatedFluxaFetch<CategoryRoute[]>(
-        `/kitchen-station-routes?locationId=${encodeURIComponent(initialLocationId)}`,
+      loadOptional<CategoryRoute[]>(
+        `/kitchen-station-routes?locationId=${encodedLocationId}`,
+        [],
       ),
-      authenticatedFluxaFetch<CatalogPage<LogicalPrinter>>(
-        `/printers?locationId=${encodeURIComponent(initialLocationId)}&page=1&pageSize=100`,
+      loadOptional<CatalogPage<LogicalPrinter>>(
+        `/printers?locationId=${encodedLocationId}&page=1&pageSize=100`,
+        { items: [], total: 0, page: 1, pageSize: 100 },
       ),
-      authenticatedFluxaFetch<PrintRoute[]>(
-        `/print-routes?locationId=${encodeURIComponent(initialLocationId)}`,
+      loadOptional<PrintRoute[]>(
+        `/print-routes?locationId=${encodedLocationId}`,
+        [],
       ),
     ]);
+  const loadErrors = [
+    categoriesResult.error,
+    stationsResult.error,
+    routesResult.error,
+    printersResult.error,
+    printRoutesResult.error,
+  ].filter((message): message is string => Boolean(message));
   const canManage = ['OWNER', 'ADMIN', 'MANAGER'].includes(
     session.session.role ?? '',
   );
@@ -158,15 +205,27 @@ async function PrintingSection() {
           stampante.
         </p>
       </div>
+      {loadErrors.length ? (
+        <div
+          className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+          role="status"
+        >
+          <strong>Configurazione caricata parzialmente</strong>
+          <p className="mt-1">
+            Una o più sezioni operative non hanno risposto. Puoi continuare con
+            quelle disponibili e riprovare senza uscire dalla dashboard.
+          </p>
+        </div>
+      ) : null}
       <KitchenConfigurationConsole
         canManage={canManage}
-        categories={categories.items}
-        initialCategoryRoutes={routeRows}
+        categories={categoriesResult.data.items}
+        initialCategoryRoutes={routesResult.data}
         initialLocationId={initialLocationId}
         initialLocations={locations}
-        initialPrintRoutes={printRouteRows}
-        initialPrinters={printerPage.items}
-        initialStations={stationRows}
+        initialPrintRoutes={printRoutesResult.data}
+        initialPrinters={printersResult.data.items}
+        initialStations={stationsResult.data}
       />
     </>
   );

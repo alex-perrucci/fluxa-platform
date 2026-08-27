@@ -108,6 +108,7 @@ export function KitchenConfigurationConsole({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loadWarning, setLoadWarning] = useState<string | null>(null);
   const [documentType, setDocumentType] = useState<PrintRoute['documentType']>('KITCHEN_TICKET');
 
   const routeByCategory = useMemo(
@@ -124,19 +125,32 @@ export function KitchenConfigurationConsole({
       setCategoryRoutes([]);
       setPrinters([]);
       setPrintRoutes([]);
+      setLoadWarning(null);
       return;
     }
+
     const encoded = encodeURIComponent(targetLocationId);
-    const [nextStations, nextRoutes, nextPrinters, nextPrintRoutes] = await Promise.all([
+    const results = await Promise.allSettled([
       requestJson<KitchenStation[]>(`/api/control-center/merchant/configuration/kitchen-stations?locationId=${encoded}`),
       requestJson<CategoryRoute[]>(`/api/control-center/merchant/configuration/kitchen-station-routes?locationId=${encoded}`),
       requestJson<CatalogPage<LogicalPrinter>>(`/api/control-center/merchant/configuration/printers?locationId=${encoded}&page=1&pageSize=100`),
       requestJson<PrintRoute[]>(`/api/control-center/merchant/configuration/print-routes?locationId=${encoded}`),
-    ]);
-    setStations(nextStations);
-    setCategoryRoutes(nextRoutes);
-    setPrinters(nextPrinters.items);
-    setPrintRoutes(nextPrintRoutes);
+    ] as const);
+
+    const [stationsResult, routesResult, printersResult, printRoutesResult] = results;
+    setStations(stationsResult.status === 'fulfilled' ? stationsResult.value : []);
+    setCategoryRoutes(routesResult.status === 'fulfilled' ? routesResult.value : []);
+    setPrinters(printersResult.status === 'fulfilled' ? printersResult.value.items : []);
+    setPrintRoutes(printRoutesResult.status === 'fulfilled' ? printRoutesResult.value : []);
+
+    const failures = results.filter((result) => result.status === 'rejected').length;
+    setLoadWarning(
+      failures === 0
+        ? null
+        : failures === results.length
+          ? 'La configurazione operativa della sede non ha risposto. I dati non disponibili sono stati svuotati per evitare di mostrare configurazioni di un’altra sede.'
+          : 'Alcune configurazioni della sede non hanno risposto. Le sezioni disponibili restano utilizzabili e i dati non caricati non vengono sostituiti con dati vecchi.',
+    );
   }
 
   async function run(action: () => Promise<void>, success: string) {
@@ -255,6 +269,7 @@ export function KitchenConfigurationConsole({
     <div>
       <ControlCenterNotification message={error} onDismiss={() => setError(null)} title="Operazione non completata" />
       <ControlCenterNotification message={message} onDismiss={() => setMessage(null)} title="Operatività aggiornata" />
+      <ControlCenterNotification message={loadWarning} onDismiss={() => setLoadWarning(null)} title="Configurazione parziale" />
 
       <div className="filter-bar">
         <select disabled={pending} onChange={(event) => void changeLocation(event.target.value)} value={locationId}>
@@ -285,7 +300,7 @@ export function KitchenConfigurationConsole({
             <button className="button-secondary" disabled={pending} type="submit">Aggiungi</button>
             <details className="text-sm">
               <summary className="cursor-pointer text-neutral-500">Opzioni avanzate</summary>
-              <div className="mt-2 flex gap-2"><input name="code" placeholder="Codice automatico" /><input defaultValue="0" min="0" name="sortOrder" placeholder="Ordine" type="number" /></div>
+              <div className="mt-2 flex flex-wrap gap-2"><input name="code" placeholder="Codice automatico" /><input defaultValue="0" min="0" name="sortOrder" placeholder="Ordine" type="number" /></div>
             </details>
           </form>
         ) : null}
@@ -296,7 +311,7 @@ export function KitchenConfigurationConsole({
             return (
               <div className="data-row" key={category.id}>
                 <div><strong>{category.name}</strong><small>{current ? `Va a ${current.stationName}` : 'Nessuna preparazione'}</small></div>
-                <label className="field min-w-[220px]"><span>Dove arriva?</span><select disabled={!canManage || pending} onChange={(event) => void routeCategory(category.id, event.target.value)} value={current?.stationId ?? ''}><option value="">Nessuna preparazione</option>{activeStations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label>
+                <label className="field min-w-0"><span>Dove arriva?</span><select disabled={!canManage || pending} onChange={(event) => void routeCategory(category.id, event.target.value)} value={current?.stationId ?? ''}><option value="">Nessuna preparazione</option>{activeStations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label>
               </div>
             );
           })}
