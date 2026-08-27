@@ -482,10 +482,7 @@ class KitchenController extends ChangeNotifier {
       _autoPollTimer = null;
       return;
     }
-    _autoPollTimer = Timer.periodic(
-      interval,
-      (_) => unawaited(pollTickets()),
-    );
+    _autoPollTimer = Timer.periodic(interval, (_) => unawaited(pollTickets()));
   }
 
   void _enterSubscriptionBackoff() {
