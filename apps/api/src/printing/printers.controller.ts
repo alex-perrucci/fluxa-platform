@@ -40,7 +40,9 @@ export class PrintersController {
       ? result
       : {
           ...result,
-          items: result.items.filter((printer) => printer.purpose !== 'KITCHEN'),
+          items: result.items.filter(
+            (printer) => printer.purpose !== 'KITCHEN',
+          ),
         };
   }
 
