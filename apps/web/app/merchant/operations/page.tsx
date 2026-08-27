@@ -17,10 +17,8 @@ import { PlanFeatureGate } from '@/components/subscriptions/plan-feature-gate';
 import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { requireMerchantSession } from '@/lib/auth/session';
 import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
-import {
-  getMerchantEntitlements,
-  hasEntitlement,
-} from '@/lib/subscriptions/entitlements';
+import { getMerchantEntitlements } from '@/lib/subscriptions/entitlements';
+import { merchantUiCapabilities } from '@/lib/subscriptions/merchant-ui-policy';
 
 export default async function OperationsPage({
   searchParams,
@@ -29,9 +27,7 @@ export default async function OperationsPage({
 }) {
   const params = await searchParams;
   const subscription = await getMerchantEntitlements();
-  const canUseKitchen =
-    hasEntitlement(subscription, 'KITCHEN') &&
-    hasEntitlement(subscription, 'KITCHEN_PRINTING');
+  const capabilities = merchantUiCapabilities(subscription.entitlements);
   const view = params.view === 'printing' ? 'printing' : 'devices';
 
   return (
@@ -52,7 +48,7 @@ export default async function OperationsPage({
           >
             Dispositivi
           </Link>
-          {canUseKitchen ? (
+          {capabilities.kitchenPrinting ? (
             <Link
               className={
                 view === 'printing' ? 'button-primary' : 'button-secondary'
@@ -76,7 +72,7 @@ export default async function OperationsPage({
             </div>
             <PosDevicesConsole />
           </>
-        ) : canUseKitchen ? (
+        ) : capabilities.kitchenPrinting ? (
           <PrintingSection />
         ) : (
           <PlanFeatureGate
