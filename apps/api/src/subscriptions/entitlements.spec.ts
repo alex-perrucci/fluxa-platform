@@ -1,7 +1,4 @@
-import {
-  PLAN_ENTITLEMENTS,
-  requiredPlanForEntitlement,
-} from './entitlements';
+import { PLAN_ENTITLEMENTS, requiredPlanForEntitlement } from './entitlements';
 
 describe('subscription entitlement matrix', () => {
   it('keeps START on core POS capabilities only', () => {
