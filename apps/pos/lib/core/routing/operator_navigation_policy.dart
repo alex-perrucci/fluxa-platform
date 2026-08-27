@@ -37,7 +37,9 @@ class PosNavigationPolicy {
     required PosOperatorMode mode,
     Set<String>? entitlements,
   }) {
-    final effective = mode == PosOperatorMode.auto ? _modeForRole(role) : mode;
+    final effective = mode == PosOperatorMode.auto
+        ? _modeForRole(role)
+        : mode;
     final roleSections = switch (effective) {
       PosOperatorMode.cashier => const [
         PosSection.checkout,
