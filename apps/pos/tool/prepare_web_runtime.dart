@@ -1,17 +1,25 @@
 import 'dart:io';
 
+const _userAgent = 'Fluxa-POS-Web-Runtime/1.0';
+const _sqliteUrl =
+    'https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-2.9.4/sqlite3.wasm';
+const _sqliteSha =
+    '922a76b182b6af69b030c8e2fdd3283ecc8e827248b20e4b1f3f3db170b52117';
+const _workerUrl =
+    'https://github.com/simolus3/drift/releases/download/drift-2.29.0/drift_worker.js';
+const _workerSha =
+    '0c2906a30531ca1f535fdfe1bb26cab04ca9c9dc5c12551def9d9f68767183be';
+
 const _assets = <WebRuntimeAsset>[
   WebRuntimeAsset(
     fileName: 'sqlite3.wasm',
-    url:
-        'https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-2.9.4/sqlite3.wasm',
-    sha256: '922a76b182b6af69b030c8e2fdd3283ecc8e827248b20e4b1f3f3db170b52117',
+    url: _sqliteUrl,
+    sha256: _sqliteSha,
   ),
   WebRuntimeAsset(
     fileName: 'drift_worker.js',
-    url:
-        'https://github.com/simolus3/drift/releases/download/drift-2.29.0/drift_worker.js',
-    sha256: '0c2906a30531ca1f535fdfe1bb26cab04ca9c9dc5c12551def9d9f68767183be',
+    url: _workerUrl,
+    sha256: _workerSha,
   ),
 ];
 
@@ -25,7 +33,8 @@ Future<void> main() async {
     return;
   }
 
-  final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
+  final client = HttpClient();
+  client.connectionTimeout = const Duration(seconds: 20);
   try {
     for (final asset in _assets) {
       await _ensureAsset(client, webDirectory, asset);
@@ -41,8 +50,8 @@ Future<void> _ensureAsset(
   Directory webDirectory,
   WebRuntimeAsset asset,
 ) async {
-  final targetPath =
-      '${webDirectory.path}${Platform.pathSeparator}${asset.fileName}';
+  final separator = Platform.pathSeparator;
+  final targetPath = '${webDirectory.path}$separator${asset.fileName}';
   final target = File(targetPath);
 
   if (await target.exists()) {
@@ -60,41 +69,29 @@ Future<void> _ensureAsset(
   }
 
   try {
-    final request = await client.getUrl(Uri.parse(asset.url));
-    request.headers.set(
-      HttpHeaders.userAgentHeader,
-      'Fluxa-POS-Web-Runtime/1.0',
-    );
+    final uri = Uri.parse(asset.url);
+    final request = await client.getUrl(uri);
+    request.headers.set(HttpHeaders.userAgentHeader, _userAgent);
     final response = await request.close();
     if (response.statusCode != HttpStatus.ok) {
       throw HttpException(
         'HTTP ${response.statusCode} while downloading ${asset.fileName}',
-        uri: Uri.parse(asset.url),
+        uri: uri,
       );
     }
 
     final sink = temp.openWrite();
-    try {
-      await response.pipe(sink);
-    } finally {
-      await sink.close();
-    }
+    await response.pipe(sink);
 
     if (asset.fileName.endsWith('.wasm')) {
-      final bytes = await temp.openRead(0, 4).fold<List<int>>(
-        <int>[],
-        (buffer, chunk) => buffer..addAll(chunk),
-      );
-      const wasmMagic = <int>[0x00, 0x61, 0x73, 0x6d];
-      if (bytes.length != 4 || !_sameBytes(bytes, wasmMagic)) {
-        throw StateError('${asset.fileName} is not a valid WebAssembly module.');
-      }
+      await _verifyWasmHeader(temp, asset.fileName);
     }
 
     final digest = await _sha256(temp);
     if (digest != asset.sha256) {
       throw StateError(
-        '${asset.fileName} checksum mismatch. Expected ${asset.sha256}, got $digest.',
+        '${asset.fileName} checksum mismatch. '
+        'Expected ${asset.sha256}, got $digest.',
       );
     }
 
@@ -111,24 +108,27 @@ Future<void> _ensureAsset(
   }
 }
 
+Future<void> _verifyWasmHeader(File file, String fileName) async {
+  final handle = await file.open();
+  try {
+    final bytes = await handle.read(4);
+    const wasmMagic = <int>[0x00, 0x61, 0x73, 0x6d];
+    if (!_sameBytes(bytes, wasmMagic)) {
+      throw StateError('$fileName is not a valid WebAssembly module.');
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
 Future<String> _sha256(File file) async {
   if (Platform.isWindows) {
-    final result = await Process.run('certutil', [
-      '-hashfile',
-      file.path,
-      'SHA256',
-    ]);
-    if (result.exitCode != 0) {
-      throw ProcessException(
-        'certutil',
-        ['-hashfile', file.path, 'SHA256'],
-        result.stderr.toString(),
-        result.exitCode,
-      );
-    }
-    final matches = RegExp(
-      r'\b[0-9a-fA-F]{64}\b',
-    ).allMatches(result.stdout.toString());
+    final arguments = ['-hashfile', file.path, 'SHA256'];
+    final result = await Process.run('certutil', arguments);
+    _checkProcess(result, 'certutil', arguments);
+
+    final output = result.stdout.toString();
+    final matches = RegExp(r'\b[0-9a-fA-F]{64}\b').allMatches(output);
     if (matches.isEmpty) {
       throw StateError('Unable to parse SHA-256 from certutil output.');
     }
@@ -136,23 +136,37 @@ Future<String> _sha256(File file) async {
   }
 
   final executable = Platform.isMacOS ? 'shasum' : 'sha256sum';
-  final arguments = Platform.isMacOS
-      ? ['-a', '256', file.path]
-      : [file.path];
-  final result = await Process.run(executable, arguments);
-  if (result.exitCode != 0) {
-    throw ProcessException(
-      executable,
-      arguments,
-      result.stderr.toString(),
-      result.exitCode,
-    );
+  final arguments = <String>[];
+  if (Platform.isMacOS) {
+    arguments.addAll(['-a', '256']);
   }
-  final digest = result.stdout.toString().trim().split(RegExp(r'\s+')).first;
+  arguments.add(file.path);
+
+  final result = await Process.run(executable, arguments);
+  _checkProcess(result, executable, arguments);
+
+  final output = result.stdout.toString().trim();
+  final digest = output.split(RegExp(r'\s+')).first;
   if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(digest)) {
     throw StateError('Unable to parse SHA-256 from $executable output.');
   }
   return digest.toLowerCase();
+}
+
+void _checkProcess(
+  ProcessResult result,
+  String executable,
+  List<String> arguments,
+) {
+  if (result.exitCode == 0) {
+    return;
+  }
+  throw ProcessException(
+    executable,
+    arguments,
+    result.stderr.toString(),
+    result.exitCode,
+  );
 }
 
 bool _sameBytes(List<int> left, List<int> right) {
