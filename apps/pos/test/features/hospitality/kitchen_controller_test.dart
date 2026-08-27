@@ -20,6 +20,9 @@ void main() {
     expect(controller.status, KitchenLoadStatus.ready);
     expect(controller.activeStations.single.name, 'Cucina');
     expect(controller.tickets.single.number, 'K-20260721-0001');
+    expect(controller.autoPollingActive, isFalse);
+
+    controller.startAutoPolling();
     expect(controller.autoPollingActive, isTrue);
   });
 
@@ -45,6 +48,7 @@ void main() {
     final controller = createController(gateway);
 
     await controller.bindLocation('location-1');
+    controller.startAutoPolling();
     final previousTickets = controller.tickets;
     gateway.ticketListError = const BackendError(
       code: 'SERVER_ERROR',
@@ -64,6 +68,7 @@ void main() {
     final controller = createController(gateway);
 
     await controller.bindLocation('location-1');
+    controller.startAutoPolling();
     gateway.ticketListError = const BackendError(
       code: 'FEATURE_NOT_INCLUDED',
       message: 'KDS not included.',
@@ -84,6 +89,17 @@ void main() {
     expect(controller.autoPollingActive, isTrue);
     expect(controller.errorMessage, isNull);
     expect(controller.tickets.single.status, KitchenTicketStatus.ready);
+  });
+
+  test('stopping KDS polling cancels its timer', () async {
+    final controller = createController(_PollingHospitalityGateway());
+
+    await controller.bindLocation('location-1');
+    controller.startAutoPolling();
+    expect(controller.autoPollingActive, isTrue);
+
+    controller.stopAutoPolling();
+    expect(controller.autoPollingActive, isFalse);
   });
 
   test('cashier dispatch binding does not start KDS polling', () async {
