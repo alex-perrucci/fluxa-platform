@@ -27,8 +27,10 @@ class FakeHospitalityGateway implements HospitalityGateway {
   KitchenDispatchBatch batch;
   BackendError? updateSessionError;
   BackendError? transitionError;
+  BackendError? dispatchError;
   String? attachedOrderId;
   int dispatchCalls = 0;
+  final List<String> dispatchBatchIds = [];
 
   @override
   Future<FloorSnapshot> fetchFloor(String locationId) async => floor;
@@ -121,6 +123,11 @@ class FakeHospitalityGateway implements HospitalityGateway {
     required String clientBatchId,
   }) async {
     dispatchCalls += 1;
+    dispatchBatchIds.add(clientBatchId);
+    final error = dispatchError;
+    if (error != null) {
+      throw error;
+    }
     return batch;
   }
 
