@@ -471,7 +471,8 @@ class _OrderPane extends ConsumerWidget {
     final auth = ref.watch(authControllerProvider).state;
     final order = orders.activeOrder;
     final role = auth.session?.role;
-    final hasKitchen = auth.session?.hasKitchen == true;
+    final hasKitchen =
+        auth.session?.organizationEntitlements?.has('KITCHEN') == true;
     final location = auth.deviceAssignment?.location;
     final kitchen = ref.watch(kitchenControllerProvider);
     final canDispatch =
