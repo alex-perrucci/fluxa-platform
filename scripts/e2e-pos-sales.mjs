@@ -116,7 +116,7 @@ const ownerEmail = `pos-sales+${suffix}@example.com`;
 const ownerPassword = `Fluxa_POS_${suffix}_Pwd!`;
 const uuid = () => randomUUID();
 
-console.log('1/11 platform administrator login and tenant onboarding');
+console.log('1/12 platform administrator login and tenant onboarding');
 const adminLogin = await login(adminEmail, adminPassword);
 const adminToken = adminLogin?.tokens?.accessToken;
 if (!adminToken || !adminLogin?.user?.platformAdmin) {
@@ -165,7 +165,7 @@ if (!token || ownerLogin?.organization?.role !== 'OWNER') {
   throw new Error('Owner login did not select the new organization.');
 }
 
-console.log('2/11 catalog, kitchen and fiscal configuration');
+console.log('2/12 catalog, kitchen and fiscal configuration');
 const vat = await request('/vat-rates', {
   method: 'POST',
   token,
@@ -253,7 +253,7 @@ await request(
   },
 );
 
-console.log('3/11 effective catalog');
+console.log('3/12 effective catalog');
 const catalog = await request(
   `/catalog?locationId=${encodeURIComponent(locationId)}`,
   { token },
@@ -265,7 +265,7 @@ if (catalogProduct?.price?.amountCents !== 1250) {
   throw new Error('Effective catalog did not resolve the configured product.');
 }
 
-console.log('4/11 concurrent idempotent order opening');
+console.log('4/12 concurrent idempotent order opening');
 const clientOrderId = uuid();
 let order = await concurrentSame(
   4,
@@ -283,7 +283,7 @@ let order = await concurrentSame(
   (value) => value?.id,
 );
 
-console.log('5/11 concurrent idempotent line addition');
+console.log('5/12 concurrent idempotent line addition');
 const addBody = {
   mutationId: uuid(),
   clientItemId: uuid(),
@@ -306,7 +306,7 @@ if (order.items.length !== 1 || order.totalCents !== 2500) {
   throw new Error('Concurrent line addition produced duplicate rows or totals.');
 }
 
-console.log('6/11 concurrent kitchen dispatch');
+console.log('6/12 concurrent COUNTER kitchen dispatch');
 const clientBatchId = uuid();
 const kitchenBatch = await concurrentSame(
   4,
@@ -319,10 +319,149 @@ const kitchenBatch = await concurrentSame(
   (value) => value?.id,
 );
 if (kitchenBatch.tickets?.length !== 1) {
-  throw new Error('Kitchen dispatch did not create exactly one ticket.');
+  throw new Error('COUNTER kitchen dispatch did not create exactly one ticket.');
 }
 
-console.log('7/11 concurrent checkout and payment');
+console.log('7/12 TABLE dispatch and live plan enforcement with same token');
+let tableOrder = await request('/orders', {
+  method: 'POST',
+  token,
+  body: {
+    clientOrderId: uuid(),
+    locationId,
+    serviceMode: 'TABLE',
+    customerNote: 'TABLE kitchen E2E',
+  },
+});
+tableOrder = await request(`/orders/${tableOrder.id}/items`, {
+  method: 'POST',
+  token,
+  body: {
+    mutationId: uuid(),
+    clientItemId: uuid(),
+    expectedVersion: tableOrder.version,
+    productId: product.id,
+    quantityAmount: 1,
+  },
+});
+const tableKitchenBatch = await request(
+  `/orders/${tableOrder.id}/kitchen-tickets`,
+  {
+    method: 'POST',
+    token,
+    body: { clientBatchId: uuid() },
+  },
+);
+if (tableKitchenBatch.tickets?.length !== 1) {
+  throw new Error('TABLE kitchen dispatch did not create exactly one ticket.');
+}
+
+tableOrder = await request(`/orders/${tableOrder.id}/items`, {
+  method: 'POST',
+  token,
+  body: {
+    mutationId: uuid(),
+    clientItemId: uuid(),
+    expectedVersion: tableOrder.version,
+    productId: product.id,
+    quantityAmount: 1,
+  },
+});
+
+await request(`/platform/organizations/${organizationId}/subscription`, {
+  method: 'PATCH',
+  token: adminToken,
+  body: { plan: 'SALA', status: 'ACTIVE' },
+});
+const salaEntitlements = await request('/me/entitlements', { token });
+if (
+  salaEntitlements?.plan !== 'SALA' ||
+  salaEntitlements?.entitlements?.includes('KITCHEN')
+) {
+  throw new Error('SALA downgrade did not remove KITCHEN for the same token.');
+}
+const blockedKitchen = await expectFailure(
+  `/orders/${tableOrder.id}/kitchen-tickets`,
+  403,
+  {
+    method: 'POST',
+    token,
+    body: { clientBatchId: uuid() },
+  },
+);
+if (blockedKitchen?.code !== 'FEATURE_NOT_INCLUDED') {
+  throw new Error(
+    `Kitchen dispatch was not blocked by plan entitlement: ${JSON.stringify(blockedKitchen)}`,
+  );
+}
+
+await request(`/platform/organizations/${organizationId}/subscription`, {
+  method: 'PATCH',
+  token: adminToken,
+  body: { plan: 'PRO', status: 'ACTIVE' },
+});
+const restoredEntitlements = await request('/me/entitlements', { token });
+if (
+  restoredEntitlements?.plan !== 'PRO' ||
+  !restoredEntitlements?.entitlements?.includes('KITCHEN')
+) {
+  throw new Error('PRO restore did not re-enable KITCHEN for the same token.');
+}
+const restoredKitchenBatch = await request(
+  `/orders/${tableOrder.id}/kitchen-tickets`,
+  {
+    method: 'POST',
+    token,
+    body: { clientBatchId: uuid() },
+  },
+);
+if (restoredKitchenBatch.tickets?.length !== 1) {
+  throw new Error('Kitchen dispatch did not recover after restoring PRO.');
+}
+
+const heldOrder = await request('/orders', {
+  method: 'POST',
+  token,
+  body: {
+    clientOrderId: uuid(),
+    locationId,
+    serviceMode: 'COUNTER',
+    customerNote: 'Held kitchen rejection E2E',
+  },
+});
+let heldOrderWithItem = await request(`/orders/${heldOrder.id}/items`, {
+  method: 'POST',
+  token,
+  body: {
+    mutationId: uuid(),
+    clientItemId: uuid(),
+    expectedVersion: heldOrder.version,
+    productId: product.id,
+    quantityAmount: 1,
+  },
+});
+heldOrderWithItem = await request(`/orders/${heldOrder.id}/hold`, {
+  method: 'POST',
+  token,
+  body: {
+    mutationId: uuid(),
+    expectedVersion: heldOrderWithItem.version,
+  },
+});
+const heldDispatch = await expectFailure(
+  `/orders/${heldOrder.id}/kitchen-tickets`,
+  409,
+  {
+    method: 'POST',
+    token,
+    body: { clientBatchId: uuid() },
+  },
+);
+if (heldDispatch?.code !== 'KITCHEN_ORDER_NOT_DISPATCHABLE') {
+  throw new Error('HELD order was allowed to dispatch to kitchen.');
+}
+
+console.log('8/12 concurrent checkout and payment');
 const clientCheckoutId = uuid();
 const checkout = await concurrentSame(
   4,
@@ -377,7 +516,7 @@ if (
   throw new Error('Payment did not complete the checkout.');
 }
 
-console.log('8/11 paid order closure and immutability');
+console.log('9/12 paid order closure and immutability');
 const paidOrder = await request(`/orders/${order.id}`, { token });
 if (paidOrder.status !== 'PAID') {
   throw new Error(`Expected PAID order, received ${paidOrder.status}.`);
@@ -397,7 +536,7 @@ if (immutable?.code !== 'ORDER_NOT_MUTABLE') {
   throw new Error('Paid order remained mutable.');
 }
 
-console.log('9/11 concurrent fiscal job and worker execution');
+console.log('10/12 concurrent fiscal job and worker execution');
 const fiscalRequest = { clientRequestId: uuid() };
 let fiscalDocument = await concurrentSame(
   4,
@@ -424,7 +563,7 @@ if (
   );
 }
 
-console.log('10/11 concurrent idempotent refund');
+console.log('11/12 concurrent idempotent refund');
 const refundBody = {
   clientRefundId: uuid(),
   amountCents: paidOrder.totalCents,
@@ -453,7 +592,7 @@ if (refunds.length !== 1 || refunds[0].id !== refundResponse.refund.id) {
   throw new Error('Concurrent refund created more than one persisted refund.');
 }
 
-console.log('11/11 final assertions');
+console.log('12/12 final assertions');
 const finalPayment = await request(`/payments/${paymentId}`, { token });
 if (finalPayment.status !== 'REFUNDED') {
   throw new Error(`Expected REFUNDED payment, received ${finalPayment.status}.`);
@@ -469,12 +608,17 @@ console.log(
       orderId: order.id,
       kitchenBatchId: kitchenBatch.id,
       kitchenTicketId: kitchenBatch.tickets[0].id,
+      tableOrderId: tableOrder.id,
+      tableKitchenBatchId: tableKitchenBatch.id,
+      restoredKitchenBatchId: restoredKitchenBatch.id,
       checkoutId: checkout.id,
       paymentId,
       fiscalDocumentId: fiscalDocument.id,
       refundId: refundResponse.refund.id,
       concurrentAttempts: 4,
       idempotency: true,
+      livePlanEnforcement: true,
+      counterAndTableKitchenDispatch: true,
       postgres: 'real',
       redis: 'real',
     },
