@@ -300,9 +300,11 @@ class KitchenController extends ChangeNotifier {
   }
 
   String _dispatchBatchIdFor(String orderId) {
-    if (_pendingDispatchOrderId == orderId &&
-        _pendingDispatchBatchId != null) {
-      return _pendingDispatchBatchId!;
+    if (_pendingDispatchOrderId == orderId) {
+      final pendingBatchId = _pendingDispatchBatchId;
+      if (pendingBatchId != null) {
+        return pendingBatchId;
+      }
     }
     final batchId = UuidV4.generate();
     _pendingDispatchOrderId = orderId;
@@ -317,30 +319,33 @@ class KitchenController extends ChangeNotifier {
 
   bool _shouldReuseDispatchId(BackendError error) {
     final status = error.statusCode;
-    return status == null ||
-        status == 408 ||
-        status == 425 ||
-        status == 429 ||
-        status >= 500;
+    if (status == null) {
+      return true;
+    }
+    return status == 408 || status == 425 || status == 429 || status >= 500;
   }
 
-  String _dispatchErrorMessage(BackendError error) => switch (error.code) {
-    'FEATURE_NOT_INCLUDED' =>
-      'La cucina non è inclusa nel piano attivo. Aggiorna il piano per inviare comande.',
-    'SUBSCRIPTION_SUSPENDED' =>
-      'L’abbonamento è sospeso: l’invio in cucina non è disponibile.',
-    'SUBSCRIPTION_NOT_PROVISIONED' =>
-      'Il piano del locale non è ancora configurato per usare la cucina.',
-    'KITCHEN_ORDER_EMPTY' =>
-      'Aggiungi almeno un prodotto prima di inviare la comanda.',
-    'KITCHEN_ORDER_NOT_DISPATCHABLE' || 'ORDER_NOT_DISPATCHABLE' =>
-      'Solo un ordine aperto può essere inviato in cucina.',
-    'KITCHEN_CATEGORY_NOT_ROUTED' =>
-      'Configura una postazione cucina attiva e l’instradamento delle categorie prima di inviare la comanda.',
-    'KITCHEN_NOTHING_TO_SEND' =>
-      'Tutte le quantità dell’ordine sono già state inviate in cucina.',
-    _ => error.message,
-  };
+  String _dispatchErrorMessage(BackendError error) {
+    switch (error.code) {
+      case 'FEATURE_NOT_INCLUDED':
+        return 'La cucina non è inclusa nel piano attivo. Aggiorna il piano per inviare comande.';
+      case 'SUBSCRIPTION_SUSPENDED':
+        return 'L’abbonamento è sospeso: l’invio in cucina non è disponibile.';
+      case 'SUBSCRIPTION_NOT_PROVISIONED':
+        return 'Il piano del locale non è ancora configurato per usare la cucina.';
+      case 'KITCHEN_ORDER_EMPTY':
+        return 'Aggiungi almeno un prodotto prima di inviare la comanda.';
+      case 'KITCHEN_ORDER_NOT_DISPATCHABLE':
+      case 'ORDER_NOT_DISPATCHABLE':
+        return 'Solo un ordine aperto può essere inviato in cucina.';
+      case 'KITCHEN_CATEGORY_NOT_ROUTED':
+        return 'Configura una postazione cucina attiva e l’instradamento delle categorie prima di inviare la comanda.';
+      case 'KITCHEN_NOTHING_TO_SEND':
+        return 'Tutte le quantità dell’ordine sono già state inviate in cucina.';
+      default:
+        return error.message;
+    }
+  }
 
   Future<void> _reloadTicketAfterConflict(
     String ticketId,
