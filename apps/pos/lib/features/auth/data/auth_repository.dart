@@ -40,6 +40,9 @@ class AuthRepository {
   Future<AuthSession> currentSession() async {
     final me = await _authApi.me();
     final device = await _deviceApi.current();
+    final entitlements = me.organizationId == null
+        ? null
+        : await _authApi.entitlements();
     return AuthSession(
       user: me.user,
       device: device,
@@ -48,6 +51,7 @@ class AuthRepository {
       organizationId: me.organizationId,
       membershipId: me.membershipId,
       role: me.role,
+      organizationEntitlements: entitlements,
     );
   }
 
