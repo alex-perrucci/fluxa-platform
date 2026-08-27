@@ -6,10 +6,13 @@ import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/control-center/icons';
 import { ControlCenterNotification } from '@/components/control-center/notification';
 
+type SubscriptionPlan = 'START' | 'SALA' | 'PRO';
+
 interface OnboardingResult {
   organization: { id: string; name: string; slug: string };
   owner: { email: string; displayName: string };
   location: { name: string };
+  subscription?: { plan: SubscriptionPlan; status: string };
   tables: Array<{ id: string }>;
 }
 
@@ -35,6 +38,7 @@ export function PlatformOnboardingForm() {
   const [error, setError] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState('');
   const [organizationSlug, setOrganizationSlug] = useState('');
+  const [plan, setPlan] = useState<SubscriptionPlan | ''>('');
   const [defaultTableCapacity, setDefaultTableCapacity] = useState(4);
   const [tables, setTables] = useState<EditableTable[]>(() =>
     Array.from({ length: 8 }, (_, index) => createTable(index, 4)),
@@ -123,9 +127,13 @@ export function PlatformOnboardingForm() {
       organizationName.trim().length < 2 ||
       !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(organizationSlug) ||
       !legalName ||
-      !vatNumber
+      !vatNumber ||
+      !plan
     ) {
-      reject(1, 'Completa nome, slug, ragione sociale e partita IVA.');
+      reject(
+        1,
+        'Completa nome, slug, ragione sociale, partita IVA e seleziona un piano.',
+      );
       return;
     }
 
@@ -186,6 +194,7 @@ export function PlatformOnboardingForm() {
     const payload = {
       organizationName: organizationName.trim(),
       organizationSlug,
+      plan,
       ownerEmail,
       ownerDisplayName,
       ownerTemporaryPassword,
@@ -214,7 +223,8 @@ export function PlatformOnboardingForm() {
         body: JSON.stringify(payload),
       });
       const body = (await response.json()) as
-        OnboardingResult | { message?: string };
+        | OnboardingResult
+        | { message?: string };
 
       if (!response.ok) {
         setError(
@@ -243,8 +253,8 @@ export function PlatformOnboardingForm() {
         <p className="eyebrow">Tenant online</p>
         <h2>{result.organization.name} è pronta.</h2>
         <p>
-          Organizzazione, account OWNER, sede, sala e {result.tables.length}{' '}
-          tavoli creati in una singola transazione.
+          Organizzazione, account OWNER, sede, sala, piano e{' '}
+          {result.tables.length} tavoli creati in una singola transazione.
         </p>
         <div className="success-grid">
           <div>
@@ -254,6 +264,10 @@ export function PlatformOnboardingForm() {
           <div>
             <span>Sede</span>
             <strong>{result.location.name}</strong>
+          </div>
+          <div>
+            <span>Piano</span>
+            <strong>{result.subscription?.plan ?? plan}</strong>
           </div>
           <div>
             <span>Slug</span>
@@ -328,6 +342,24 @@ export function PlatformOnboardingForm() {
               required
               value={organizationSlug}
             />
+          </label>
+          <label className="field span-2">
+            <span>Piano Fluxa</span>
+            <select
+              onChange={(changeEvent) =>
+                setPlan(changeEvent.target.value as SubscriptionPlan | '')
+              }
+              required
+              value={plan}
+            >
+              <option value="">Seleziona un piano</option>
+              <option value="START">Fluxa Start · Cassa</option>
+              <option value="SALA">Fluxa Sala · Cassa + tavoli</option>
+              <option value="PRO">Fluxa Pro · Sala + cucina/KDS</option>
+            </select>
+            <small>
+              Obbligatorio: il tenant non viene creato senza una subscription.
+            </small>
           </label>
           <label className="field">
             <span>Ragione sociale</span>
