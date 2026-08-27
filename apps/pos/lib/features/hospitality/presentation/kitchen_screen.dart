@@ -555,12 +555,13 @@ class _TicketDetailPanel extends StatelessWidget {
   }
 }
 
-KitchenTicketStatus? _nextStatus(KitchenTicketStatus status) => switch (status) {
-  KitchenTicketStatus.queued => KitchenTicketStatus.inProgress,
-  KitchenTicketStatus.inProgress => KitchenTicketStatus.ready,
-  KitchenTicketStatus.ready => KitchenTicketStatus.served,
-  KitchenTicketStatus.served || KitchenTicketStatus.cancelled => null,
-};
+KitchenTicketStatus? _nextStatus(KitchenTicketStatus status) =>
+    switch (status) {
+      KitchenTicketStatus.queued => KitchenTicketStatus.inProgress,
+      KitchenTicketStatus.inProgress => KitchenTicketStatus.ready,
+      KitchenTicketStatus.ready => KitchenTicketStatus.served,
+      KitchenTicketStatus.served || KitchenTicketStatus.cancelled => null,
+    };
 
 String _nextLabel(KitchenTicketStatus status) => switch (status) {
   KitchenTicketStatus.inProgress => 'Inizia preparazione',
