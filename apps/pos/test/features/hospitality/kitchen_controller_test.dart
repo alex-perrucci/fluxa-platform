@@ -59,34 +59,37 @@ void main() {
     expect(gateway.dispatchBatchIds.last, firstBatchId);
   });
 
-  test('drops the batch id after a deterministic configuration failure', () async {
-    final gateway = FakeHospitalityGateway();
-    gateway.dispatchError = const BackendError(
-      code: 'KITCHEN_CATEGORY_NOT_ROUTED',
-      message: 'Routing mancante.',
-      statusCode: 409,
-    );
-    final controller = KitchenController(gateway);
+  test(
+    'drops the batch id after a deterministic configuration failure',
+    () async {
+      final gateway = FakeHospitalityGateway();
+      gateway.dispatchError = const BackendError(
+        code: 'KITCHEN_CATEGORY_NOT_ROUTED',
+        message: 'Routing mancante.',
+        statusCode: 409,
+      );
+      final controller = KitchenController(gateway);
 
-    await controller.bindLocation('location-1');
-    final first = await controller.dispatchOrder(
-      locationId: 'location-1',
-      orderId: 'order-1',
-    );
-    final firstBatchId = gateway.dispatchBatchIds.single;
+      await controller.bindLocation('location-1');
+      final first = await controller.dispatchOrder(
+        locationId: 'location-1',
+        orderId: 'order-1',
+      );
+      final firstBatchId = gateway.dispatchBatchIds.single;
 
-    expect(first, isFalse);
-    expect(controller.errorMessage, contains('postazione cucina attiva'));
+      expect(first, isFalse);
+      expect(controller.errorMessage, contains('postazione cucina attiva'));
 
-    gateway.dispatchError = null;
-    final second = await controller.dispatchOrder(
-      locationId: 'location-1',
-      orderId: 'order-1',
-    );
+      gateway.dispatchError = null;
+      final second = await controller.dispatchOrder(
+        locationId: 'location-1',
+        orderId: 'order-1',
+      );
 
-    expect(second, isTrue);
-    expect(gateway.dispatchBatchIds.last, isNot(firstBatchId));
-  });
+      expect(second, isTrue);
+      expect(gateway.dispatchBatchIds.last, isNot(firstBatchId));
+    },
+  );
 
   test('explains when kitchen is not included in the active plan', () async {
     final gateway = FakeHospitalityGateway();
