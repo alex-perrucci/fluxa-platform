@@ -33,9 +33,10 @@ class PosNavigationPolicy {
   static List<PosSection> sections({
     required String? role,
     required PosOperatorMode mode,
+    Set<String>? entitlements,
   }) {
     final effective = mode == PosOperatorMode.auto ? _modeForRole(role) : mode;
-    return switch (effective) {
+    final roleSections = switch (effective) {
       PosOperatorMode.cashier => const [
         PosSection.checkout,
         PosSection.tables,
@@ -54,9 +55,30 @@ class PosNavigationPolicy {
         PosSection.fiscal,
         PosSection.settings,
       ],
-      PosOperatorMode.auto => const [],
+      PosOperatorMode.auto => const <PosSection>[],
     };
+
+    if (entitlements == null) return roleSections;
+
+    final filtered = roleSections
+        .where((section) => _hasEntitlement(section, entitlements))
+        .toList(growable: false);
+    return filtered.isEmpty ? const [PosSection.settings] : filtered;
   }
+
+  static bool _hasEntitlement(
+    PosSection section,
+    Set<String> entitlements,
+  ) => switch (section) {
+    PosSection.checkout => entitlements.contains('POS_CORE'),
+    PosSection.tables => entitlements.contains('TABLES'),
+    PosSection.orders => entitlements.contains('ORDERS'),
+    PosSection.refunds => entitlements.contains('PAYMENTS'),
+    PosSection.kitchen => entitlements.contains('KITCHEN'),
+    PosSection.printing => entitlements.contains('RECEIPT_PRINTING'),
+    PosSection.fiscal => entitlements.contains('FISCAL'),
+    PosSection.settings => true,
+  };
 
   static PosOperatorMode _modeForRole(String? role) => switch (role) {
     'OWNER' || 'ADMIN' || 'MANAGER' => PosOperatorMode.manager,
