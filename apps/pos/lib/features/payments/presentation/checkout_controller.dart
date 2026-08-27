@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/backend_error.dart';
+import '../../../core/payments/external_terminal_bridge.dart';
 import '../../orders/domain/order_models.dart';
 import '../../orders/domain/uuid_v4.dart';
 import '../data/payments_api.dart';
@@ -8,10 +9,20 @@ import '../domain/payment_models.dart';
 
 enum CheckoutLoadStatus { idle, loading, ready, failure }
 
+enum CardPaymentFlowOutcome {
+  manualFallback,
+  approved,
+  declined,
+  pending,
+  failed,
+}
+
 class CheckoutController extends ChangeNotifier {
-  CheckoutController(this._gateway);
+  CheckoutController(this._gateway, {TerminalBridgeGateway? terminalBridge})
+    : _terminalBridge = terminalBridge;
 
   final PaymentsGateway _gateway;
+  final TerminalBridgeGateway? _terminalBridge;
 
   String? _locationId;
   CheckoutSession? _checkout;
@@ -59,6 +70,22 @@ class CheckoutController extends ChangeNotifier {
     }
     _errorMessage = null;
     _noticeMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> setNotice(String message) async {
+    _errorMessage = null;
+    _noticeMessage = message;
+    notifyListeners();
+  }
+
+  Future<void> bindCheckoutForOfflineRecovery(CheckoutSession checkout) async {
+    _locationId = checkout.locationId;
+    _checkout = checkout;
+    _status = CheckoutLoadStatus.ready;
+    _busy = false;
+    _errorMessage = null;
+    _noticeMessage = 'Vendita locale pronta per la sincronizzazione.';
     notifyListeners();
   }
 
@@ -247,6 +274,132 @@ class CheckoutController extends ChangeNotifier {
     );
   }
 
+  Future<CardPaymentFlowOutcome> startCardPayment({
+    required int amountCents,
+  }) async {
+    final checkout = _checkout;
+    if (!_canMutate(checkout) || checkout == null || amountCents <= 0) {
+      return CardPaymentFlowOutcome.failed;
+    }
+
+    final unresolvedExternal = _latestPendingCard(
+      PaymentProvider.externalTerminal,
+    );
+    if (unresolvedExternal != null) {
+      _noticeMessage =
+          'Esiste già un pagamento carta da verificare. Non verrà avviato un secondo addebito.';
+      notifyListeners();
+      return CardPaymentFlowOutcome.pending;
+    }
+
+    final bridge = _terminalBridge;
+    final bridgeReady =
+        bridge != null && bridge.isEnabled && await bridge.preflight();
+
+    if (!bridgeReady) {
+      final created = await addTerminalPayment(
+        method: PaymentMethod.card,
+        provider: PaymentProvider.manualTerminal,
+        amountCents: amountCents,
+      );
+      return created
+          ? CardPaymentFlowOutcome.manualFallback
+          : CardPaymentFlowOutcome.failed;
+    }
+
+    final created = await addTerminalPayment(
+      method: PaymentMethod.card,
+      provider: PaymentProvider.externalTerminal,
+      amountCents: amountCents,
+    );
+    if (!created) {
+      return CardPaymentFlowOutcome.failed;
+    }
+
+    final payment = _latestPendingCard(PaymentProvider.externalTerminal);
+    final current = _checkout;
+    if (payment == null || current == null) {
+      _setFailure('Pagamento terminale creato ma non recuperabile.');
+      return CardPaymentFlowOutcome.failed;
+    }
+
+    final result = await bridge.startPayment(
+      paymentId: payment.id,
+      amountCents: payment.amountCents,
+      currency: current.currency,
+    );
+    return _applyTerminalBridgeResult(payment, result);
+  }
+
+  Future<CardPaymentFlowOutcome> verifyExternalTerminalPayment(
+    PaymentRecord payment,
+  ) async {
+    if (payment.status != PaymentStatus.pending ||
+        payment.provider != PaymentProvider.externalTerminal) {
+      _setFailure(
+        'Il pagamento selezionato non è da verificare sul terminale.',
+      );
+      return CardPaymentFlowOutcome.failed;
+    }
+    final bridge = _terminalBridge;
+    if (bridge == null || !bridge.isEnabled) {
+      _noticeMessage =
+          'Bridge terminale non disponibile. Il pagamento resta in attesa: non ripetere l’addebito.';
+      notifyListeners();
+      return CardPaymentFlowOutcome.pending;
+    }
+
+    final result = await bridge.verifyPayment(payment.id);
+    return _applyTerminalBridgeResult(payment, result);
+  }
+
+  Future<CardPaymentFlowOutcome> _applyTerminalBridgeResult(
+    PaymentRecord payment,
+    TerminalBridgeResult result,
+  ) async {
+    switch (result.decision) {
+      case TerminalBridgeDecision.approved:
+        final reference = result.providerReference;
+        if (reference == null) {
+          _noticeMessage =
+              'Esito terminale non verificabile. Il pagamento resta in attesa.';
+          notifyListeners();
+          return CardPaymentFlowOutcome.pending;
+        }
+        final captured = await capturePayment(
+          payment: payment,
+          providerReference: reference,
+          providerEventId: result.providerEventId,
+        );
+        return captured
+            ? CardPaymentFlowOutcome.approved
+            : CardPaymentFlowOutcome.failed;
+      case TerminalBridgeDecision.declined:
+        final failed = await failPayment(
+          payment: payment,
+          failureCode: 'TERMINAL_DECLINED',
+          failureMessage:
+              result.message ?? 'Pagamento rifiutato dal terminale.',
+          providerEventId: result.providerEventId,
+        );
+        return failed
+            ? CardPaymentFlowOutcome.declined
+            : CardPaymentFlowOutcome.failed;
+      case TerminalBridgeDecision.pending:
+        _errorMessage = null;
+        _noticeMessage =
+            'Pagamento ancora in elaborazione sul terminale. Usa “Verifica esito”: non ripetere il pagamento.';
+        notifyListeners();
+        return CardPaymentFlowOutcome.pending;
+      case TerminalBridgeDecision.unknown:
+        _errorMessage = null;
+        _noticeMessage =
+            'Esito del terminale non confermato. Il pagamento resta in attesa: verifica lo stesso pagamento, senza crearne un altro.';
+        notifyListeners();
+        return CardPaymentFlowOutcome.pending;
+    }
+  }
+
   Future<bool> capturePayment({
     required PaymentRecord payment,
     required String providerReference,
@@ -396,6 +549,21 @@ class CheckoutController extends ChangeNotifier {
       return false;
     }
     return true;
+  }
+
+  PaymentRecord? _latestPendingCard(PaymentProvider provider) {
+    final checkout = _checkout;
+    if (checkout == null) {
+      return null;
+    }
+    for (final payment in checkout.payments.reversed) {
+      if (payment.status == PaymentStatus.pending &&
+          payment.method == PaymentMethod.card &&
+          payment.provider == provider) {
+        return payment;
+      }
+    }
+    return null;
   }
 
   CheckoutSession? _findCheckoutForOrder(

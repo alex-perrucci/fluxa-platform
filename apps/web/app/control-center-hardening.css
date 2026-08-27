@@ -1,0 +1,54 @@
+.control-center .cc-nav a[aria-current='page'] {
+  border-color: rgb(79 124 255 / 42%);
+  background:
+    linear-gradient(90deg, rgb(79 124 255 / 18%), rgb(139 92 246 / 8%)),
+    rgb(255 255 255 / 4%);
+  color: var(--text);
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.control-center .cc-nav a[aria-current='page']:hover {
+  transform: none;
+}
+
+.control-center .cc-nav a:focus-visible,
+.control-center :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid rgb(79 124 255 / 52%);
+  outline-offset: 2px;
+}
+
+/*
+ * Merchant pages are dark by design. A few consolidated screens still use
+ * light Tailwind utility classes inherited from their previous standalone
+ * pages. Keep the correction scoped to the Control Center so the public site
+ * and auth screens are untouched.
+ */
+.control-center .bg-white,
+.control-center .bg-gray-50,
+.control-center .bg-slate-50,
+.control-center .bg-zinc-50 {
+  background-color: var(--surface-strong) !important;
+  color: var(--text) !important;
+}
+
+.control-center :is(.text-black, .text-gray-900, .text-slate-900, .text-zinc-900) {
+  color: var(--text) !important;
+}
+
+.control-center :is(.text-gray-500, .text-gray-600, .text-slate-500, .text-slate-600) {
+  color: var(--muted) !important;
+}
+
+.control-center :is(input, select, textarea) {
+  color: var(--text);
+}
+
+.control-center :is(input, select, textarea)::placeholder {
+  color: color-mix(in srgb, var(--muted) 78%, transparent);
+}
+
+@media (max-width: 900px) {
+  .control-center .cc-nav a[aria-current='page'] {
+    box-shadow: inset 0 -3px 0 var(--blue);
+  }
+}

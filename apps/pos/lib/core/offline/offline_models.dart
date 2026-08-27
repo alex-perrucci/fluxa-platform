@@ -7,6 +7,7 @@ enum OfflineOperationKind {
   deleteOrderItem,
   holdOrder,
   resumeOrder,
+  completeCashSale,
   openCheckout,
   createPayment,
   capturePayment,

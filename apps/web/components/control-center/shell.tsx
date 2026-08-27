@@ -3,6 +3,10 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { FluxaMark } from '@/components/brand/fluxa-mark';
 import { Icon, type IconName } from '@/components/control-center/icons';
+import {
+  ControlCenterNavigation,
+  ControlCenterPageTitle,
+} from '@/components/control-center/navigation';
 import { OrganizationSwitcher } from '@/components/control-center/organization-switcher';
 import { LogoutButton } from '@/components/auth/logout-button';
 import type {
@@ -82,15 +86,10 @@ export function ControlCenterShell({
             scrollbarWidth: 'none',
           }}
         >
-          <nav className="cc-nav" style={{ minWidth: 0, scrollbarWidth: 'none' }}>
-            <p>{mode === 'merchant' ? 'Gestione locale' : 'Control center'}</p>
-            {nav.map((item) => (
-              <Link href={item.href} key={item.href}>
-                <Icon name={item.icon} />
-                <span className="min-w-0 truncate">{item.label}</span>
-              </Link>
-            ))}
-          </nav>
+          <ControlCenterNavigation
+            label={mode === 'merchant' ? 'Gestione locale' : 'Control center'}
+            nav={nav}
+          />
         </div>
 
         <div
@@ -119,7 +118,11 @@ export function ControlCenterShell({
         <header className="cc-topbar">
           <div>
             <p className="eyebrow">{subtitle}</p>
-            <h1>{title}</h1>
+            <ControlCenterPageTitle
+              dynamic={mode === 'merchant'}
+              fallback={title}
+              nav={nav}
+            />
           </div>
           {mode === 'platform' ? (
             <div className="cc-live-pill">

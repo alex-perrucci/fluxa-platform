@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -18,6 +19,7 @@ const requiredFiles = [
   'scripts/vps/rollback.sh',
   'scripts/vps/doctor.sh',
   'scripts/vps/backup.sh',
+  'apps/web/app/api/health/route.ts',
 ];
 
 for (const relativePath of requiredFiles) {
@@ -82,6 +84,16 @@ assert.ok(
   'Compose health dependencies are missing.',
 );
 
+const web = serviceBlock('web');
+for (const marker of [
+  'FLUXA_INTERNAL_API_BASE_URL: http://api:3000/api/v1',
+  'FLUXA_RELEASE_SHA: ${RELEASE_SHA}',
+  'FLUXA_RELEASE_VERSION: ${RELEASE_VERSION}',
+  "fetch('http://127.0.0.1:3000/api/health')",
+]) {
+  assert.ok(web.includes(marker), `Web deployment marker missing: ${marker}`);
+}
+
 const adeWorker = serviceBlock('ade-fiscal-worker');
 for (const marker of [
   'Dockerfile.ade-fiscal-worker',
@@ -140,13 +152,45 @@ for (const script of [
   'doctor.sh',
   'backup.sh',
 ]) {
-  const content = fs.readFileSync(
-    path.join(root, 'scripts/vps', script),
-    'utf8',
-  );
+  const scriptPath = path.join(root, 'scripts/vps', script);
+  const content = fs.readFileSync(scriptPath, 'utf8');
   assert.ok(
     content.includes('set -Eeuo pipefail'),
     `${script} must use strict Bash mode.`,
+  );
+  execFileSync('bash', ['-n', scriptPath], { stdio: 'pipe' });
+}
+
+const update = fs.readFileSync(
+  path.join(root, 'scripts/vps/update.sh'),
+  'utf8',
+);
+for (const marker of [
+  'rollback_failed_release',
+  'trap rollback_failed_release ERR',
+  'ROLLBACK_ARMED=true',
+  'ROLLBACK_ARMED=false',
+  'rollback.sh',
+  'release-alignment diagnostics',
+]) {
+  assert.ok(update.includes(marker), `Update safety marker missing: ${marker}`);
+}
+
+const doctor = fs.readFileSync(
+  path.join(root, 'scripts/vps/doctor.sh'),
+  'utf8',
+);
+for (const marker of [
+  '/api/v1/health/ready',
+  '/api/health',
+  '.release.sha == $release_sha',
+  '.release.version == $release_version',
+  '.backend.release.sha == $release_sha',
+  '.backend.release.version == $release_version',
+]) {
+  assert.ok(
+    doctor.includes(marker),
+    `Release diagnostics marker missing: ${marker}`,
   );
 }
 

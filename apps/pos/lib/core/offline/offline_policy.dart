@@ -9,7 +9,8 @@ class OfflineSafetyPolicy {
     OfflineOperationKind.updateOrderItem ||
     OfflineOperationKind.deleteOrderItem ||
     OfflineOperationKind.holdOrder ||
-    OfflineOperationKind.resumeOrder => true,
+    OfflineOperationKind.resumeOrder ||
+    OfflineOperationKind.completeCashSale => true,
     OfflineOperationKind.openCheckout ||
     OfflineOperationKind.createPayment ||
     OfflineOperationKind.capturePayment ||

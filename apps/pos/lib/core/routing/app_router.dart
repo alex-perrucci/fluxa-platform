@@ -5,7 +5,7 @@ import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/organization_selection_screen.dart';
 import '../../features/catalog/presentation/fast_cashier_screen.dart';
-import '../../features/catalog/presentation/operator_cashier_screen.dart';
+import '../../features/catalog/presentation/resilient_cashier_screen.dart';
 import '../../features/device/presentation/operational_blocked_screen.dart';
 import '../../features/fiscal/presentation/fiscal_screen.dart';
 import '../../features/fiscal/presentation/fiscalize_screen.dart';
@@ -108,7 +108,7 @@ GoRouter buildAppRouter(AuthController authController) => GoRouter(
           routes: [
             GoRoute(
               path: '/home',
-              builder: (context, state) => const OperatorCashierScreen(),
+              builder: (context, state) => const ResilientCashierScreen(),
               routes: [
                 GoRoute(
                   path: 'manage',
