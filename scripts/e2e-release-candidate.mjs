@@ -53,6 +53,38 @@ async function request(pathname, { method = 'GET', token, body } = {}) {
   return payload;
 }
 
+async function expectHttpStatus(
+  pathname,
+  expectedStatus,
+  { method = 'GET', token, body } = {},
+) {
+  const response = await fetch(`${apiBase}${pathname}`, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await response.text();
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = text;
+  }
+
+  if (response.status !== expectedStatus) {
+    throw new Error(
+      `${method} ${pathname} expected HTTP ${expectedStatus}, got ${response.status}: ${String(
+        typeof payload === 'string' ? payload : JSON.stringify(payload),
+      ).slice(0, 500)}`,
+    );
+  }
+  return payload;
+}
+
 async function login(email, password, organizationId) {
   return request('/auth/login', {
     method: 'POST',
@@ -78,7 +110,7 @@ const ownerEmail = `fluxa-e2e+${suffix}@example.com`;
 const ownerPassword = `Fluxa_E2E_${suffix}_Pwd!`;
 const slug = `fluxa-e2e-${suffix}`.slice(0, 78);
 
-console.log('1/10 platform administrator login');
+console.log('1/13 platform administrator login');
 const adminLogin = await login(adminEmail, adminPassword);
 const adminToken = adminLogin?.tokens?.accessToken;
 
@@ -86,13 +118,14 @@ if (!adminToken || !adminLogin?.user?.platformAdmin) {
   throw new Error('Platform administrator login did not return admin access.');
 }
 
-console.log('2/10 atomic organization onboarding');
+console.log('2/13 atomic START organization onboarding');
 const onboarding = await request('/platform/onboarding', {
   method: 'POST',
   token: adminToken,
   body: {
     organizationName: `Fluxa E2E ${suffix}`,
     organizationSlug: `fluxa-e2e-${suffix}`.slice(0, 78),
+    plan: 'START',
     ownerEmail,
     ownerDisplayName: 'Fluxa E2E Owner',
     ownerTemporaryPassword: ownerPassword,
@@ -120,11 +153,16 @@ const organizationId = onboarding?.organization?.id;
 const locationId = onboarding?.location?.id;
 const tableIds = onboarding?.tables?.map((table) => table.id) ?? [];
 
-if (!organizationId || !locationId || tableIds.length !== 2) {
-  throw new Error('Onboarding response is incomplete.');
+if (
+  !organizationId ||
+  !locationId ||
+  tableIds.length !== 2 ||
+  onboarding?.subscription?.plan !== 'START'
+) {
+  throw new Error('Atomic onboarding response is incomplete or has wrong plan.');
 }
 
-console.log('3/10 owner login');
+console.log('3/13 owner login');
 const ownerLogin = await login(ownerEmail, ownerPassword, organizationId);
 const ownerToken = ownerLogin?.tokens?.accessToken;
 
@@ -132,13 +170,79 @@ if (!ownerToken || ownerLogin?.organization?.role !== 'OWNER') {
   throw new Error('Owner login did not select the new organization.');
 }
 
+console.log('4/13 START is fail-closed for Sala and Pro capabilities');
+const startEntitlements = await request('/me/entitlements', { token: ownerToken });
+if (
+  startEntitlements?.plan !== 'START' ||
+  startEntitlements?.entitlements?.includes('TABLES') ||
+  startEntitlements?.entitlements?.includes('KITCHEN')
+) {
+  throw new Error('START entitlement matrix is not enforced.');
+}
+await expectHttpStatus(
+  `/dining-tables?locationId=${encodeURIComponent(locationId)}`,
+  403,
+  { token: ownerToken },
+);
+await expectHttpStatus(
+  `/kitchen-stations?locationId=${encodeURIComponent(locationId)}`,
+  403,
+  { token: ownerToken },
+);
+
+console.log('5/13 SALA upgrade is visible without logout and enables tables');
+await request(`/platform/organizations/${organizationId}/subscription`, {
+  method: 'PATCH',
+  token: adminToken,
+  body: { plan: 'SALA', status: 'ACTIVE' },
+});
+const salaEntitlements = await request('/me/entitlements', { token: ownerToken });
+if (
+  salaEntitlements?.plan !== 'SALA' ||
+  !salaEntitlements?.entitlements?.includes('TABLES') ||
+  salaEntitlements?.entitlements?.includes('KITCHEN')
+) {
+  throw new Error('SALA upgrade was not reflected on entitlement refresh.');
+}
+const salaTables = await request(
+  `/dining-tables?locationId=${encodeURIComponent(locationId)}`,
+  { token: ownerToken },
+);
+if (!Array.isArray(salaTables) || salaTables.length !== 2) {
+  throw new Error('SALA did not enable existing dining tables.');
+}
+await expectHttpStatus(
+  `/kitchen-stations?locationId=${encodeURIComponent(locationId)}`,
+  403,
+  { token: ownerToken },
+);
+
+console.log('6/13 PRO upgrade enables kitchen and KDS capabilities');
+await request(`/platform/organizations/${organizationId}/subscription`, {
+  method: 'PATCH',
+  token: adminToken,
+  body: { plan: 'PRO', status: 'ACTIVE' },
+});
+const proEntitlements = await request('/me/entitlements', { token: ownerToken });
+if (
+  proEntitlements?.plan !== 'PRO' ||
+  !proEntitlements?.entitlements?.includes('KITCHEN') ||
+  !proEntitlements?.entitlements?.includes('KDS')
+) {
+  throw new Error('PRO upgrade was not reflected on entitlement refresh.');
+}
+await request(
+  `/kitchen-stations?locationId=${encodeURIComponent(locationId)}`,
+  { token: ownerToken },
+);
+
 const now = Date.now();
 const startsAt = new Date(now + 24 * 60 * 60 * 1000);
 const endsAt = new Date(now + 28 * 60 * 60 * 1000);
 const bookingOpensAt = new Date(now - 60 * 1000);
 const bookingClosesAt = new Date(now + 23 * 60 * 60 * 1000);
 
-console.log('4/10 event creation and publishing');
+console.log('7/13 event creation and publishing');
 const event = await request('/events', {
   method: 'POST',
   token: ownerToken,
@@ -184,7 +288,7 @@ if (published?.status !== 'PUBLISHED') {
   throw new Error('Event publishing failed.');
 }
 
-console.log('5/10 public discovery and availability');
+console.log('8/13 public discovery and availability');
 const publicEvent = await request(`/public/events/${slug}`);
 const availability = await request(
   `/public/events/${slug}/availability?partySize=2`,
@@ -194,7 +298,7 @@ if (publicEvent?.slug !== slug || availability?.available !== true) {
   throw new Error('Public event or availability is not ready for booking.');
 }
 
-console.log('6/10 atomic hold and free reservation');
+console.log('9/13 atomic hold and free reservation');
 const holdToken = randomUUID();
 const hold = await request(`/public/events/${slug}/holds`, {
   method: 'POST',
@@ -228,7 +332,7 @@ if (!reservation?.id || reservation?.status !== 'CONFIRMED') {
   throw new Error('Free reservation was not confirmed.');
 }
 
-console.log('7/10 check-in and table-session creation');
+console.log('10/13 check-in and table-session creation');
 const detail = await request(`/control-center/reservations/${reservation.id}`, {
   token: ownerToken,
 });
@@ -252,7 +356,7 @@ if (
   throw new Error('Check-in did not open a POS table session.');
 }
 
-console.log('8/10 seating');
+console.log('11/13 seating');
 const seated = await request(
   `/control-center/reservations/${reservation.id}/actions/seat`,
   {
@@ -269,7 +373,7 @@ if (seated?.status !== 'SEATED') {
   throw new Error('Reservation did not transition to SEATED.');
 }
 
-console.log('9/10 POS session close');
+console.log('12/13 POS session close');
 const closedSession = await request(
   `/table-sessions/${seated.tableSessionId}/close`,
   {
@@ -287,7 +391,7 @@ if (closedSession?.status !== 'CLOSED') {
   throw new Error('POS table session did not close.');
 }
 
-console.log('10/10 reservation completion');
+console.log('13/13 reservation completion');
 const completed = await request(
   `/control-center/reservations/${reservation.id}/actions/complete`,
   {
@@ -313,6 +417,7 @@ console.log(
       status: 'passed',
       organizationId,
       locationId,
+      finalPlan: proEntitlements.plan,
       eventId: event.id,
       eventSlug: slug,
       reservationId: reservation.id,
