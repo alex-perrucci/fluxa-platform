@@ -23,14 +23,15 @@ describe('EntitlementGuard', () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(undefined),
     } as unknown as Reflector;
+    const assertEntitlement = jest.fn();
     const subscriptions = {
-      assertEntitlement: jest.fn(),
+      assertEntitlement,
     } as unknown as SubscriptionsService;
 
     const guard = new EntitlementGuard(reflector, subscriptions);
 
     await expect(guard.canActivate(context('org'))).resolves.toBe(true);
-    expect(subscriptions.assertEntitlement).not.toHaveBeenCalled();
+    expect(assertEntitlement).not.toHaveBeenCalled();
   });
 
   it('fails closed when a protected route has no tenant context', async () => {
@@ -50,14 +51,15 @@ describe('EntitlementGuard', () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue('KITCHEN'),
     } as unknown as Reflector;
+    const assertEntitlement = jest.fn().mockRejectedValue(
+      new ForbiddenException({
+        code: 'FEATURE_NOT_INCLUDED',
+        feature: 'KITCHEN',
+        requiredPlan: 'PRO',
+      }),
+    );
     const subscriptions = {
-      assertEntitlement: jest.fn().mockRejectedValue(
-        new ForbiddenException({
-          code: 'FEATURE_NOT_INCLUDED',
-          feature: 'KITCHEN',
-          requiredPlan: 'PRO',
-        }),
-      ),
+      assertEntitlement,
     } as unknown as SubscriptionsService;
 
     const guard = new EntitlementGuard(reflector, subscriptions);
@@ -65,9 +67,6 @@ describe('EntitlementGuard', () => {
     await expect(guard.canActivate(context('org'))).rejects.toMatchObject({
       status: 403,
     });
-    expect(subscriptions.assertEntitlement).toHaveBeenCalledWith(
-      'org',
-      'KITCHEN',
-    );
+    expect(assertEntitlement).toHaveBeenCalledWith('org', 'KITCHEN');
   });
 });
