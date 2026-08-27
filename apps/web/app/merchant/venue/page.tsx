@@ -12,10 +12,8 @@ import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { requireMerchantSession } from '@/lib/auth/session';
 import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
 import type { FloorPlanLocation, FloorPlanView } from '@/lib/floor-plan/types';
-import {
-  getMerchantEntitlements,
-  hasEntitlement,
-} from '@/lib/subscriptions/entitlements';
+import { getMerchantEntitlements } from '@/lib/subscriptions/entitlements';
+import { merchantUiCapabilities } from '@/lib/subscriptions/merchant-ui-policy';
 
 export default async function MerchantVenuePage({
   searchParams,
@@ -24,18 +22,17 @@ export default async function MerchantVenuePage({
 }) {
   const session = await requireMerchantSession();
   const subscription = await getMerchantEntitlements();
+  const capabilities = merchantUiCapabilities(subscription.entitlements);
   const params = await searchParams;
   const view = params.view === 'map' ? 'map' : 'spaces';
-  const canManageTables = hasEntitlement(subscription, 'TABLES');
-  const canUseFloorPlan = hasEntitlement(subscription, 'FLOOR_PLAN');
   const membership = session.availableOrganizations.find(
     (organization) =>
       organization.organizationId === session.session.organizationId,
   );
 
   const blocked =
-    (view === 'spaces' && !canManageTables) ||
-    (view === 'map' && !canUseFloorPlan);
+    (view === 'spaces' && !capabilities.tables) ||
+    (view === 'map' && !capabilities.floorPlan);
 
   return (
     <>
@@ -45,12 +42,12 @@ export default async function MerchantVenuePage({
           Qui gestisci la parte fisica del locale: sede, sale, tavoli e piantina.
           Non devi passare tra sezioni diverse per configurare lo stesso spazio.
         </p>
-        {canManageTables || canUseFloorPlan ? (
+        {capabilities.tables || capabilities.floorPlan ? (
           <nav
             className="mt-5 flex flex-wrap gap-2"
             aria-label="Sezioni del locale"
           >
-            {canManageTables ? (
+            {capabilities.tables ? (
               <Link
                 className={
                   view === 'spaces' ? 'button-primary' : 'button-secondary'
@@ -64,7 +61,7 @@ export default async function MerchantVenuePage({
                 Sale e tavoli
               </Link>
             ) : null}
-            {canUseFloorPlan ? (
+            {capabilities.floorPlan ? (
               <Link
                 className={
                   view === 'map' ? 'button-primary' : 'button-secondary'
@@ -193,6 +190,10 @@ async function FloorPlanViewSection({
   );
 
   return (
-    <FloorPlanEditor initialView={initialView} locations={locations} mode="merchant" />
+    <FloorPlanEditor
+      initialView={initialView}
+      locations={locations}
+      mode="merchant"
+    />
   );
 }
