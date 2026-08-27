@@ -1,14 +1,37 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 import 'offline_models.dart';
 import 'offline_policy.dart';
 
 part 'offline_database.g.dart';
 
+const _offlineDatabaseName = 'fluxa_pos_offline';
+const _sqlite3WasmAsset = 'sqlite3.wasm';
+const _driftWorkerAsset = 'drift_worker.js';
+
+QueryExecutor _openOfflineDatabase() => driftDatabase(
+  name: _offlineDatabaseName,
+  web: DriftWebOptions(
+    sqlite3Wasm: Uri.parse(_sqlite3WasmAsset),
+    driftWorker: Uri.parse(_driftWorkerAsset),
+    onResult: (result) {
+      if (result.missingFeatures.isNotEmpty) {
+        debugPrint(
+          'Fluxa offline database is using ${result.chosenImplementation} '
+          'because these browser features are unavailable: '
+          '${result.missingFeatures.join(', ')}',
+        );
+      }
+    },
+  ),
+);
+
 @DriftDatabase(tables: [])
 class OfflineDatabase extends _$OfflineDatabase {
-  OfflineDatabase() : super(driftDatabase(name: 'fluxa_pos_offline'));
+  OfflineDatabase({QueryExecutor? executor})
+    : super(executor ?? _openOfflineDatabase());
 
   @override
   int get schemaVersion => 1;
