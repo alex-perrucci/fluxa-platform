@@ -12,6 +12,8 @@ import {
 import type { AuthContext } from '../auth/auth.types';
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { assertOrganizationScope } from '../auth/tenant-scope';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AddOrderItemDto } from './dto/add-order-item.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CreateOrderAdjustmentDto } from './dto/create-order-adjustment.dto';
@@ -23,7 +25,10 @@ import { OrdersService } from './orders.service';
 
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly subscriptions: SubscriptionsService,
+  ) {}
 
   @Get()
   list(@CurrentAuth() auth: AuthContext, @Query() query: OrderListQueryDto) {
@@ -40,60 +45,71 @@ export class OrdersController {
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
   @Post()
-  create(@CurrentAuth() auth: AuthContext, @Body() dto: CreateOrderDto) {
+  async create(@CurrentAuth() auth: AuthContext, @Body() dto: CreateOrderDto) {
+    if (dto.serviceMode === 'TABLE') {
+      await this.subscriptions.assertEntitlement(
+        assertOrganizationScope(auth),
+        'TABLE_SERVICE',
+      );
+    }
     return this.ordersService.create(auth, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
   @Post(':orderId/items')
-  addItem(
+  async addItem(
     @CurrentAuth() auth: AuthContext,
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Body() dto: AddOrderItemDto,
   ) {
+    await this.assertTableOrderEntitlement(auth, orderId);
     return this.ordersService.addItem(auth, orderId, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
   @Patch(':orderId/items/:itemId')
-  updateItem(
+  async updateItem(
     @CurrentAuth() auth: AuthContext,
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: UpdateOrderItemDto,
   ) {
+    await this.assertTableOrderEntitlement(auth, orderId);
     return this.ordersService.updateItem(auth, orderId, itemId, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
   @Delete(':orderId/items/:itemId')
-  deleteItem(
+  async deleteItem(
     @CurrentAuth() auth: AuthContext,
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: OrderMutationDto,
   ) {
+    await this.assertTableOrderEntitlement(auth, orderId);
     return this.ordersService.deleteItem(auth, orderId, itemId, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER')
   @Post(':orderId/adjustments')
-  addAdjustment(
+  async addAdjustment(
     @CurrentAuth() auth: AuthContext,
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Body() dto: CreateOrderAdjustmentDto,
   ) {
+    await this.assertTableOrderEntitlement(auth, orderId);
     return this.ordersService.addAdjustment(auth, orderId, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER')
   @Delete(':orderId/adjustments/:adjustmentId')
-  deleteAdjustment(
+  async deleteAdjustment(
     @CurrentAuth() auth: AuthContext,
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Param('adjustmentId', ParseUUIDPipe) adjustmentId: string,
     @Body() dto: OrderMutationDto,
   ) {
+    await this.assertTableOrderEntitlement(auth, orderId);
     return this.ordersService.deleteAdjustment(
       auth,
       orderId,
@@ -104,31 +120,47 @@ export class OrdersController {
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
   @Post(':orderId/hold')
-  hold(
+  async hold(
     @CurrentAuth() auth: AuthContext,
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Body() dto: OrderMutationDto,
   ) {
+    await this.assertTableOrderEntitlement(auth, orderId);
     return this.ordersService.hold(auth, orderId, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'WAITER')
   @Post(':orderId/resume')
-  resume(
+  async resume(
     @CurrentAuth() auth: AuthContext,
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Body() dto: OrderMutationDto,
   ) {
+    await this.assertTableOrderEntitlement(auth, orderId);
     return this.ordersService.resume(auth, orderId, dto);
   }
 
   @Roles('OWNER', 'ADMIN', 'MANAGER')
   @Post(':orderId/cancel')
-  cancel(
+  async cancel(
     @CurrentAuth() auth: AuthContext,
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Body() dto: CancelOrderDto,
   ) {
+    await this.assertTableOrderEntitlement(auth, orderId);
     return this.ordersService.cancel(auth, orderId, dto);
+  }
+
+  private async assertTableOrderEntitlement(
+    auth: AuthContext,
+    orderId: string,
+  ): Promise<void> {
+    const order = await this.ordersService.get(auth, orderId);
+    if (order.serviceMode === 'TABLE') {
+      await this.subscriptions.assertEntitlement(
+        assertOrganizationScope(auth),
+        'TABLE_SERVICE',
+      );
+    }
   }
 }
