@@ -33,11 +33,11 @@ void main() {
   });
 
   test('reuses the same batch id after an ambiguous server failure', () async {
-    final gateway = FakeHospitalityGateway()
-      ..dispatchError = const BackendError(
-        message: 'Server temporarily unavailable.',
-        statusCode: 503,
-      );
+    final gateway = FakeHospitalityGateway();
+    gateway.dispatchError = const BackendError(
+      message: 'Server temporarily unavailable.',
+      statusCode: 503,
+    );
     final controller = KitchenController(gateway);
 
     await controller.bindLocation('location-1');
@@ -60,12 +60,12 @@ void main() {
   });
 
   test('drops the batch id after a deterministic configuration failure', () async {
-    final gateway = FakeHospitalityGateway()
-      ..dispatchError = const BackendError(
-        code: 'KITCHEN_CATEGORY_NOT_ROUTED',
-        message: 'Routing mancante.',
-        statusCode: 409,
-      );
+    final gateway = FakeHospitalityGateway();
+    gateway.dispatchError = const BackendError(
+      code: 'KITCHEN_CATEGORY_NOT_ROUTED',
+      message: 'Routing mancante.',
+      statusCode: 409,
+    );
     final controller = KitchenController(gateway);
 
     await controller.bindLocation('location-1');
@@ -89,12 +89,12 @@ void main() {
   });
 
   test('explains when kitchen is not included in the active plan', () async {
-    final gateway = FakeHospitalityGateway()
-      ..dispatchError = const BackendError(
-        code: 'FEATURE_NOT_INCLUDED',
-        message: 'Feature unavailable.',
-        statusCode: 403,
-      );
+    final gateway = FakeHospitalityGateway();
+    gateway.dispatchError = const BackendError(
+      code: 'FEATURE_NOT_INCLUDED',
+      message: 'Feature unavailable.',
+      statusCode: 403,
+    );
     final controller = KitchenController(gateway);
 
     await controller.bindLocation('location-1');
@@ -108,12 +108,12 @@ void main() {
   });
 
   test('reloads ticket after optimistic concurrency conflict', () async {
-    final gateway = FakeHospitalityGateway()
-      ..transitionError = const BackendError(
-        code: 'KITCHEN_TICKET_VERSION_CONFLICT',
-        message: 'Conflitto.',
-        statusCode: 409,
-      );
+    final gateway = FakeHospitalityGateway();
+    gateway.transitionError = const BackendError(
+      code: 'KITCHEN_TICKET_VERSION_CONFLICT',
+      message: 'Conflitto.',
+      statusCode: 409,
+    );
     final controller = KitchenController(gateway);
 
     await controller.bindLocation('location-1');
