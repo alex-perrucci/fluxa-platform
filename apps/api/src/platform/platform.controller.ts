@@ -18,6 +18,7 @@ import { TenantOptional } from '../auth/decorators/tenant-optional.decorator';
 import { PublishFloorPlanDto } from '../floor-plans/dto/publish-floor-plan.dto';
 import { SaveFloorPlanDraftDto } from '../floor-plans/dto/save-floor-plan-draft.dto';
 import { FloorPlansService } from '../floor-plans/floor-plans.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { ReplacePlatformLocationAccessDto } from './dto/platform-location-access.dto';
 import {
   CreatePlatformLocationDto,
@@ -41,6 +42,7 @@ export class PlatformController {
     private readonly locations: PlatformLocationsService,
     private readonly locationAccess: PlatformLocationAccessService,
     private readonly floorPlans: FloorPlansService,
+    private readonly subscriptions: SubscriptionsService,
   ) {}
 
   @Get('overview')
@@ -49,11 +51,17 @@ export class PlatformController {
   }
 
   @Post('onboarding')
-  onboard(
+  async onboard(
     @CurrentAuth() auth: AuthContext,
     @Body() dto: PlatformOnboardingDto,
   ) {
-    return this.platform.onboard(auth, dto);
+    const result = await this.platform.onboard(auth, dto);
+    const subscription = await this.subscriptions.setSubscription(
+      auth,
+      result.organization.id,
+      { plan: dto.plan, status: 'ACTIVE' },
+    );
+    return { ...result, subscription };
   }
 
   @Get('organizations/:organizationId')
