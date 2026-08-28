@@ -7,6 +7,7 @@ import '../../../core/offline/offline_sale_models.dart';
 import '../../../core/widgets/async_states.dart';
 import '../../orders/domain/quantity_codec.dart';
 import '../domain/catalog_models.dart';
+import 'cashier_responsive_layout.dart';
 import 'catalog_controller.dart';
 
 class OfflineCashierScreen extends ConsumerStatefulWidget {
@@ -69,36 +70,18 @@ class _OfflineCashierScreenState extends ConsumerState<OfflineCashierScreen> {
             const SizedBox(height: 10),
           ],
           Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final catalogPane = _OfflineCatalogPane(
-                  snapshot: snapshot,
-                  catalog: catalog,
-                  sale: sale,
-                );
-                final cart = _OfflineCartPane(
-                  sale: sale,
-                  currency: snapshot.currency,
-                  onCash: () => _completeCashSale(sale, snapshot.currency),
-                );
-                if (constraints.maxWidth >= 980) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: catalogPane),
-                      const SizedBox(width: 14),
-                      SizedBox(width: 410, child: cart),
-                    ],
-                  );
-                }
-                return Column(
-                  children: [
-                    SizedBox(height: 280, child: cart),
-                    const SizedBox(height: 10),
-                    Expanded(child: catalogPane),
-                  ],
-                );
-              },
+            child: CashierResponsiveWorkspace(
+              hasActiveContent: sale.items.isNotEmpty,
+              catalogPane: _OfflineCatalogPane(
+                snapshot: snapshot,
+                catalog: catalog,
+                sale: sale,
+              ),
+              orderPane: _OfflineCartPane(
+                sale: sale,
+                currency: snapshot.currency,
+                onCash: () => _completeCashSale(sale, snapshot.currency),
+              ),
             ),
           ),
         ],
@@ -209,30 +192,29 @@ class _OfflineBanner extends StatelessWidget {
     borderRadius: BorderRadius.circular(14),
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        children: [
-          const Icon(Icons.cloud_off_outlined),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'MODALITÀ OFFLINE',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final status = Row(
+            children: [
+              const Icon(Icons.cloud_off_outlined),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'MODALITÀ OFFLINE',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      'Catalogo locale attivo · vendite consentite solo in contanti',
+                    ),
+                  ],
                 ),
-                Text(
-                  'Catalogo locale attivo · vendite consentite solo in contanti',
-                ),
-              ],
-            ),
-          ),
-          if (pendingCount > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Chip(label: Text('$pendingCount da sincronizzare')),
-            ),
-          FilledButton.tonalIcon(
+              ),
+            ],
+          );
+          final retry = FilledButton.tonalIcon(
             onPressed: syncing ? null : onReconnect,
             icon: syncing
                 ? const SizedBox.square(
@@ -241,8 +223,36 @@ class _OfflineBanner extends StatelessWidget {
                   )
                 : const Icon(Icons.sync),
             label: const Text('Riprova rete'),
-          ),
-        ],
+          );
+          if (constraints.maxWidth < 680) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                status,
+                if (pendingCount > 0) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Chip(label: Text('$pendingCount da sincronizzare')),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                retry,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: status),
+              if (pendingCount > 0) ...[
+                const SizedBox(width: 10),
+                Chip(label: Text('$pendingCount da sincronizzare')),
+              ],
+              const SizedBox(width: 10),
+              retry,
+            ],
+          );
+        },
       ),
     ),
   );
@@ -542,50 +552,83 @@ class _OfflineCartLine extends StatelessWidget {
   final String currency;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(line.displayName),
-              Text(
-                '${QuantityCodec.format(line.quantityAmount, line.quantityScale)} · '
-                '${formatCatalogMoney(line.grossCents, currency)}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-        if (line.quantityScale == 0) ...[
-          IconButton.filledTonal(
-            tooltip: 'Uno in meno',
-            onPressed: sale.busy || line.quantityAmount <= 1
-                ? null
-                : () => sale.updateQuantity(line, line.quantityAmount - 1),
-            icon: const Icon(Icons.remove),
-          ),
-          SizedBox(
-            width: 38,
-            child: Text('${line.quantityAmount}', textAlign: TextAlign.center),
-          ),
-          IconButton.filledTonal(
-            tooltip: 'Uno in più',
-            onPressed: sale.busy
-                ? null
-                : () => sale.updateQuantity(line, line.quantityAmount + 1),
-            icon: const Icon(Icons.add),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final details = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(line.displayName, maxLines: 2, overflow: TextOverflow.ellipsis),
+          Text(
+            '${QuantityCodec.format(line.quantityAmount, line.quantityScale)} · '
+            '${formatCatalogMoney(line.grossCents, currency)}',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
-        IconButton(
-          tooltip: 'Rimuovi',
-          onPressed: sale.busy ? null : () => sale.removeLine(line),
-          icon: const Icon(Icons.delete_outline),
+      );
+      final quantity = line.quantityScale == 0
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton.filledTonal(
+                  tooltip: 'Uno in meno',
+                  onPressed: sale.busy || line.quantityAmount <= 1
+                      ? null
+                      : () => sale.updateQuantity(
+                          line,
+                          line.quantityAmount - 1,
+                        ),
+                  icon: const Icon(Icons.remove),
+                ),
+                SizedBox(
+                  width: 38,
+                  child: Text(
+                    '${line.quantityAmount}',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'Uno in più',
+                  onPressed: sale.busy
+                      ? null
+                      : () => sale.updateQuantity(
+                          line,
+                          line.quantityAmount + 1,
+                        ),
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            )
+          : const SizedBox.shrink();
+      final remove = IconButton(
+        tooltip: 'Rimuovi',
+        onPressed: sale.busy ? null : () => sale.removeLine(line),
+        icon: const Icon(Icons.delete_outline),
+      );
+
+      if (CashierLayoutPolicy.stackOrderLineControls(constraints.maxWidth)) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [Expanded(child: details), remove]),
+              if (line.quantityScale == 0)
+                Align(alignment: Alignment.centerRight, child: quantity),
+            ],
+          ),
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(child: details),
+            if (line.quantityScale == 0) quantity,
+            remove,
+          ],
         ),
-      ],
-    ),
+      );
+    },
   );
 }
 
