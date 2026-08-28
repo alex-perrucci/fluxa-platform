@@ -66,10 +66,7 @@ void main() {
         home: Scaffold(
           body: CashierResponsiveWorkspace(
             hasActiveContent: true,
-            orderPane: ColoredBox(
-              key: Key('order-pane'),
-              color: Colors.black,
-            ),
+            orderPane: ColoredBox(key: Key('order-pane'), color: Colors.black),
             catalogPane: ColoredBox(
               key: Key('catalog-pane'),
               color: Colors.white,
