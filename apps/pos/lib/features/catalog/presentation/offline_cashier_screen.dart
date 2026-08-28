@@ -573,10 +573,8 @@ class _OfflineCartLine extends StatelessWidget {
                   tooltip: 'Uno in meno',
                   onPressed: sale.busy || line.quantityAmount <= 1
                       ? null
-                      : () => sale.updateQuantity(
-                          line,
-                          line.quantityAmount - 1,
-                        ),
+                      : () =>
+                            sale.updateQuantity(line, line.quantityAmount - 1),
                   icon: const Icon(Icons.remove),
                 ),
                 SizedBox(
@@ -590,10 +588,8 @@ class _OfflineCartLine extends StatelessWidget {
                   tooltip: 'Uno in più',
                   onPressed: sale.busy
                       ? null
-                      : () => sale.updateQuantity(
-                          line,
-                          line.quantityAmount + 1,
-                        ),
+                      : () =>
+                            sale.updateQuantity(line, line.quantityAmount + 1),
                   icon: const Icon(Icons.add),
                 ),
               ],
@@ -611,7 +607,12 @@ class _OfflineCartLine extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: [Expanded(child: details), remove]),
+              Row(
+                children: [
+                  Expanded(child: details),
+                  remove,
+                ],
+              ),
               if (line.quantityScale == 0)
                 Align(alignment: Alignment.centerRight, child: quantity),
             ],

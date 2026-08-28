@@ -137,10 +137,7 @@ class _CashierWorkspace extends StatelessWidget {
               catalog: catalog,
               orders: orders,
             ),
-            orderPane: _OrderPane(
-              orders: orders,
-              currency: snapshot.currency,
-            ),
+            orderPane: _OrderPane(orders: orders, currency: snapshot.currency),
           ),
         ),
       ],
@@ -722,10 +719,7 @@ class _OrderLine extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               Text(
-                formatOrderMoney(
-                  item.finalGrossCents,
-                  order.header.currency,
-                ),
+                formatOrderMoney(item.finalGrossCents, order.header.currency),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -790,7 +784,12 @@ class _OrderLine extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: [Expanded(child: details), menu]),
+              Row(
+                children: [
+                  Expanded(child: details),
+                  menu,
+                ],
+              ),
               if (_stepQuantity)
                 Align(alignment: Alignment.centerRight, child: quantity),
             ],

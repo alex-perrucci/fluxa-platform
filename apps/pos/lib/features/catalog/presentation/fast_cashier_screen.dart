@@ -787,7 +787,12 @@ class _FastOrderLine extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(children: [Expanded(child: details), menu]),
+                Row(
+                  children: [
+                    Expanded(child: details),
+                    menu,
+                  ],
+                ),
                 if (_canStepQuantity)
                   Align(alignment: Alignment.centerRight, child: quantity),
               ],
