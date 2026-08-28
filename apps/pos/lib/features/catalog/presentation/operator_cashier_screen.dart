@@ -12,6 +12,7 @@ import '../../orders/presentation/order_composer.dart';
 import '../../orders/presentation/order_controller.dart';
 import '../../payments/presentation/quick_payment_sheet.dart';
 import '../domain/catalog_models.dart';
+import 'cashier_responsive_layout.dart';
 import 'catalog_controller.dart';
 
 class OperatorCashierScreen extends ConsumerStatefulWidget {
@@ -128,36 +129,15 @@ class _CashierWorkspace extends StatelessWidget {
           const SizedBox(height: 10),
         ],
         Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final catalogPane = _CatalogPane(
-                location: location,
-                snapshot: snapshot,
-                catalog: catalog,
-                orders: orders,
-              );
-              final orderPane = _OrderPane(
-                orders: orders,
-                currency: snapshot.currency,
-              );
-              if (constraints.maxWidth >= 980) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: catalogPane),
-                    const SizedBox(width: 14),
-                    SizedBox(width: 410, child: orderPane),
-                  ],
-                );
-              }
-              return Column(
-                children: [
-                  SizedBox(height: 250, child: orderPane),
-                  const SizedBox(height: 10),
-                  Expanded(child: catalogPane),
-                ],
-              );
-            },
+          child: CashierResponsiveWorkspace(
+            hasActiveContent: orders.activeOrder?.items.isNotEmpty == true,
+            catalogPane: _CatalogPane(
+              location: location,
+              snapshot: snapshot,
+              catalog: catalog,
+              orders: orders,
+            ),
+            orderPane: _OrderPane(orders: orders, currency: snapshot.currency),
           ),
         ),
       ],
@@ -194,10 +174,15 @@ class _CatalogPane extends StatelessWidget {
                     'Cassa',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  Text('${location.name} · tocca un prodotto per aggiungerlo'),
+                  Text(
+                    '${location.name} · tocca un prodotto per aggiungerlo',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             PopupMenuButton<String>(
               tooltip: 'Operazioni meno frequenti',
               onSelected: (value) async {
@@ -284,61 +269,52 @@ class _CatalogPane extends StatelessWidget {
         ],
         const SizedBox(height: 10),
         Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: products.isEmpty
-                    ? const FluxaEmptyView(
-                        icon: Icons.search_off,
-                        title: 'Nessun prodotto',
-                        message: 'Cambia ricerca oppure usa Importo libero.',
-                      )
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final columns = switch (constraints.maxWidth) {
-                            >= 1180 => 5,
-                            >= 860 => 4,
-                            >= 580 => 3,
-                            >= 380 => 2,
-                            _ => 1,
-                          };
-                          return GridView.builder(
-                            padding: const EdgeInsets.only(bottom: 88),
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                  childAspectRatio: columns == 1 ? 3 : 1.35,
-                                ),
-                            itemCount: products.length,
-                            itemBuilder: (context, index) => _ProductButton(
-                              product: products[index],
-                              currency: snapshot.currency,
-                              orders: orders,
-                            ),
-                          );
-                        },
+          child: products.isEmpty
+              ? const FluxaEmptyView(
+                  icon: Icons.search_off,
+                  title: 'Nessun prodotto',
+                  message: 'Cambia ricerca oppure usa Importo libero.',
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = switch (constraints.maxWidth) {
+                      >= 1180 => 5,
+                      >= 860 => 4,
+                      >= 580 => 3,
+                      >= 380 => 2,
+                      _ => 1,
+                    };
+                    return GridView.builder(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: columns == 1 ? 3 : 1.35,
                       ),
-              ),
-              Positioned(
-                right: 4,
-                bottom: 4,
-                child: FloatingActionButton.extended(
-                  key: const Key('operator-manual-amount'),
-                  heroTag: 'operator-manual-amount',
-                  onPressed: orders.busy
-                      ? null
-                      : () => showManualAmountKeypad(
-                          context,
-                          controller: orders,
-                          currency: snapshot.currency,
-                        ),
-                  icon: const Icon(Icons.dialpad),
-                  label: const Text('Importo libero'),
+                      itemCount: products.length,
+                      itemBuilder: (context, index) => _ProductButton(
+                        product: products[index],
+                        currency: snapshot.currency,
+                        orders: orders,
+                      ),
+                    );
+                  },
                 ),
-              ),
-            ],
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.tonalIcon(
+            key: const Key('operator-manual-amount'),
+            onPressed: orders.busy
+                ? null
+                : () => showManualAmountKeypad(
+                    context,
+                    controller: orders,
+                    currency: snapshot.currency,
+                  ),
+            icon: const Icon(Icons.dialpad),
+            label: const Text('Importo libero'),
           ),
         ),
       ],
@@ -496,6 +472,8 @@ class _OrderPane extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     order == null ? 'Vendita corrente' : order.header.number,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -522,18 +500,24 @@ class _OrderPane extends ConsumerWidget {
               const SizedBox(height: 6),
               Text(
                 orders.errorMessage!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ] else if (kitchen.errorMessage != null) ...[
               const SizedBox(height: 6),
               Text(
                 kitchen.errorMessage!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ] else if (kitchen.noticeMessage != null) ...[
               const SizedBox(height: 6),
               Text(
                 kitchen.noticeMessage!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w700,
@@ -600,36 +584,10 @@ class _OrderPane extends ConsumerWidget {
                 const SizedBox(height: 10),
               ],
               if (order.header.status == OrderStatus.open)
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 58,
-                        child: FilledButton.icon(
-                          key: const Key('operator-cash'),
-                          onPressed: orders.busy || kitchen.busy
-                              ? null
-                              : () => _pay(context, order, 'cash'),
-                          icon: const Icon(Icons.payments_outlined),
-                          label: const Text('CONTANTI'),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SizedBox(
-                        height: 58,
-                        child: FilledButton.icon(
-                          key: const Key('operator-card'),
-                          onPressed: orders.busy || kitchen.busy
-                              ? null
-                              : () => _pay(context, order, 'card'),
-                          icon: const Icon(Icons.credit_card),
-                          label: const Text('CARTA'),
-                        ),
-                      ),
-                    ),
-                  ],
+                _PaymentActions(
+                  disabled: orders.busy || kitchen.busy,
+                  onCash: () => _pay(context, order, 'cash'),
+                  onCard: () => _pay(context, order, 'card'),
                 )
               else if (order.header.status == OrderStatus.awaitingPayment)
                 FilledButton.icon(
@@ -668,6 +626,65 @@ class _OrderPane extends ConsumerWidget {
   }
 }
 
+class _PaymentActions extends StatelessWidget {
+  const _PaymentActions({
+    required this.disabled,
+    required this.onCash,
+    required this.onCard,
+  });
+
+  final bool disabled;
+  final VoidCallback onCash;
+  final VoidCallback onCard;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      Widget button({
+        required Key key,
+        required IconData icon,
+        required String label,
+        required VoidCallback onPressed,
+      }) => SizedBox(
+        height: 58,
+        child: FilledButton.icon(
+          key: key,
+          onPressed: disabled ? null : onPressed,
+          icon: Icon(icon),
+          label: Text(label),
+        ),
+      );
+
+      final cash = button(
+        key: const Key('operator-cash'),
+        icon: Icons.payments_outlined,
+        label: 'CONTANTI',
+        onPressed: onCash,
+      );
+      final card = button(
+        key: const Key('operator-card'),
+        icon: Icons.credit_card,
+        label: 'CARTA',
+        onPressed: onCard,
+      );
+
+      if (CashierLayoutPolicy.stackPrimaryActions(constraints.maxWidth)) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [cash, const SizedBox(height: 8), card],
+        );
+      }
+      return Row(
+        children: [
+          Expanded(child: cash),
+          const SizedBox(width: 10),
+          Expanded(child: card),
+        ],
+      );
+    },
+  );
+}
+
 class _OrderLine extends StatelessWidget {
   const _OrderLine({
     required this.order,
@@ -685,84 +702,111 @@ class _OrderLine extends StatelessWidget {
       item.unitSnapshot == CatalogProductUnit.each.wireValue;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(
-      children: [
-        Expanded(
-          child: InkWell(
-            onTap: order.header.status == OrderStatus.open && !orders.busy
-                ? () => showEditOrderItemDialog(context, orders, item)
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.displayName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    formatOrderMoney(
-                      item.finalGrossCents,
-                      order.header.currency,
-                    ),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final details = InkWell(
+        onTap: order.header.status == OrderStatus.open && !orders.busy
+            ? () => showEditOrderItemDialog(context, orders, item)
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.displayName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ),
-        ),
-        if (_stepQuantity) ...[
-          IconButton.filledTonal(
-            tooltip: 'Uno in meno',
-            onPressed: orders.busy || item.quantityAmount <= 1
-                ? null
-                : () => orders.updateItem(
-                    item: item,
-                    quantityAmount: item.quantityAmount - 1,
-                  ),
-            icon: const Icon(Icons.remove),
-          ),
-          SizedBox(
-            width: 42,
-            child: Text(
-              item.displayQuantity,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          IconButton.filled(
-            tooltip: 'Uno in più',
-            onPressed: orders.busy
-                ? null
-                : () => orders.updateItem(
-                    item: item,
-                    quantityAmount: item.quantityAmount + 1,
-                  ),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-        if (order.header.status == OrderStatus.open)
-          PopupMenuButton<String>(
-            tooltip: 'Modifica riga',
-            onSelected: (value) async {
-              if (value == 'edit') {
-                await showEditOrderItemDialog(context, orders, item);
-              } else if (value == 'delete') {
-                await confirmDeleteOrderItem(context, orders, item);
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'edit', child: Text('Quantità o nota')),
-              PopupMenuItem(value: 'delete', child: Text('Rimuovi')),
+              Text(
+                formatOrderMoney(item.finalGrossCents, order.header.currency),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
-      ],
-    ),
+        ),
+      );
+      final menu = order.header.status == OrderStatus.open
+          ? PopupMenuButton<String>(
+              tooltip: 'Modifica riga',
+              onSelected: (value) async {
+                if (value == 'edit') {
+                  await showEditOrderItemDialog(context, orders, item);
+                } else if (value == 'delete') {
+                  await confirmDeleteOrderItem(context, orders, item);
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'edit', child: Text('Quantità o nota')),
+                PopupMenuItem(value: 'delete', child: Text('Rimuovi')),
+              ],
+            )
+          : const SizedBox.shrink();
+      final quantity = _stepQuantity
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton.filledTonal(
+                  tooltip: 'Uno in meno',
+                  onPressed: orders.busy || item.quantityAmount <= 1
+                      ? null
+                      : () => orders.updateItem(
+                          item: item,
+                          quantityAmount: item.quantityAmount - 1,
+                        ),
+                  icon: const Icon(Icons.remove),
+                ),
+                SizedBox(
+                  width: 42,
+                  child: Text(
+                    item.displayQuantity,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                IconButton.filled(
+                  tooltip: 'Uno in più',
+                  onPressed: orders.busy
+                      ? null
+                      : () => orders.updateItem(
+                          item: item,
+                          quantityAmount: item.quantityAmount + 1,
+                        ),
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            )
+          : const SizedBox.shrink();
+
+      if (CashierLayoutPolicy.stackOrderLineControls(constraints.maxWidth)) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: details),
+                  menu,
+                ],
+              ),
+              if (_stepQuantity)
+                Align(alignment: Alignment.centerRight, child: quantity),
+            ],
+          ),
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(child: details),
+            if (_stepQuantity) quantity,
+            menu,
+          ],
+        ),
+      );
+    },
   );
 }
 

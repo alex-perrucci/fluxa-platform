@@ -10,6 +10,7 @@ import '../../orders/presentation/manual_amount_keypad.dart';
 import '../../orders/presentation/order_composer.dart';
 import '../../orders/presentation/order_controller.dart';
 import '../domain/catalog_models.dart';
+import 'cashier_responsive_layout.dart';
 import 'catalog_controller.dart';
 
 class FastCashierScreen extends ConsumerStatefulWidget {
@@ -124,38 +125,21 @@ class _FastCashierView extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.all(16),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final catalog = _FastCatalog(
-          catalogController: catalogController,
-          orderController: orderController,
-          location: location,
-          snapshot: snapshot,
-        );
-        final order = _FastOrderPanel(
-          controller: orderController,
-          currency: snapshot.currency,
-        );
-
-        if (constraints.maxWidth >= 1050) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: catalog),
-              const SizedBox(width: 16),
-              SizedBox(width: 410, child: order),
-            ],
-          );
-        }
-
-        return Column(
-          children: [
-            SizedBox(height: 220, child: order),
-            const SizedBox(height: 12),
-            Expanded(child: catalog),
-          ],
-        );
-      },
+    child: CashierResponsiveWorkspace(
+      hasActiveContent:
+          orderController.activeOrder?.items.isNotEmpty == true ||
+          orderController.draft != null,
+      sideBySideMinWidth: 1050,
+      catalogPane: _FastCatalog(
+        catalogController: catalogController,
+        orderController: orderController,
+        location: location,
+        snapshot: snapshot,
+      ),
+      orderPane: _FastOrderPanel(
+        controller: orderController,
+        currency: snapshot.currency,
+      ),
     ),
   );
 }
@@ -189,10 +173,15 @@ class _FastCatalog extends StatelessWidget {
                     'Cassa',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  Text('${location.name} · vendita rapida'),
+                  Text(
+                    '${location.name} · vendita rapida',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             PopupMenuButton<String>(
               tooltip: 'Altre operazioni',
               onSelected: (value) async {
@@ -290,62 +279,53 @@ class _FastCatalog extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: products.isEmpty
-                    ? const FluxaEmptyView(
-                        icon: Icons.search_off,
-                        title: 'Nessun prodotto',
-                        message: 'Prova un’altra ricerca o usa Importo libero.',
-                      )
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final columns = switch (constraints.maxWidth) {
-                            >= 1200 => 5,
-                            >= 900 => 4,
-                            >= 620 => 3,
-                            >= 400 => 2,
-                            _ => 1,
-                          };
-                          return GridView.builder(
-                            key: const Key('fast-cashier-product-grid'),
-                            padding: const EdgeInsets.only(bottom: 88),
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                  childAspectRatio: columns == 1 ? 2.8 : 1.35,
-                                ),
-                            itemCount: products.length,
-                            itemBuilder: (context, index) => _FastProductTile(
-                              product: products[index],
-                              currency: snapshot.currency,
-                              controller: orderController,
-                            ),
-                          );
-                        },
+          child: products.isEmpty
+              ? const FluxaEmptyView(
+                  icon: Icons.search_off,
+                  title: 'Nessun prodotto',
+                  message: 'Prova un’altra ricerca o usa Importo libero.',
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = switch (constraints.maxWidth) {
+                      >= 1200 => 5,
+                      >= 900 => 4,
+                      >= 620 => 3,
+                      >= 400 => 2,
+                      _ => 1,
+                    };
+                    return GridView.builder(
+                      key: const Key('fast-cashier-product-grid'),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: columns == 1 ? 2.8 : 1.35,
                       ),
-              ),
-              Positioned(
-                right: 4,
-                bottom: 4,
-                child: FloatingActionButton.extended(
-                  key: const Key('fast-cashier-manual-amount'),
-                  heroTag: 'fast-cashier-manual-amount',
-                  onPressed: orderController.busy
-                      ? null
-                      : () => showManualAmountKeypad(
-                          context,
-                          controller: orderController,
-                          currency: snapshot.currency,
-                        ),
-                  icon: const Icon(Icons.dialpad),
-                  label: const Text('Importo libero'),
+                      itemCount: products.length,
+                      itemBuilder: (context, index) => _FastProductTile(
+                        product: products[index],
+                        currency: snapshot.currency,
+                        controller: orderController,
+                      ),
+                    );
+                  },
                 ),
-              ),
-            ],
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.tonalIcon(
+            key: const Key('fast-cashier-manual-amount'),
+            onPressed: orderController.busy
+                ? null
+                : () => showManualAmountKeypad(
+                    context,
+                    controller: orderController,
+                    currency: snapshot.currency,
+                  ),
+            icon: const Icon(Icons.dialpad),
+            label: const Text('Importo libero'),
           ),
         ),
       ],
@@ -521,6 +501,8 @@ class _FastOrderPanel extends StatelessWidget {
                 Expanded(
                   child: Text(
                     order?.header.number ?? 'Vendita corrente',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -598,34 +580,48 @@ class _FastOrderPanel extends StatelessWidget {
               const SizedBox(height: 12),
               if (order.header.status == OrderStatus.open &&
                   order.items.isNotEmpty) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        key: const Key('fast-cashier-cash'),
-                        onPressed: controller.busy
-                            ? null
-                            : () => context.push(
-                                '/checkout/${order.header.id}?quick=cash',
-                              ),
-                        icon: const Icon(Icons.payments_outlined),
-                        label: const Text('CONTANTI'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.icon(
-                        key: const Key('fast-cashier-card'),
-                        onPressed: controller.busy
-                            ? null
-                            : () => context.push(
-                                '/checkout/${order.header.id}?quick=card',
-                              ),
-                        icon: const Icon(Icons.credit_card),
-                        label: const Text('CARTA'),
-                      ),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cash = FilledButton.icon(
+                      key: const Key('fast-cashier-cash'),
+                      onPressed: controller.busy
+                          ? null
+                          : () => context.push(
+                              '/checkout/${order.header.id}?quick=cash',
+                            ),
+                      icon: const Icon(Icons.payments_outlined),
+                      label: const Text('CONTANTI'),
+                    );
+                    final card = FilledButton.icon(
+                      key: const Key('fast-cashier-card'),
+                      onPressed: controller.busy
+                          ? null
+                          : () => context.push(
+                              '/checkout/${order.header.id}?quick=card',
+                            ),
+                      icon: const Icon(Icons.credit_card),
+                      label: const Text('CARTA'),
+                    );
+                    if (CashierLayoutPolicy.stackPrimaryActions(
+                      constraints.maxWidth,
+                    )) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(height: 52, child: cash),
+                          const SizedBox(height: 8),
+                          SizedBox(height: 52, child: card),
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: cash),
+                        const SizedBox(width: 10),
+                        Expanded(child: card),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 6),
                 Center(
@@ -694,93 +690,127 @@ class _FastOrderLine extends StatelessWidget {
       order.header.currency,
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.displayName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _canStepQuantity
-                      ? '$unitPrice cad. · $lineTotal'
-                      : '${item.displayQuantity} × $unitPrice · $lineTotal',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final details = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.displayName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
             ),
-          ),
-          const SizedBox(width: 8),
-          if (_canStepQuantity) ...[
-            IconButton.filledTonal(
-              key: Key('fast-order-minus-${item.id}'),
-              tooltip: 'Riduci quantità',
-              onPressed: controller.busy || item.quantityAmount <= 1
-                  ? null
-                  : () => controller.updateItem(
-                      item: item,
-                      quantityAmount: item.quantityAmount - 1,
-                    ),
-              icon: const Icon(Icons.remove),
-            ),
-            SizedBox(
-              width: 46,
-              height: 44,
-              child: InkWell(
-                key: Key('fast-order-quantity-${item.id}'),
-                borderRadius: BorderRadius.circular(10),
-                onTap: controller.busy
-                    ? null
-                    : () => showEditOrderItemDialog(context, controller, item),
-                child: Center(
-                  child: Text(
-                    item.displayQuantity,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ),
-            ),
-            IconButton.filled(
-              key: Key('fast-order-plus-${item.id}'),
-              tooltip: 'Aumenta quantità',
-              onPressed: controller.busy
-                  ? null
-                  : () => controller.updateItem(
-                      item: item,
-                      quantityAmount: item.quantityAmount + 1,
-                    ),
-              icon: const Icon(Icons.add),
+            const SizedBox(height: 2),
+            Text(
+              _canStepQuantity
+                  ? '$unitPrice cad. · $lineTotal'
+                  : '${item.displayQuantity} × $unitPrice · $lineTotal',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
-          if (order.header.status == OrderStatus.open)
-            PopupMenuButton<String>(
-              tooltip: 'Altre opzioni riga',
-              onSelected: (value) async {
-                if (value == 'edit') {
-                  await showEditOrderItemDialog(context, controller, item);
-                } else if (value == 'delete') {
-                  await confirmDeleteOrderItem(context, controller, item);
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: 'edit',
-                  child: Text('Modifica quantità / nota'),
+        );
+        final quantity = _canStepQuantity
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton.filledTonal(
+                    key: Key('fast-order-minus-${item.id}'),
+                    tooltip: 'Riduci quantità',
+                    onPressed: controller.busy || item.quantityAmount <= 1
+                        ? null
+                        : () => controller.updateItem(
+                            item: item,
+                            quantityAmount: item.quantityAmount - 1,
+                          ),
+                    icon: const Icon(Icons.remove),
+                  ),
+                  SizedBox(
+                    width: 46,
+                    height: 44,
+                    child: InkWell(
+                      key: Key('fast-order-quantity-${item.id}'),
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: controller.busy
+                          ? null
+                          : () => showEditOrderItemDialog(
+                              context,
+                              controller,
+                              item,
+                            ),
+                      child: Center(
+                        child: Text(
+                          item.displayQuantity,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton.filled(
+                    key: Key('fast-order-plus-${item.id}'),
+                    tooltip: 'Aumenta quantità',
+                    onPressed: controller.busy
+                        ? null
+                        : () => controller.updateItem(
+                            item: item,
+                            quantityAmount: item.quantityAmount + 1,
+                          ),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              )
+            : const SizedBox.shrink();
+        final menu = order.header.status == OrderStatus.open
+            ? PopupMenuButton<String>(
+                tooltip: 'Altre opzioni riga',
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    await showEditOrderItemDialog(context, controller, item);
+                  } else if (value == 'delete') {
+                    await confirmDeleteOrderItem(context, controller, item);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text('Modifica quantità / nota'),
+                  ),
+                  PopupMenuItem(value: 'delete', child: Text('Rimuovi')),
+                ],
+              )
+            : const SizedBox.shrink();
+
+        if (CashierLayoutPolicy.stackOrderLineControls(constraints.maxWidth)) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: details),
+                    menu,
+                  ],
                 ),
-                PopupMenuItem(value: 'delete', child: Text('Rimuovi')),
+                if (_canStepQuantity)
+                  Align(alignment: Alignment.centerRight, child: quantity),
               ],
             ),
-        ],
-      ),
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Expanded(child: details),
+              const SizedBox(width: 8),
+              if (_canStepQuantity) quantity,
+              menu,
+            ],
+          ),
+        );
+      },
     );
   }
 }
