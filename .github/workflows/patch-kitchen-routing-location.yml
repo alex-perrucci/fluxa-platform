@@ -1,0 +1,157 @@
+name: Patch kitchen routing after location change
+
+on:
+  push:
+    branches:
+      - fix/kitchen-routing-after-location-change
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/kitchen-routing-after-location-change
+      - name: Apply kitchen routing fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected 1 match, found {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          service = 'apps/api/src/hospitality/kitchen.service.ts'
+          replace_once(
+              service,
+              """      if (pending.length === 0)
+        throw new ConflictException({
+          code: 'KITCHEN_NOTHING_TO_SEND',
+          message: 'Non ci sono nuove quantità da inviare in cucina.',
+        });
+
+      const { dispatchable, unavailable } =
+        partitionKitchenDispatchItems(pending);""",
+              """      if (pending.length === 0)
+        throw new ConflictException({
+          code: 'KITCHEN_NOTHING_TO_SEND',
+          message: 'Non ci sono nuove quantità da inviare in cucina.',
+        });
+
+      if (!pending.some((item) => item.routeStationId !== null)) {
+        const routeState = await client.query<
+          { routeCount: number } & QueryResultRow
+        >(
+          `SELECT COUNT(*)::int AS \"routeCount\" FROM kitchen_station_categories WHERE organization_id=$1 AND location_id=$2`,
+          [org, order.locationId],
+        );
+        if ((routeState.rows[0]?.routeCount ?? 0) === 0)
+          throw new ConflictException({
+            code: 'KITCHEN_ROUTING_NOT_CONFIGURED',
+            message:
+              'La sede non ha ancora un instradamento cucina configurato.',
+          });
+      }
+
+      const { dispatchable, unavailable } =
+        partitionKitchenDispatchItems(pending);""",
+          )
+          replace_once(
+              service,
+              """      if (dispatchable.length === 0)
+        throw new ConflictException({
+          code: 'KITCHEN_NOTHING_TO_SEND',
+          message:
+            'Nessun nuovo articolo dell’ordine richiede preparazione in cucina.',
+        });""",
+              """      if (dispatchable.length === 0)
+        throw new ConflictException({
+          code: 'KITCHEN_NO_PREPARATION_ITEMS',
+          message:
+            'Nessun nuovo articolo dell’ordine richiede preparazione in cucina.',
+        });""",
+          )
+
+          controller = 'apps/pos/lib/features/hospitality/presentation/kitchen_controller.dart'
+          replace_once(
+              controller,
+              """      case 'KITCHEN_CATEGORY_NOT_ROUTED':
+        return 'Configura una postazione cucina attiva e l’instradamento delle categorie prima di inviare la comanda.';
+      case 'KITCHEN_NOTHING_TO_SEND':
+        return 'Tutte le quantità dell’ordine sono già state inviate in cucina.';""",
+              """      case 'KITCHEN_ROUTING_NOT_CONFIGURED':
+      case 'KITCHEN_CATEGORY_NOT_ROUTED':
+        return 'Configura una postazione cucina attiva e l’instradamento delle categorie per questa sede prima di inviare la comanda.';
+      case 'KITCHEN_NO_PREPARATION_ITEMS':
+        return 'Nessun nuovo articolo dell’ordine richiede preparazione in cucina.';
+      case 'KITCHEN_NOTHING_TO_SEND':
+        return 'Tutte le quantità dell’ordine sono già state inviate in cucina.';""",
+          )
+
+          tests = 'apps/pos/test/features/hospitality/kitchen_controller_test.dart'
+          anchor = """  test('explains when kitchen is not included in the active plan', () async {"""
+          addition = """  test('explains when the current location has no kitchen routing', () async {
+    final gateway = FakeHospitalityGateway();
+    gateway.dispatchError = const BackendError(
+      code: 'KITCHEN_ROUTING_NOT_CONFIGURED',
+      message: 'Routing sede mancante.',
+      statusCode: 409,
+    );
+    final controller = createController(gateway);
+
+    await controller.bindLocation('location-1');
+    final dispatched = await controller.dispatchOrder(
+      locationId: 'location-1',
+      orderId: 'order-1',
+    );
+
+    expect(dispatched, isFalse);
+    expect(controller.errorMessage, contains('per questa sede'));
+  });
+
+  test('distinguishes no-preparation items from quantities already sent', () async {
+    final gateway = FakeHospitalityGateway();
+    final controller = createController(gateway);
+
+    await controller.bindLocation('location-1');
+    gateway.dispatchError = const BackendError(
+      code: 'KITCHEN_NO_PREPARATION_ITEMS',
+      message: 'Nessuna preparazione.',
+      statusCode: 409,
+    );
+    await controller.dispatchOrder(
+      locationId: 'location-1',
+      orderId: 'order-1',
+    );
+    expect(controller.errorMessage, contains('richiede preparazione'));
+    expect(controller.errorMessage, isNot(contains('già state inviate')));
+
+    gateway.dispatchError = const BackendError(
+      code: 'KITCHEN_NOTHING_TO_SEND',
+      message: 'Già inviato.',
+      statusCode: 409,
+    );
+    await controller.dispatchOrder(
+      locationId: 'location-1',
+      orderId: 'order-1',
+    );
+    expect(controller.errorMessage, contains('già state inviate'));
+  });
+
+"""
+          replace_once(tests, anchor, addition + anchor)
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/api/src/hospitality/kitchen.service.ts apps/pos/lib/features/hospitality/presentation/kitchen_controller.dart apps/pos/test/features/hospitality/kitchen_controller_test.dart
+          git commit -m 'fix: distinguish missing kitchen routing after location changes'
+          git push origin HEAD:fix/kitchen-routing-after-location-change
