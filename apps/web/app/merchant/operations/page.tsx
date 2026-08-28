@@ -18,7 +18,7 @@ import { authenticatedFluxaFetch } from '@/lib/api/authenticated';
 import { FluxaApiError } from '@/lib/api/fluxa-api';
 import { requireMerchantSession } from '@/lib/auth/session';
 import { resolveAdministrativeLocation } from '@/lib/control-center/merchant-context';
-import { getMerchantEntitlements } from '@/lib/subscriptions/entitlements';
+import { loadMerchantEntitlementsSafely } from '@/lib/subscriptions/merchant-entitlement-load';
 import { merchantUiCapabilities } from '@/lib/subscriptions/merchant-ui-policy';
 
 type OptionalLoad<T> = {
@@ -49,8 +49,9 @@ export default async function OperationsPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   const params = await searchParams;
-  const subscription = await getMerchantEntitlements();
-  const capabilities = merchantUiCapabilities(subscription.entitlements);
+  const entitlementLoad = await loadMerchantEntitlementsSafely();
+  const subscription = entitlementLoad.subscription;
+  const capabilities = merchantUiCapabilities(subscription?.entitlements ?? []);
   const view = params.view === 'printing' ? 'printing' : 'devices';
 
   return (
@@ -61,6 +62,19 @@ export default async function OperationsPage({
           Gestisci gli strumenti usati durante il servizio con nomi reali: casse,
           postazioni di preparazione e stampanti.
         </p>
+        {entitlementLoad.error ? (
+          <div
+            className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+            role="status"
+          >
+            <strong>Piano momentaneamente non verificabile</strong>
+            <p className="mt-1">
+              {entitlementLoad.error} La gestione dispositivi resta disponibile;
+              le funzioni cucina verranno riabilitate appena il piano sarà
+              nuovamente leggibile.
+            </p>
+          </div>
+        ) : null}
         <nav
           className="mt-5 flex flex-wrap gap-2"
           aria-label="Sezioni operative"
@@ -71,7 +85,7 @@ export default async function OperationsPage({
           >
             Dispositivi
           </Link>
-          {capabilities.kitchenPrinting ? (
+          {capabilities.kitchenPrinting || view === 'printing' ? (
             <Link
               className={
                 view === 'printing' ? 'button-primary' : 'button-secondary'
@@ -95,6 +109,11 @@ export default async function OperationsPage({
             </div>
             <PosDevicesConsole />
           </>
+        ) : !subscription ? (
+          <EmptyState
+            description="Non riusciamo a verificare il piano Fluxa in questo momento. La dashboard resta disponibile: riprova tra poco senza cambiare dispositivo o sede."
+            title="Cucina temporaneamente non verificabile"
+          />
         ) : capabilities.kitchenPrinting ? (
           <PrintingSection />
         ) : (

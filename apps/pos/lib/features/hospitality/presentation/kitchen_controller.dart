@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/backend_error.dart';
@@ -10,6 +12,9 @@ enum KitchenLoadStatus { idle, loading, ready, failure }
 class KitchenController extends ChangeNotifier {
   KitchenController(this._gateway);
 
+  static const autoPollInterval = Duration(seconds: 2);
+  static const subscriptionBackoffInterval = Duration(seconds: 15);
+
   final HospitalityGateway _gateway;
 
   String? _locationId;
@@ -20,10 +25,14 @@ class KitchenController extends ChangeNotifier {
   String? _stationFilterId;
   KitchenLoadStatus _status = KitchenLoadStatus.idle;
   bool _busy = false;
+  bool _pollInFlight = false;
+  bool _autoPollingEnabled = false;
+  bool _autoPollingBlocked = false;
   String? _errorMessage;
   String? _noticeMessage;
   String? _pendingDispatchOrderId;
   String? _pendingDispatchBatchId;
+  Timer? _autoPollTimer;
   int _requestVersion = 0;
 
   String? get locationId => _locationId;
@@ -34,6 +43,8 @@ class KitchenController extends ChangeNotifier {
   String? get stationFilterId => _stationFilterId;
   KitchenLoadStatus get status => _status;
   bool get busy => _busy;
+  bool get autoPollingActive => _autoPollTimer?.isActive == true;
+  bool get autoPollingBlocked => _autoPollingBlocked;
   String? get errorMessage => _errorMessage;
   String? get noticeMessage => _noticeMessage;
 
@@ -56,11 +67,17 @@ class KitchenController extends ChangeNotifier {
     _stationFilterId = null;
     _status = KitchenLoadStatus.idle;
     _busy = false;
+    _pollInFlight = false;
+    _autoPollingBlocked = false;
     _errorMessage = null;
     _noticeMessage = null;
     _clearPendingDispatch();
+    _cancelAutoPollTimer();
     notifyListeners();
     await refresh();
+    if (_autoPollingEnabled) {
+      _startAutoPolling(autoPollInterval);
+    }
   }
 
   void clearLocation() {
@@ -73,10 +90,29 @@ class KitchenController extends ChangeNotifier {
     _stationFilterId = null;
     _status = KitchenLoadStatus.idle;
     _busy = false;
+    _pollInFlight = false;
+    _autoPollingEnabled = false;
+    _autoPollingBlocked = false;
     _errorMessage = null;
     _noticeMessage = null;
     _clearPendingDispatch();
+    _cancelAutoPollTimer();
     notifyListeners();
+  }
+
+  void startAutoPolling() {
+    _autoPollingEnabled = true;
+    if (_locationId == null || _autoPollTimer?.isActive == true) {
+      return;
+    }
+    _startAutoPolling(
+      _autoPollingBlocked ? subscriptionBackoffInterval : autoPollInterval,
+    );
+  }
+
+  void stopAutoPolling() {
+    _autoPollingEnabled = false;
+    _cancelAutoPollTimer();
   }
 
   Future<void> refresh() async {
@@ -108,6 +144,7 @@ class KitchenController extends ChangeNotifier {
       _stations = stations;
       _tickets = tickets;
       _status = KitchenLoadStatus.ready;
+      _recoverAutoPollingIfNeeded();
       final selectedId = _selectedTicket?.ticket.id;
       if (selectedId != null &&
           !tickets.any((ticket) => ticket.id == selectedId)) {
@@ -119,7 +156,10 @@ class KitchenController extends ChangeNotifier {
       }
       _tickets = const [];
       _status = KitchenLoadStatus.failure;
-      _errorMessage = error.message;
+      _errorMessage = _kdsErrorMessage(error);
+      if (_isSubscriptionPollingError(error)) {
+        _enterSubscriptionBackoff();
+      }
     } on FormatException {
       if (requestVersion != _requestVersion) {
         return;
@@ -136,6 +176,76 @@ class KitchenController extends ChangeNotifier {
       _errorMessage = 'Impossibile recuperare le comande.';
     }
     notifyListeners();
+  }
+
+  Future<void> pollTickets() async {
+    final currentLocationId = _locationId;
+    if (currentLocationId == null || _busy || _pollInFlight) {
+      return;
+    }
+
+    _pollInFlight = true;
+    try {
+      final tickets = await _gateway.listKitchenTickets(
+        locationId: currentLocationId,
+        stationId: _stationFilterId,
+        status: _statusFilter,
+      );
+      if (_locationId != currentLocationId) {
+        return;
+      }
+      if (tickets.any((ticket) => ticket.locationId != currentLocationId)) {
+        throw const BackendError(
+          message: 'Le comande appartengono a una location diversa.',
+        );
+      }
+
+      final previousTickets = _tickets;
+      final wasBlocked = _autoPollingBlocked;
+      var selectedChanged = false;
+      final selected = _selectedTicket;
+      if (selected != null) {
+        final selectedSummary = _findTicket(tickets, selected.ticket.id);
+        if (selectedSummary == null) {
+          _selectedTicket = null;
+          selectedChanged = true;
+        } else if (selectedSummary.version != selected.ticket.version) {
+          final detail = await _gateway.getKitchenTicket(selected.ticket.id);
+          if (_locationId == currentLocationId &&
+              detail.ticket.locationId == currentLocationId) {
+            _selectedTicket = detail;
+            selectedChanged = true;
+          }
+        }
+      }
+
+      _tickets = tickets;
+      _status = KitchenLoadStatus.ready;
+      _recoverAutoPollingIfNeeded();
+      if (wasBlocked) {
+        _errorMessage = null;
+      }
+
+      if (wasBlocked ||
+          selectedChanged ||
+          !_sameTickets(previousTickets, tickets)) {
+        notifyListeners();
+      }
+    } on BackendError catch (error) {
+      if (_isSubscriptionPollingError(error)) {
+        _errorMessage = _kdsErrorMessage(error);
+        _enterSubscriptionBackoff();
+        notifyListeners();
+      }
+      // Transient polling failures keep the last known KDS state on screen.
+      // Operators can still use the explicit refresh action if needed.
+    } on FormatException {
+      // Preserve the last known state; a later poll or manual refresh can recover.
+    } catch (_) {
+      // Preserve the last known state on transient connectivity failures.
+    } finally {
+      _pollInFlight = false;
+    }
   }
 
   Future<void> setStatusFilter(KitchenTicketStatus? status) async {
@@ -347,6 +457,91 @@ class KitchenController extends ChangeNotifier {
     }
   }
 
+  String _kdsErrorMessage(BackendError error) {
+    switch (error.code) {
+      case 'FEATURE_NOT_INCLUDED':
+        return 'Il KDS non è incluso nel piano attivo. Le comande restano salvate, ma questa postazione non può aggiornarle finché il piano non include la cucina.';
+      case 'SUBSCRIPTION_SUSPENDED':
+        return 'L’abbonamento è sospeso: gli aggiornamenti automatici della cucina sono in pausa.';
+      case 'SUBSCRIPTION_NOT_PROVISIONED':
+        return 'Il piano del locale non è configurato: gli aggiornamenti automatici della cucina sono in pausa.';
+      default:
+        return error.message;
+    }
+  }
+
+  bool _isSubscriptionPollingError(BackendError error) =>
+      error.code == 'FEATURE_NOT_INCLUDED' ||
+      error.code == 'SUBSCRIPTION_SUSPENDED' ||
+      error.code == 'SUBSCRIPTION_NOT_PROVISIONED';
+
+  void _startAutoPolling(Duration interval) {
+    _cancelAutoPollTimer();
+    if (!_autoPollingEnabled || _locationId == null) {
+      return;
+    }
+    _autoPollTimer = Timer.periodic(interval, (_) => unawaited(pollTickets()));
+  }
+
+  void _enterSubscriptionBackoff() {
+    if (!_autoPollingEnabled) {
+      return;
+    }
+    if (_autoPollingBlocked && _autoPollTimer?.isActive == true) {
+      return;
+    }
+    _autoPollingBlocked = true;
+    _startAutoPolling(subscriptionBackoffInterval);
+  }
+
+  void _recoverAutoPollingIfNeeded() {
+    if (!_autoPollingBlocked) {
+      return;
+    }
+    _autoPollingBlocked = false;
+    if (_autoPollingEnabled) {
+      _startAutoPolling(autoPollInterval);
+    }
+  }
+
+  void _cancelAutoPollTimer() {
+    _autoPollTimer?.cancel();
+    _autoPollTimer = null;
+  }
+
+  KitchenTicketSummary? _findTicket(
+    List<KitchenTicketSummary> tickets,
+    String id,
+  ) {
+    for (final ticket in tickets) {
+      if (ticket.id == id) {
+        return ticket;
+      }
+    }
+    return null;
+  }
+
+  bool _sameTickets(
+    List<KitchenTicketSummary> previous,
+    List<KitchenTicketSummary> next,
+  ) {
+    if (previous.length != next.length) {
+      return false;
+    }
+    for (var index = 0; index < previous.length; index += 1) {
+      final left = previous[index];
+      final right = next[index];
+      if (left.id != right.id ||
+          left.status != right.status ||
+          left.version != right.version ||
+          left.stationId != right.stationId ||
+          left.tableCodeSnapshot != right.tableCodeSnapshot) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<void> _reloadTicketAfterConflict(
     String ticketId,
     BackendError original,
@@ -392,5 +587,12 @@ class KitchenController extends ChangeNotifier {
   void _finishBusy() {
     _busy = false;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _autoPollingEnabled = false;
+    _cancelAutoPollTimer();
+    super.dispose();
   }
 }
