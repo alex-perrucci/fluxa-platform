@@ -12,8 +12,7 @@ class CashierLayoutPolicy {
   static bool useSideBySide(
     BoxConstraints constraints, {
     double minWidth = defaultSideBySideMinWidth,
-  }) =>
-      constraints.maxWidth >= minWidth;
+  }) => constraints.maxWidth >= minWidth;
 
   static double stackedOrderHeight({required bool hasActiveContent}) =>
       hasActiveContent ? activeOrderPaneHeight : emptyOrderPaneHeight;
