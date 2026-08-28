@@ -448,8 +448,11 @@ class KitchenController extends ChangeNotifier {
       case 'KITCHEN_ORDER_NOT_DISPATCHABLE':
       case 'ORDER_NOT_DISPATCHABLE':
         return 'Solo un ordine aperto può essere inviato in cucina.';
+      case 'KITCHEN_ROUTING_NOT_CONFIGURED':
       case 'KITCHEN_CATEGORY_NOT_ROUTED':
-        return 'Configura una postazione cucina attiva e l’instradamento delle categorie prima di inviare la comanda.';
+        return 'Configura una postazione cucina attiva e l’instradamento delle categorie per questa sede prima di inviare la comanda.';
+      case 'KITCHEN_NO_PREPARATION_ITEMS':
+        return 'Nessun nuovo articolo dell’ordine richiede preparazione in cucina.';
       case 'KITCHEN_NOTHING_TO_SEND':
         return 'Tutte le quantità dell’ordine sono già state inviate in cucina.';
       default:

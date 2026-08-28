@@ -190,6 +190,57 @@ void main() {
     },
   );
 
+  test('explains when the current location has no kitchen routing', () async {
+    final gateway = FakeHospitalityGateway();
+    gateway.dispatchError = const BackendError(
+      code: 'KITCHEN_ROUTING_NOT_CONFIGURED',
+      message: 'Routing sede mancante.',
+      statusCode: 409,
+    );
+    final controller = createController(gateway);
+
+    await controller.bindLocation('location-1');
+    final dispatched = await controller.dispatchOrder(
+      locationId: 'location-1',
+      orderId: 'order-1',
+    );
+
+    expect(dispatched, isFalse);
+    expect(controller.errorMessage, contains('per questa sede'));
+  });
+
+  test(
+    'distinguishes no-preparation items from quantities already sent',
+    () async {
+      final gateway = FakeHospitalityGateway();
+      final controller = createController(gateway);
+
+      await controller.bindLocation('location-1');
+      gateway.dispatchError = const BackendError(
+        code: 'KITCHEN_NO_PREPARATION_ITEMS',
+        message: 'Nessuna preparazione.',
+        statusCode: 409,
+      );
+      await controller.dispatchOrder(
+        locationId: 'location-1',
+        orderId: 'order-1',
+      );
+      expect(controller.errorMessage, contains('richiede preparazione'));
+      expect(controller.errorMessage, isNot(contains('già state inviate')));
+
+      gateway.dispatchError = const BackendError(
+        code: 'KITCHEN_NOTHING_TO_SEND',
+        message: 'Già inviato.',
+        statusCode: 409,
+      );
+      await controller.dispatchOrder(
+        locationId: 'location-1',
+        orderId: 'order-1',
+      );
+      expect(controller.errorMessage, contains('già state inviate'));
+    },
+  );
+
   test('explains when kitchen is not included in the active plan', () async {
     final gateway = FakeHospitalityGateway();
     gateway.dispatchError = const BackendError(
