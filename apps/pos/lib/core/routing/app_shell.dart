@@ -8,6 +8,7 @@ import '../theme/fluxa_theme.dart';
 import '../widgets/fluxa_brand.dart';
 import 'operator_navigation_policy.dart';
 import 'operator_tutorial_gate.dart';
+import 'pos_shell_layout.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
@@ -105,7 +106,18 @@ class AppShell extends ConsumerWidget {
       (item) => item.branchIndex == navigationShell.currentIndex,
     );
     final selectedIndex = visibleIndex < 0 ? 0 : visibleIndex;
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final width = MediaQuery.sizeOf(context).width;
+    final sizeClass = PosShellLayoutPolicy.sizeClassForWidth(width);
+    final expanded = sizeClass == PosShellSizeClass.expanded;
+    final showCompactRail = PosShellLayoutPolicy.shouldShowCompactRail(
+      width: width,
+      destinationCount: destinations.length,
+    );
+    final showBottomNavigation =
+        PosShellLayoutPolicy.shouldShowBottomNavigation(
+          width: width,
+          destinationCount: destinations.length,
+        );
 
     return OperatorTutorialGate(
       mode: mode,
@@ -131,18 +143,20 @@ class AppShell extends ConsumerWidget {
           child: Focus(
             autofocus: true,
             child: Scaffold(
-              appBar: wide
+              appBar: expanded
                   ? null
                   : AppBar(
+                      titleSpacing: 12,
                       title: const FluxaBrandLockup(compact: true),
                       actions: [
                         Padding(
-                          padding: const EdgeInsets.only(right: 16),
+                          padding: const EdgeInsets.only(right: 12),
                           child: Center(
                             child: Text(
                               _modeLabel(mode),
                               style: const TextStyle(
                                 color: FluxaPalette.goldDark,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 1.2,
                               ),
@@ -152,29 +166,42 @@ class AppShell extends ConsumerWidget {
                       ],
                     ),
               body: SafeArea(
-                top: wide,
-                child: wide
-                    ? Row(
-                        children: [
-                          _DesktopNavigation(
-                            destinations: destinations,
-                            selectedIndex: selectedIndex,
-                            onSelected: (index) =>
-                                _go(ref, destinations[index].branchIndex),
-                            mode: mode,
-                          ),
-                          Expanded(child: navigationShell),
-                        ],
-                      )
-                    : navigationShell,
+                top: expanded,
+                child: switch (sizeClass) {
+                  PosShellSizeClass.expanded => Row(
+                    children: [
+                      _DesktopNavigation(
+                        destinations: destinations,
+                        selectedIndex: selectedIndex,
+                        onSelected: (index) =>
+                            _go(ref, destinations[index].branchIndex),
+                        mode: mode,
+                      ),
+                      Expanded(child: navigationShell),
+                    ],
+                  ),
+                  PosShellSizeClass.medium => Row(
+                    children: [
+                      if (showCompactRail)
+                        _TabletNavigation(
+                          destinations: destinations,
+                          currentBranchIndex: navigationShell.currentIndex,
+                          onSelectedBranch: (branchIndex) =>
+                              _go(ref, branchIndex),
+                        ),
+                      Expanded(child: navigationShell),
+                    ],
+                  ),
+                  PosShellSizeClass.compact => navigationShell,
+                },
               ),
-              bottomNavigationBar: wide
-                  ? null
-                  : _MobileNavigation(
+              bottomNavigationBar: showBottomNavigation
+                  ? _MobileNavigation(
                       destinations: destinations,
                       currentBranchIndex: navigationShell.currentIndex,
                       onSelectedBranch: (branchIndex) => _go(ref, branchIndex),
-                    ),
+                    )
+                  : null,
             ),
           ),
         ),
@@ -251,6 +278,83 @@ class AppShell extends ConsumerWidget {
         return;
     }
   }
+}
+
+class _TabletNavigation extends StatelessWidget {
+  const _TabletNavigation({
+    required this.destinations,
+    required this.currentBranchIndex,
+    required this.onSelectedBranch,
+  });
+
+  final List<_PosDestination> destinations;
+  final int currentBranchIndex;
+  final ValueChanged<int> onSelectedBranch;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 88,
+    decoration: const BoxDecoration(
+      color: FluxaPalette.ink,
+      border: Border(right: BorderSide(color: Color(0xFF2A2B30))),
+    ),
+    child: ListView(
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
+      children: [
+        for (final destination in destinations)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Tooltip(
+              message: '${destination.label} · ${destination.description}',
+              child: Material(
+                color: destination.branchIndex == currentBranchIndex
+                    ? const Color(0xFF303033)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => onSelectedBranch(destination.branchIndex),
+                  child: SizedBox(
+                    height: 66,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          destination.branchIndex == currentBranchIndex
+                              ? destination.selectedIcon
+                              : destination.icon,
+                          color: destination.branchIndex == currentBranchIndex
+                              ? FluxaPalette.goldDark
+                              : Colors.white70,
+                        ),
+                        const SizedBox(height: 5),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            destination.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color:
+                                  destination.branchIndex == currentBranchIndex
+                                  ? FluxaPalette.goldDark
+                                  : Colors.white70,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class _DesktopNavigation extends StatelessWidget {
@@ -410,7 +514,14 @@ class _MobileNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (destinations.length <= 5) {
+    if (destinations.length < 2) {
+      return const SizedBox.shrink();
+    }
+
+    final primaryCount = PosShellLayoutPolicy.compactPrimaryDestinationCount(
+      destinations.length,
+    );
+    if (primaryCount == destinations.length) {
       final selectedIndex = destinations.indexWhere(
         (item) => item.branchIndex == currentBranchIndex,
       );
@@ -430,12 +541,14 @@ class _MobileNavigation extends StatelessWidget {
       );
     }
 
-    final primary = destinations.take(4).toList(growable: false);
-    final secondary = destinations.skip(4).toList(growable: false);
+    final primary = destinations.take(primaryCount).toList(growable: false);
+    final secondary = destinations.skip(primaryCount).toList(growable: false);
     final selectedPrimary = primary.indexWhere(
       (item) => item.branchIndex == currentBranchIndex,
     );
-    final selectedIndex = selectedPrimary >= 0 ? selectedPrimary : 4;
+    final selectedIndex = selectedPrimary >= 0
+        ? selectedPrimary
+        : primary.length;
 
     return NavigationBar(
       selectedIndex: selectedIndex,
