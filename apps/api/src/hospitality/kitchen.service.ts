@@ -19,6 +19,7 @@ import { hospitalityRequestHash } from './hospitality-idempotency';
 import {
   assertKitchenTicketTransition,
   formatKitchenTicketNumber,
+  partitionKitchenDispatchItems,
   remainingKitchenQuantity,
   type KitchenTicketState,
 } from './hospitality-policy';
@@ -61,6 +62,7 @@ interface DispatchItemRow extends QueryResultRow {
   quantityAmount: number;
   quantityScale: number;
   note: string | null;
+  routeStationId: string | null;
   stationId: string | null;
   stationName: string | null;
   sentQuantity: number;
@@ -278,7 +280,7 @@ export class KitchenService {
           message: 'Solo un ordine aperto può essere inviato in cucina.',
         });
       const itemResult = await client.query<DispatchItemRow>(
-        `SELECT oi.id,oi.product_name_snapshot AS "productName",oi.variant_name_snapshot AS "variantName",oi.category_id_snapshot AS "categoryId",oi.quantity_amount AS "quantityAmount",oi.quantity_scale AS "quantityScale",oi.note,ks.id AS "stationId",ks.name AS "stationName",COALESCE(SUM(CASE WHEN kt.status<>'CANCELLED' THEN kti.quantity_amount ELSE 0 END),0)::int AS "sentQuantity" FROM order_items oi LEFT JOIN kitchen_station_categories ksc ON ksc.organization_id=oi.organization_id AND ksc.location_id=$3 AND ksc.category_id=oi.category_id_snapshot LEFT JOIN kitchen_stations ks ON ks.id=ksc.station_id AND ks.organization_id=$2 AND ks.location_id=$3 AND ks.status='ACTIVE' LEFT JOIN kitchen_ticket_items kti ON kti.order_item_id=oi.id LEFT JOIN kitchen_tickets kt ON kt.id=kti.kitchen_ticket_id WHERE oi.organization_id=$2 AND oi.order_id=$1 GROUP BY oi.id,ks.id,ks.name ORDER BY oi.sort_order,oi.created_at`,
+        `SELECT oi.id,oi.product_name_snapshot AS "productName",oi.variant_name_snapshot AS "variantName",oi.category_id_snapshot AS "categoryId",oi.quantity_amount AS "quantityAmount",oi.quantity_scale AS "quantityScale",oi.note,ksc.station_id AS "routeStationId",ks.id AS "stationId",ks.name AS "stationName",COALESCE(SUM(CASE WHEN kt.status<>'CANCELLED' THEN kti.quantity_amount ELSE 0 END),0)::int AS "sentQuantity" FROM order_items oi LEFT JOIN kitchen_station_categories ksc ON ksc.organization_id=oi.organization_id AND ksc.location_id=$3 AND ksc.category_id=oi.category_id_snapshot LEFT JOIN kitchen_stations ks ON ks.id=ksc.station_id AND ks.organization_id=$2 AND ks.location_id=$3 AND ks.status='ACTIVE' LEFT JOIN kitchen_ticket_items kti ON kti.order_item_id=oi.id LEFT JOIN kitchen_tickets kt ON kt.id=kti.kitchen_ticket_id WHERE oi.organization_id=$2 AND oi.order_id=$1 GROUP BY oi.id,ksc.station_id,ks.id,ks.name ORDER BY oi.sort_order,oi.created_at`,
         [orderId, org, order.locationId],
       );
       if (itemResult.rows.length === 0)
@@ -300,14 +302,23 @@ export class KitchenService {
           code: 'KITCHEN_NOTHING_TO_SEND',
           message: 'Non ci sono nuove quantità da inviare in cucina.',
         });
-      const unrouted = pending.filter((item) => !item.stationId);
-      if (unrouted.length > 0)
+
+      const { dispatchable, unavailable } =
+        partitionKitchenDispatchItems(pending);
+      if (unavailable.length > 0)
         throw new ConflictException({
           code: 'KITCHEN_CATEGORY_NOT_ROUTED',
           message:
-            'Configura una postazione cucina attiva e assegna le categorie prima di inviare la comanda.',
-          orderItemIds: unrouted.map((item) => item.id),
+            'Una o più categorie sono assegnate a una postazione cucina non attiva.',
+          orderItemIds: unavailable.map((item) => item.id),
         });
+      if (dispatchable.length === 0)
+        throw new ConflictException({
+          code: 'KITCHEN_NOTHING_TO_SEND',
+          message:
+            'Nessun nuovo articolo dell’ordine richiede preparazione in cucina.',
+        });
+
       const table = await client.query<
         { sessionId: string; tableCode: string } & QueryResultRow
       >(
@@ -328,8 +339,8 @@ export class KitchenService {
           requestHash,
         ],
       );
-      const groups = new Map<string, typeof pending>();
-      for (const item of pending) {
+      const groups = new Map<string, typeof dispatchable>();
+      for (const item of dispatchable) {
         const key = item.stationId!;
         const group = groups.get(key) ?? [];
         group.push(item);
@@ -396,7 +407,11 @@ export class KitchenService {
         'kitchen.batch.dispatched',
         'order',
         orderId,
-        { batchId: createdBatch, ticketCount: groups.size },
+        {
+          batchId: createdBatch,
+          ticketCount: groups.size,
+          skippedItemCount: pending.length - dispatchable.length,
+        },
       );
       return createdBatch;
     });
