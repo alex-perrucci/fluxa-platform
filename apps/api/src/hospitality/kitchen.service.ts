@@ -303,6 +303,21 @@ export class KitchenService {
           message: 'Non ci sono nuove quantità da inviare in cucina.',
         });
 
+      if (!pending.some((item) => item.routeStationId !== null)) {
+        const routeState = await client.query<
+          { routeCount: number } & QueryResultRow
+        >(
+          `SELECT COUNT(*)::int AS "routeCount" FROM kitchen_station_categories WHERE organization_id=$1 AND location_id=$2`,
+          [org, order.locationId],
+        );
+        if ((routeState.rows[0]?.routeCount ?? 0) === 0)
+          throw new ConflictException({
+            code: 'KITCHEN_ROUTING_NOT_CONFIGURED',
+            message:
+              'La sede non ha ancora un instradamento cucina configurato.',
+          });
+      }
+
       const { dispatchable, unavailable } =
         partitionKitchenDispatchItems(pending);
       if (unavailable.length > 0)
@@ -314,7 +329,7 @@ export class KitchenService {
         });
       if (dispatchable.length === 0)
         throw new ConflictException({
-          code: 'KITCHEN_NOTHING_TO_SEND',
+          code: 'KITCHEN_NO_PREPARATION_ITEMS',
           message:
             'Nessun nuovo articolo dell’ordine richiede preparazione in cucina.',
         });
