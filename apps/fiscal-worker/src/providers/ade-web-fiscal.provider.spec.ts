@@ -72,7 +72,7 @@ describe('AdeWebFiscalProvider', () => {
 
     const request = fetchMock.mock.calls[0]?.[1];
     expect(typeof request?.body).toBe('string');
-    const body =
+    const body: unknown =
       typeof request?.body === 'string' ? JSON.parse(request.body) : {};
     expect(body).toMatchObject({
       operationId: documentId,
