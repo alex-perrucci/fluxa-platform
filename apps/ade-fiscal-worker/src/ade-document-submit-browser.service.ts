@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs';
 import {
   Injectable,
+  Logger,
   OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
@@ -22,6 +23,7 @@ const DCO_DIRECT_URL =
   'https://ivaservizi.agenziaentrate.gov.it/ser/documenticommercialionline/';
 const DIRECT_DCO_DISCOVERY_TIMEOUT_MS = 2_000;
 const ELECTRONIC_TRANSITION_TIMEOUT_MS = 5_000;
+const MAX_DIAGNOSTIC_DETAIL_LENGTH = 180;
 
 export type AdeSubmitConfirmationEvidence =
   'DOWNLOAD' | 'PDF_ACTION' | 'PRINT_ACTION';
@@ -96,10 +98,22 @@ function submitUnknown(message: string): AdeAutomationError {
   );
 }
 
+function safeDiagnosticDetail(error: unknown): string {
+  if (!(error instanceof Error)) return 'Errore Playwright sconosciuto';
+  const name = error.name.trim() || 'Error';
+  const firstLine = error.message
+    .split('\n', 1)[0]
+    ?.replace(/\s+/g, ' ')
+    .trim();
+  if (!firstLine) return name;
+  return `${name}: ${firstLine}`.slice(0, MAX_DIAGNOSTIC_DETAIL_LENGTH);
+}
+
 @Injectable()
 export class AdeDocumentSubmitBrowserService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
+  private readonly logger = new Logger(AdeDocumentSubmitBrowserService.name);
   private browserPromise: Promise<Browser> | null = null;
   private reusableContext: BrowserContext | null = null;
   private reusablePage: Page | null = null;
@@ -387,7 +401,7 @@ export class AdeDocumentSubmitBrowserService
       await generate.click();
       return;
     } catch {
-      // Use the already validated home flow as a fallback and as the session
+      // Use the already validated home flow as fallback and as the session
       // expiry signal consumed by the one allowed auth refresh.
     }
 
@@ -432,23 +446,34 @@ export class AdeDocumentSubmitBrowserService
       .getByLabel(`Aliquota IVA riga ${row}:*`, { exact: false })
       .first();
 
-    try {
-      await quantity.waitFor({ state: 'visible', timeout: timeoutMs });
-      await quantity.fill(String(item.quantity));
-      if (Number(await quantity.inputValue()) !== item.quantity) {
-        throw documentFlowError(`Verifica quantità riga ${row} non riuscita.`);
-      }
+    await this.runTextFieldStep(row, 'quantity.waitFor', () =>
+      quantity.waitFor({ state: 'visible', timeout: timeoutMs }),
+    );
+    await this.runTextFieldStep(row, 'quantity.fill', () =>
+      quantity.fill(String(item.quantity)),
+    );
+    const quantityValue = await this.runTextFieldStep(
+      row,
+      'quantity.inputValue',
+      () => quantity.inputValue(),
+    );
+    if (Number(quantityValue) !== item.quantity) {
+      throw documentFlowError(`Verifica quantità riga ${row} non riuscita.`);
+    }
 
-      await description.waitFor({ state: 'visible', timeout: timeoutMs });
-      await description.fill(item.description);
-      if ((await description.inputValue()).trim() !== item.description) {
-        throw documentFlowError(
-          `Verifica descrizione riga ${row} non riuscita.`,
-        );
-      }
-    } catch (error) {
-      if (error instanceof AdeAutomationError) throw error;
-      throw documentFlowError(`Campi testuali riga ${row} non compilabili.`);
+    await this.runTextFieldStep(row, 'description.waitFor', () =>
+      description.waitFor({ state: 'visible', timeout: timeoutMs }),
+    );
+    await this.runTextFieldStep(row, 'description.fill', () =>
+      description.fill(item.description),
+    );
+    const descriptionValue = await this.runTextFieldStep(
+      row,
+      'description.inputValue',
+      () => description.inputValue(),
+    );
+    if (descriptionValue.trim() !== item.description) {
+      throw documentFlowError(`Verifica descrizione riga ${row} non riuscita.`);
     }
 
     await this.fillMoneyField(
@@ -469,6 +494,25 @@ export class AdeDocumentSubmitBrowserService
     } catch (error) {
       if (error instanceof AdeAutomationError) throw error;
       throw documentFlowError(`Aliquota IVA riga ${row} non selezionabile.`);
+    }
+  }
+
+  private async runTextFieldStep<T>(
+    row: number,
+    step: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await action();
+    } catch (error) {
+      if (error instanceof AdeAutomationError) throw error;
+      const detail = safeDiagnosticDetail(error);
+      this.logger.warn(
+        `ADE submit text-field failure row=${row} step=${step} detail=${detail}`,
+      );
+      throw documentFlowError(
+        `Riga ${row}, step ${step} non riuscito (${detail}).`,
+      );
     }
   }
 
