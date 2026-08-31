@@ -13,10 +13,7 @@ async function bootstrap(): Promise<void> {
   }
 
   await app.listen(port, '0.0.0.0');
-  Logger.log(
-    `ADE fiscal worker dry-run phase started on port ${port}; fiscal submit is not implemented.`,
-    'AdeFiscalWorker',
-  );
+  Logger.log(`ADE fiscal worker started on port ${port}.`, 'AdeFiscalWorker');
 }
 
 void bootstrap();
