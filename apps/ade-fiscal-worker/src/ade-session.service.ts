@@ -1,5 +1,5 @@
-import { dirname } from 'node:path';
 import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { AdeAutomationError } from './ade-automation-error';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
@@ -35,12 +35,17 @@ function parseStorageState(path: string): PlaywrightStorageState {
   };
 }
 
+function normalizedFiscalId(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? '';
+  return /^\d{11}$/.test(normalized) ? normalized : null;
+}
+
 @Injectable()
 export class AdeSessionService {
   constructor(private readonly config: AdeRuntimeConfigService) {}
 
-  readiness(): AdeSessionReadiness {
-    const path = this.config.read().storageStatePath;
+  readiness(fiscalId?: string): AdeSessionReadiness {
+    const path = this.resolvePath(fiscalId);
     if (!path) return { status: 'missing', reason: 'path_not_configured' };
     if (!existsSync(path)) return { status: 'missing', reason: 'file_missing' };
     try {
@@ -51,8 +56,8 @@ export class AdeSessionService {
     }
   }
 
-  storageStatePathForUse(): string {
-    const path = this.config.read().storageStatePath;
+  storageStatePathForUse(fiscalId?: string): string {
+    const path = this.resolvePath(fiscalId);
     if (!path || !existsSync(path)) {
       throw new AdeAutomationError(
         'La sessione Agenzia delle Entrate non è configurata.',
@@ -74,8 +79,8 @@ export class AdeSessionService {
     }
   }
 
-  storageStatePathForWrite(): string {
-    const path = this.config.read().storageStatePath;
+  storageStatePathForWrite(fiscalId?: string): string {
+    const path = this.resolvePath(fiscalId);
     if (!path) {
       throw new AdeAutomationError(
         'Percorso sessione Agenzia delle Entrate non configurato.',
@@ -104,5 +109,31 @@ export class AdeSessionService {
         false,
       );
     }
+  }
+
+  private resolvePath(fiscalId?: string): string | null {
+    const config = this.config.read();
+    const requestedFiscalId = normalizedFiscalId(fiscalId);
+    const defaultFiscalId = normalizedFiscalId(config.incaricanteCf);
+
+    if (fiscalId !== undefined && !requestedFiscalId) return null;
+
+    const targetFiscalId = requestedFiscalId ?? defaultFiscalId;
+    if (config.storageStateDir && targetFiscalId) {
+      return join(config.storageStateDir, `${targetFiscalId}.json`);
+    }
+
+    if (!config.storageStatePath) return null;
+
+    // The legacy single-file session is safe only for the legacy default
+    // incaricante. A different requested fiscal ID must never reuse it.
+    if (
+      requestedFiscalId &&
+      (!defaultFiscalId || requestedFiscalId !== defaultFiscalId)
+    ) {
+      return null;
+    }
+
+    return config.storageStatePath;
   }
 }
