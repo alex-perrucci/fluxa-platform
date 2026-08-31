@@ -101,7 +101,10 @@ function submitUnknown(message: string): AdeAutomationError {
 function safeDiagnosticDetail(error: unknown): string {
   if (!(error instanceof Error)) return 'Errore Playwright sconosciuto';
   const name = error.name.trim() || 'Error';
-  const firstLine = error.message.split('\n', 1)[0]?.replace(/\s+/g, ' ').trim();
+  const firstLine = error.message
+    .split('\n', 1)[0]
+    ?.replace(/\s+/g, ' ')
+    .trim();
   if (!firstLine) return name;
   return `${name}: ${firstLine}`.slice(0, MAX_DIAGNOSTIC_DETAIL_LENGTH);
 }
