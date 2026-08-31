@@ -34,7 +34,7 @@ describe('AdeWebFiscalProvider', () => {
 
   beforeEach(() => {
     process.env.ADE_WORKER_INTERNAL_TOKEN = 'x'.repeat(32);
-    process.env.ADE_INCARICANTE_CF = '03154790343';
+    process.env.ADE_INCARICANTE_CF = '99999999999';
     process.env.ADE_WORKER_BASE_URL = 'http://ade-fiscal-worker:3010';
   });
 
@@ -53,6 +53,31 @@ describe('AdeWebFiscalProvider', () => {
     const provider = new AdeWebFiscalProvider();
     expect(provider.supports('ADE_WEB')).toBe(true);
     expect(provider.supports('MOCK')).toBe(false);
+  });
+
+  it('propagates the fiscal profile id even when it differs from the legacy default', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'DOCUMENT_SUBMITTED_CONFIRMED',
+          operationId: documentId,
+          confirmationEvidence: 'PDF_ACTION',
+          submitAttempted: true,
+        }),
+        { status: 201, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    await new AdeWebFiscalProvider().execute(input());
+
+    const request = fetchMock.mock.calls[0]?.[1];
+    expect(typeof request?.body).toBe('string');
+    const body: unknown =
+      typeof request?.body === 'string' ? JSON.parse(request.body) : {};
+    expect(body).toMatchObject({
+      operationId: documentId,
+      fiscalId: '03154790343',
+    });
   });
 
   it('returns issued only after the worker confirms post-submit evidence', async () => {
@@ -77,6 +102,20 @@ describe('AdeWebFiscalProvider', () => {
       confirmationEvidence: 'PDF_ACTION',
       submitAttempted: true,
     });
+  });
+
+  it('rejects an invalid fiscal id before calling the worker', async () => {
+    const request = input();
+    request.payload.fiscal_id = 'invalid';
+    const fetchMock = jest.spyOn(global, 'fetch');
+
+    await expect(
+      new AdeWebFiscalProvider().execute(request),
+    ).rejects.toMatchObject<Partial<FiscalProviderError>>({
+      code: 'ADE_WEB_FISCAL_ID_INVALID',
+      retryable: false,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('turns a transport failure into terminal UNKNOWN', async () => {

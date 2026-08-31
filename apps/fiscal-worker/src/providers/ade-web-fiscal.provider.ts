@@ -222,19 +222,11 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
   private workerPayload(input: FiscalProviderExecutionInput) {
     const payload = input.payload;
     const fiscalId = stringField(payload.fiscal_id).trim();
-    const expectedFiscalId = process.env.ADE_INCARICANTE_CF?.trim() ?? '';
-    if (!expectedFiscalId || !/^\d{11}$/.test(expectedFiscalId)) {
+    if (!/^\d{11}$/.test(fiscalId)) {
       throw new FiscalProviderError(
-        'ADE_INCARICANTE_CF is not configured for ADE_WEB.',
+        'ADE_WEB fiscal profile must contain a valid 11-digit fiscal ID.',
         false,
-        'ADE_WEB_INCARICANTE_MISSING',
-      );
-    }
-    if (fiscalId !== expectedFiscalId) {
-      throw new FiscalProviderError(
-        'ADE_WEB fiscal profile does not match the configured AdE working profile.',
-        false,
-        'ADE_WEB_FISCAL_PROFILE_MISMATCH',
+        'ADE_WEB_FISCAL_ID_INVALID',
       );
     }
 
@@ -316,6 +308,7 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
 
     return {
       operationId: input.documentId,
+      fiscalId,
       items,
       payment: { cashCents, electronicCents },
     };

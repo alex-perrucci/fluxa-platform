@@ -35,7 +35,7 @@ export class AdeAuthService {
     return { ...this.snapshot };
   }
 
-  async refresh(): Promise<{
+  async refresh(incaricanteCf?: string): Promise<{
     status: 'SESSION_READY';
     finalUrl: string;
     sessionSaved: true;
@@ -49,7 +49,7 @@ export class AdeAuthService {
       );
     }
 
-    const operation = this.runRefresh();
+    const operation = this.runRefresh(incaricanteCf);
     this.inFlight = operation;
     try {
       return await operation;
@@ -58,7 +58,7 @@ export class AdeAuthService {
     }
   }
 
-  private async runRefresh(): Promise<{
+  private async runRefresh(incaricanteCf?: string): Promise<{
     status: 'SESSION_READY';
     finalUrl: string;
     sessionSaved: true;
@@ -67,7 +67,9 @@ export class AdeAuthService {
     try {
       const config = this.config.read();
       const authUrl = this.config.validatedAuthEntryUrl();
-      if (!authUrl || !config.incaricanteCf) {
+      const targetIncaricanteCf =
+        incaricanteCf?.trim() || config.incaricanteCf?.trim() || '';
+      if (!authUrl || !/^\d{11}$/.test(targetIncaricanteCf)) {
         throw new AdeAutomationError(
           'Configurazione autenticazione AdE incompleta o non valida.',
           'ADE_CONFIGURATION_INVALID',
@@ -78,13 +80,14 @@ export class AdeAuthService {
 
       const credentials = this.credentials.loadForUse();
       const profile = this.profile.loadForUse();
-      const storageStatePath = this.session.storageStatePathForWrite();
+      const storageStatePath =
+        this.session.storageStatePathForWrite(targetIncaricanteCf);
 
       const result = await this.browser.authenticateWithCie({
         authEntryUrl: authUrl.toString(),
         username: credentials.username,
         password: credentials.password,
-        incaricanteCf: config.incaricanteCf,
+        incaricanteCf: targetIncaricanteCf,
         profile,
         storageStatePath,
         navigationTimeoutMs: config.navigationTimeoutMs,
