@@ -15,6 +15,7 @@ export interface AdeRuntimeConfig {
   entryUrl: string | null;
   authEntryUrl: string | null;
   storageStatePath: string | null;
+  storageStateDir: string | null;
   selectorProfilePath: string | null;
   authProfilePath: string | null;
   cieUsernameFile: string | null;
@@ -57,6 +58,7 @@ export class AdeRuntimeConfigService {
       entryUrl: optionalString(process.env.ADE_WEB_ENTRY_URL),
       authEntryUrl: optionalString(process.env.ADE_AUTH_ENTRY_URL),
       storageStatePath: optionalString(process.env.ADE_STORAGE_STATE_PATH),
+      storageStateDir: optionalString(process.env.ADE_STORAGE_STATE_DIR),
       selectorProfilePath: optionalString(
         process.env.ADE_SELECTOR_PROFILE_PATH,
       ),
