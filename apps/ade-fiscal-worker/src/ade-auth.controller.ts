@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpException,
@@ -85,9 +86,30 @@ export class AdeAuthController {
   }
 
   @Post('refresh')
-  async refresh() {
+  async refresh(@Body() body?: { fiscalId?: unknown }) {
+    const rawFiscalId = body?.fiscalId;
+    if (
+      rawFiscalId !== undefined &&
+      (typeof rawFiscalId !== 'string' || !/^\d{11}$/.test(rawFiscalId.trim()))
+    ) {
+      throw new HttpException(
+        {
+          code: 'ADE_FISCAL_ID_INVALID',
+          category: 'VALIDATION',
+          message: 'Il fiscalId deve contenere esattamente 11 cifre.',
+          retrySafe: true,
+          submitAttempted: false,
+          canSubmit: false,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const fiscalId =
+      typeof rawFiscalId === 'string' ? rawFiscalId.trim() : undefined;
+
     try {
-      return await this.auth.refresh();
+      return await this.auth.refresh(fiscalId);
     } catch (error) {
       if (!(error instanceof AdeAutomationError)) throw error;
       throw new HttpException(
