@@ -7,11 +7,7 @@ import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 import { AdeSessionService } from './ade-session.service';
 
 export type AdeAuthStatus =
-  | 'IDLE'
-  | 'LOGIN_STARTING'
-  | 'WAITING_MFA'
-  | 'SESSION_READY'
-  | 'FAILED';
+  'IDLE' | 'LOGIN_STARTING' | 'WAITING_MFA' | 'SESSION_READY' | 'FAILED';
 
 export interface AdeAuthStatusSnapshot {
   status: AdeAuthStatus;
