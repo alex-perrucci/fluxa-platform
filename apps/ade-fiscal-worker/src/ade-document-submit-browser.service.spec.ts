@@ -1,4 +1,5 @@
 import type { Locator, Page } from 'playwright';
+import { AdeAutomationError } from './ade-automation-error';
 import type { AdeDocumentItemInput } from './ade-document-browser.service';
 import { AdeDocumentSubmitBrowserService } from './ade-document-submit-browser.service';
 
@@ -47,6 +48,18 @@ function pageWithFields(fields: {
   } as unknown as Page;
 }
 
+async function captureAutomationError(
+  promise: Promise<void>,
+): Promise<AdeAutomationError> {
+  try {
+    await promise;
+  } catch (error) {
+    if (error instanceof AdeAutomationError) return error;
+    throw error;
+  }
+  throw new Error('Expected AdeAutomationError');
+}
+
 const ITEM: AdeDocumentItemInput = {
   description: 'Vendita libera',
   quantity: 1,
@@ -67,19 +80,21 @@ describe('AdeDocumentSubmitBrowserService text-field diagnostics', () => {
       fill: jest
         .fn()
         .mockRejectedValue(
-          new Error('locator.fill: Timeout 20000ms exceeded.\nCall log omitted'),
+          new Error(
+            'locator.fill: Timeout 20000ms exceeded.\nCall log omitted',
+          ),
         ),
     });
     const description = locator();
 
-    await expect(
+    const error = await captureAutomationError(
       fillItem(pageWithFields({ quantity, description }), 1, ITEM, 20_000),
-    ).rejects.toMatchObject({
-      code: 'ADE_DOCUMENT_FLOW_MISMATCH',
-      category: 'SELECTOR_MISMATCH',
-      submitAttempted: false,
-      message: expect.stringContaining('step quantity.fill'),
-    });
+    );
+
+    expect(error.code).toBe('ADE_DOCUMENT_FLOW_MISMATCH');
+    expect(error.category).toBe('SELECTOR_MISMATCH');
+    expect(error.submitAttempted).toBe(false);
+    expect(error.message).toContain('step quantity.fill');
   });
 
   it('reports description.waitFor after quantity has been verified', async () => {
@@ -89,15 +104,17 @@ describe('AdeDocumentSubmitBrowserService text-field diagnostics', () => {
     const description = locator({
       waitFor: jest
         .fn()
-        .mockRejectedValue(new Error('locator.waitFor: Timeout 20000ms exceeded.')),
+        .mockRejectedValue(
+          new Error('locator.waitFor: Timeout 20000ms exceeded.'),
+        ),
     });
 
-    await expect(
+    const error = await captureAutomationError(
       fillItem(pageWithFields({ quantity, description }), 1, ITEM, 20_000),
-    ).rejects.toMatchObject({
-      code: 'ADE_DOCUMENT_FLOW_MISMATCH',
-      message: expect.stringContaining('step description.waitFor'),
-    });
+    );
+
+    expect(error.code).toBe('ADE_DOCUMENT_FLOW_MISMATCH');
+    expect(error.message).toContain('step description.waitFor');
   });
 
   it('keeps verification mismatches distinct from Playwright step failures', async () => {
@@ -106,11 +123,11 @@ describe('AdeDocumentSubmitBrowserService text-field diagnostics', () => {
     });
     const description = locator();
 
-    await expect(
+    const error = await captureAutomationError(
       fillItem(pageWithFields({ quantity, description }), 1, ITEM, 20_000),
-    ).rejects.toMatchObject({
-      code: 'ADE_DOCUMENT_FLOW_MISMATCH',
-      message: 'Verifica quantità riga 1 non riuscita.',
-    });
+    );
+
+    expect(error.code).toBe('ADE_DOCUMENT_FLOW_MISMATCH');
+    expect(error.message).toBe('Verifica quantità riga 1 non riuscita.');
   });
 });
