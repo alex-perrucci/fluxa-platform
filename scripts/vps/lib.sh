@@ -45,10 +45,10 @@ compose_base() {
 
 fluxa_compose() {
   local profile_args=()
-  if [[ "${ACUBE_ENABLED:-false}" == "true" || "${OPENAPI_ENABLED:-false}" == "true" ]]; then
+  if [[ "${ACUBE_ENABLED:-false}" == "true" || "${OPENAPI_ENABLED:-false}" == "true" || "${ADE_DRY_RUN_ENABLED:-false}" == "true" || "${ADE_SUBMIT_ENABLED:-false}" == "true" ]]; then
     profile_args+=(--profile fiscal)
   fi
-  if [[ "${ADE_DRY_RUN_ENABLED:-false}" == "true" ]]; then
+  if [[ "${ADE_DRY_RUN_ENABLED:-false}" == "true" || "${ADE_SUBMIT_ENABLED:-false}" == "true" ]]; then
     profile_args+=(--profile ade-fiscal)
   fi
   compose_base "${profile_args[@]}" "$@"
