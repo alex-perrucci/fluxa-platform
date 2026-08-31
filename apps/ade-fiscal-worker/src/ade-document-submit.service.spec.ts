@@ -82,12 +82,16 @@ describe('AdeDocumentSubmitService', () => {
   it('uses the fiscal-id-specific session for the document', async () => {
     const submit = jest.fn().mockResolvedValue(BROWSER_SUCCESS);
     const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
-    const storageStatePathForUse = jest.fn().mockReturnValue('/runtime/client.json');
+    const storageStatePathForUse = jest
+      .fn()
+      .mockReturnValue('/runtime/client.json');
     const session = { storageStatePathForUse } as unknown as AdeSessionService;
 
     await serviceWithDependencies({ browser, session }).run(DOCUMENT_INPUT);
 
-    expect(storageStatePathForUse).toHaveBeenCalledWith(DOCUMENT_INPUT.fiscalId);
+    expect(storageStatePathForUse).toHaveBeenCalledWith(
+      DOCUMENT_INPUT.fiscalId,
+    );
   });
 
   it('refreshes one expired session only before Procedi for the same fiscal id', async () => {
