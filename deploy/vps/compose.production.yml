@@ -201,6 +201,7 @@ services:
       ADE_AUTH_ENTRY_URL: ${ADE_AUTH_ENTRY_URL:-}
       ADE_INCARICANTE_CF: ${ADE_INCARICANTE_CF:-}
       ADE_STORAGE_STATE_PATH: /run/fluxa-ade-session/storage-state.json
+      ADE_STORAGE_STATE_DIR: /run/fluxa-ade-session
       ADE_SELECTOR_PROFILE_PATH: /run/fluxa-ade/selectors.json
       ADE_AUTH_PROFILE_PATH: /run/fluxa-ade/auth-profile.json
       ADE_CIE_USERNAME_FILE: /run/fluxa-ade-secrets/cie-username
