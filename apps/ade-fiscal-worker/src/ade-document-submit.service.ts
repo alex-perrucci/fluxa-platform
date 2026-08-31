@@ -23,6 +23,7 @@ const DCO_ENTRY_UNAVAILABLE_MESSAGE =
 
 interface NormalizedSubmitInput {
   operationId: string;
+  fiscalId: string;
   items: AdeDocumentItemInput[];
   payment: AdeDocumentPaymentInput;
   grossTotalCents: number;
@@ -67,6 +68,11 @@ function normalizeInput(raw: unknown): NormalizedSubmitInput {
     typeof raw.operationId === 'string' ? raw.operationId.trim() : '';
   if (!operationId || operationId.length > MAX_OPERATION_ID_LENGTH) {
     invalid('operationId non valido.');
+  }
+
+  const fiscalId = typeof raw.fiscalId === 'string' ? raw.fiscalId.trim() : '';
+  if (!/^\d{11}$/.test(fiscalId)) {
+    invalid('fiscalId non valido.');
   }
 
   const rawItems = raw.items;
@@ -143,6 +149,7 @@ function normalizeInput(raw: unknown): NormalizedSubmitInput {
 
   return {
     operationId,
+    fiscalId,
     items,
     payment: { cashCents, electronicCents },
     grossTotalCents,
@@ -231,7 +238,7 @@ export class AdeDocumentSubmitService {
         // Exactly one pre-submit auth refresh is allowed. CieID MFA remains an
         // official manual approval; no refresh/retry is ever attempted after
         // the irreversible Procedi boundary.
-        await this.auth.refresh();
+        await this.auth.refresh(input.fiscalId);
         return await this.runBrowser(
           entryUrl.toString(),
           input,
@@ -253,7 +260,7 @@ export class AdeDocumentSubmitService {
     input: NormalizedSubmitInput,
     timeoutMs: number,
   ): Promise<AdeDocumentSubmitResult> {
-    const storageStatePath = this.session.storageStatePathForUse();
+    const storageStatePath = this.session.storageStatePathForUse(input.fiscalId);
     const result = await this.browser.submit({
       entryUrl,
       storageStatePath,
@@ -282,7 +289,8 @@ export class AdeDocumentSubmitService {
     this.attemptedOperationIds.add(operationId);
     if (this.attemptedOperationIds.size <= 2_000) return;
     const oldest = this.attemptedOperationIds.values().next().value as
-      string | undefined;
+      | string
+      | undefined;
     if (oldest) this.attemptedOperationIds.delete(oldest);
   }
 }
