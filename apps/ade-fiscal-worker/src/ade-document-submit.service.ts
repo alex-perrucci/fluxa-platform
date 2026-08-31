@@ -260,7 +260,9 @@ export class AdeDocumentSubmitService {
     input: NormalizedSubmitInput,
     timeoutMs: number,
   ): Promise<AdeDocumentSubmitResult> {
-    const storageStatePath = this.session.storageStatePathForUse(input.fiscalId);
+    const storageStatePath = this.session.storageStatePathForUse(
+      input.fiscalId,
+    );
     const result = await this.browser.submit({
       entryUrl,
       storageStatePath,
@@ -289,8 +291,7 @@ export class AdeDocumentSubmitService {
     this.attemptedOperationIds.add(operationId);
     if (this.attemptedOperationIds.size <= 2_000) return;
     const oldest = this.attemptedOperationIds.values().next().value as
-      | string
-      | undefined;
+      string | undefined;
     if (oldest) this.attemptedOperationIds.delete(oldest);
   }
 }
