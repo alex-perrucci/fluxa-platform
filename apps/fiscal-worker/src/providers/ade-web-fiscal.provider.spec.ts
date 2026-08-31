@@ -71,7 +71,10 @@ describe('AdeWebFiscalProvider', () => {
     await new AdeWebFiscalProvider().execute(input());
 
     const request = fetchMock.mock.calls[0]?.[1];
-    expect(JSON.parse(String(request?.body))).toMatchObject({
+    expect(typeof request?.body).toBe('string');
+    const body =
+      typeof request?.body === 'string' ? JSON.parse(request.body) : {};
+    expect(body).toMatchObject({
       operationId: documentId,
       fiscalId: '03154790343',
     });
