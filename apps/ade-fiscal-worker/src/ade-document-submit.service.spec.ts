@@ -7,6 +7,7 @@ import { AdeSessionService } from './ade-session.service';
 
 const DOCUMENT_INPUT = {
   operationId: '00000000-0000-4000-8000-000000000001',
+  fiscalId: '03154790343',
   items: [
     {
       description: 'Caffè',
@@ -78,7 +79,18 @@ describe('AdeDocumentSubmitService', () => {
     expect(submit).toHaveBeenCalledTimes(1);
   });
 
-  it('refreshes one expired session only before Procedi', async () => {
+  it('uses the fiscal-id-specific session for the document', async () => {
+    const submit = jest.fn().mockResolvedValue(BROWSER_SUCCESS);
+    const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
+    const storageStatePathForUse = jest.fn().mockReturnValue('/runtime/client.json');
+    const session = { storageStatePathForUse } as unknown as AdeSessionService;
+
+    await serviceWithDependencies({ browser, session }).run(DOCUMENT_INPUT);
+
+    expect(storageStatePathForUse).toHaveBeenCalledWith(DOCUMENT_INPUT.fiscalId);
+  });
+
+  it('refreshes one expired session only before Procedi for the same fiscal id', async () => {
     const submit = jest
       .fn()
       .mockRejectedValueOnce(
@@ -103,6 +115,7 @@ describe('AdeDocumentSubmitService', () => {
     );
 
     expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledWith(DOCUMENT_INPUT.fiscalId);
     expect(submit).toHaveBeenCalledTimes(2);
     expect(result.status).toBe('DOCUMENT_SUBMITTED_CONFIRMED');
   });
@@ -157,6 +170,20 @@ describe('AdeDocumentSubmitService', () => {
       submitAttempted: true,
     });
     expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a missing or invalid fiscal id before opening the browser', async () => {
+    const submit = jest.fn();
+    const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
+    const service = serviceWithDependencies({ browser });
+
+    await expect(
+      service.run({ ...DOCUMENT_INPUT, fiscalId: 'invalid' }),
+    ).rejects.toMatchObject({
+      code: 'ADE_DOCUMENT_INPUT_INVALID',
+      submitAttempted: false,
+    });
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it('does not permit submit while the production gate is disabled', async () => {
