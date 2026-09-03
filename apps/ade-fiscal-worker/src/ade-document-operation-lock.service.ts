@@ -4,17 +4,17 @@ export type AdeDocumentOperationRelease = () => void;
 
 @Injectable()
 export class AdeDocumentOperationLockService {
-  private busy = false;
+  private readonly busyKeys = new Set<string>();
 
-  tryAcquire(): AdeDocumentOperationRelease | null {
-    if (this.busy) return null;
-    this.busy = true;
+  tryAcquire(key = '__global__'): AdeDocumentOperationRelease | null {
+    if (this.busyKeys.has(key)) return null;
+    this.busyKeys.add(key);
 
     let released = false;
     return () => {
       if (released) return;
       released = true;
-      this.busy = false;
+      this.busyKeys.delete(key);
     };
   }
 }

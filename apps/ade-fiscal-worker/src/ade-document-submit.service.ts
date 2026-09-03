@@ -5,6 +5,7 @@ import type {
   AdeDocumentItemInput,
   AdeDocumentPaymentInput,
 } from './ade-document-browser.service';
+import { AdeDocumentOperationLockService } from './ade-document-operation-lock.service';
 import {
   AdeDocumentSubmitBrowserService,
   type AdeSubmitConfirmationEvidence,
@@ -170,7 +171,6 @@ function shouldRefreshSession(error: unknown): boolean {
 
 @Injectable()
 export class AdeDocumentSubmitService {
-  private inFlight = false;
   private readonly attemptedOperationIds = new Set<string>();
 
   constructor(
@@ -178,6 +178,7 @@ export class AdeDocumentSubmitService {
     private readonly session: AdeSessionService,
     private readonly browser: AdeDocumentSubmitBrowserService,
     private readonly auth: AdeAuthService,
+    private readonly operationLock: AdeDocumentOperationLockService,
   ) {}
 
   async run(raw: unknown): Promise<AdeDocumentSubmitResult> {
@@ -211,16 +212,17 @@ export class AdeDocumentSubmitService {
         true,
       );
     }
-    if (this.inFlight) {
+
+    const release = this.operationLock.tryAcquire(input.fiscalId);
+    if (!release) {
       throw new AdeAutomationError(
-        'Un submit AdE è già in corso.',
+        'Un submit AdE è già in corso per questo incaricante.',
         'ADE_DOCUMENT_SUBMIT_BUSY',
         'CONFIGURATION',
         true,
       );
     }
 
-    this.inFlight = true;
     try {
       try {
         return await this.runBrowser(
@@ -251,7 +253,7 @@ export class AdeDocumentSubmitService {
       }
       throw error;
     } finally {
-      this.inFlight = false;
+      release();
     }
   }
 
