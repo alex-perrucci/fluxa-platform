@@ -142,14 +142,16 @@ describe('AdeDocumentSubmitService', () => {
     const browser = {
       submit: browserSubmit,
     } as unknown as AdeDocumentSubmitBrowserService;
-    const fastSubmitCall = jest.fn().mockRejectedValue(
-      new AdeAutomationError(
-        'unsupported fiscal shape',
-        'ADE_DCO_FAST_PATH_UNAVAILABLE',
-        'CONFIGURATION',
-        true,
-      ),
-    );
+    const fastSubmitCall = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'unsupported fiscal shape',
+          'ADE_DCO_FAST_PATH_UNAVAILABLE',
+          'CONFIGURATION',
+          true,
+        ),
+      );
     const fastSubmit = {
       submit: fastSubmitCall,
     } as unknown as AdeDcoFastSubmitService;
@@ -272,14 +274,16 @@ describe('AdeDocumentSubmitService', () => {
     const browser = {
       submit: browserSubmit,
     } as unknown as AdeDocumentSubmitBrowserService;
-    const fastSubmitCall = jest.fn().mockRejectedValue(
-      new AdeAutomationError(
-        'Bootstrap DCO non autorizzato.',
-        'ADE_SESSION_INVALID',
-        'AUTH_REQUIRED',
-        false,
-      ),
-    );
+    const fastSubmitCall = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'Bootstrap DCO non autorizzato.',
+          'ADE_SESSION_INVALID',
+          'AUTH_REQUIRED',
+          false,
+        ),
+      );
     const fastSubmit = {
       submit: fastSubmitCall,
     } as unknown as AdeDcoFastSubmitService;
@@ -304,14 +308,16 @@ describe('AdeDocumentSubmitService', () => {
   });
 
   it('does not refresh or retry when the DCO upstream is unavailable', async () => {
-    const submit = jest.fn().mockRejectedValue(
-      new AdeAutomationError(
-        'Servizio DCO non disponibile.',
-        'ADE_UPSTREAM_UNAVAILABLE',
-        'NAVIGATION',
-        true,
-      ),
-    );
+    const submit = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'Servizio DCO non disponibile.',
+          'ADE_UPSTREAM_UNAVAILABLE',
+          'NAVIGATION',
+          true,
+        ),
+      );
     const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
     const refresh = jest.fn();
     const auth = { refresh } as unknown as AdeAuthService;
@@ -333,15 +339,17 @@ describe('AdeDocumentSubmitService', () => {
     const browser = {
       submit: browserSubmit,
     } as unknown as AdeDocumentSubmitBrowserService;
-    const fastSubmitCall = jest.fn().mockRejectedValue(
-      new AdeAutomationError(
-        'Esito HTTP non verificabile.',
-        'ADE_DOCUMENT_SUBMIT_UNKNOWN',
-        'SUBMIT_UNKNOWN',
-        false,
-        true,
-      ),
-    );
+    const fastSubmitCall = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'Esito HTTP non verificabile.',
+          'ADE_DOCUMENT_SUBMIT_UNKNOWN',
+          'SUBMIT_UNKNOWN',
+          false,
+          true,
+        ),
+      );
     const fastSubmit = {
       submit: fastSubmitCall,
     } as unknown as AdeDcoFastSubmitService;
@@ -366,15 +374,17 @@ describe('AdeDocumentSubmitService', () => {
   });
 
   it('blocks the same operationId after an ambiguous post-submit attempt', async () => {
-    const submit = jest.fn().mockRejectedValue(
-      new AdeAutomationError(
-        'Esito non verificabile.',
-        'ADE_DOCUMENT_SUBMIT_UNKNOWN',
-        'SUBMIT_UNKNOWN',
-        false,
-        true,
-      ),
-    );
+    const submit = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'Esito non verificabile.',
+          'ADE_DOCUMENT_SUBMIT_UNKNOWN',
+          'SUBMIT_UNKNOWN',
+          false,
+          true,
+        ),
+      );
     const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
     const service = serviceWithDependencies({ browser });
 
