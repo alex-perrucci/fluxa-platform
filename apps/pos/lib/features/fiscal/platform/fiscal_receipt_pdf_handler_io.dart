@@ -1,15 +1,23 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../domain/fiscal_models.dart';
+
 bool get fiscalReceiptPdfActionsSupported => Platform.isWindows;
 
 typedef FiscalReceiptPrinter =
     Future<String> Function(Uint8List bytes, String filename);
+typedef FiscalDocumentPrinter = Future<String> Function(FiscalDocument document);
 
 FiscalReceiptPrinter? _configuredReceiptPrinter;
+FiscalDocumentPrinter? _configuredDocumentPrinter;
 
 void configureFiscalReceiptPrinter(FiscalReceiptPrinter? printer) {
   _configuredReceiptPrinter = printer;
+}
+
+void configureFiscalDocumentPrinter(FiscalDocumentPrinter? printer) {
+  _configuredDocumentPrinter = printer;
 }
 
 Future<String> openFiscalReceiptPdf(Uint8List bytes, String filename) async {
@@ -48,6 +56,17 @@ Future<String> printFiscalReceiptPdf(Uint8List bytes, String filename) async {
     );
   }
   return printer(bytes, filename);
+}
+
+Future<String> printFiscalReceiptDocument(FiscalDocument document) async {
+  _ensureWindows();
+  final printer = _configuredDocumentPrinter;
+  if (printer == null) {
+    throw const FileSystemException(
+      'Stampante documenti fiscali Fluxa non ancora inizializzata.',
+    );
+  }
+  return printer(document);
 }
 
 Future<File> _writeTemp(Uint8List bytes, String filename) async {
