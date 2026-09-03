@@ -1,10 +1,12 @@
 import { statSync } from 'node:fs';
 import { Injectable, OnApplicationShutdown } from '@nestjs/common';
-import { request, type APIRequestContext } from 'playwright';
+import { request, type APIRequestContext, type APIResponse } from 'playwright';
 import { AdeAutomationError } from './ade-automation-error';
 import { adeSessionPoolMax } from './ade-submit-observability';
 
 const DCO_ORIGIN = 'https://ivaservizi.agenziaentrate.gov.it';
+const DCO_ROOT_PATH = '/ser/documenticommercialionline/';
+const DCO_DOCUMENTS_PATH = '/ser/api/documenti/v1/doc/documenti/';
 const ALLOWED_READ_PREFIXES = ['/ser/api/', '/common/'] as const;
 
 interface ReusableApiContext {
@@ -17,6 +19,20 @@ export interface AdeDcoHttpReadResult<T = unknown> {
   path: string;
   contentType: string;
   body: T;
+}
+
+export interface AdeDcoHttpBootstrapResult {
+  status: number;
+  path: typeof DCO_ROOT_PATH;
+  contentType: string;
+}
+
+export interface AdeDcoHttpSubmitResult {
+  status: number;
+  path: typeof DCO_DOCUMENTS_PATH;
+  contentType: string;
+  body: unknown;
+  submitAttempted: true;
 }
 
 export function validateAdeDcoReadPath(rawPath: string): string {
@@ -67,6 +83,38 @@ export class AdeDcoHttpClient implements OnApplicationShutdown {
   private readonly contexts = new Map<string, ReusableApiContext>();
   private readonly maxContexts = adeSessionPoolMax();
 
+  async bootstrapDco(input: {
+    storageStatePath: string;
+    timeoutMs: number;
+  }): Promise<AdeDcoHttpBootstrapResult> {
+    const context = await this.contextForSession(input.storageStatePath);
+    let response: APIResponse;
+    try {
+      response = await context.get(`${DCO_ORIGIN}${DCO_ROOT_PATH}`, {
+        timeout: input.timeoutMs,
+        failOnStatusCode: false,
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Referer: `${DCO_ORIGIN}/instr/InstradamentofcWeb/home`,
+        },
+      });
+    } catch (error) {
+      throw this.navigationError(error, 'Bootstrap DCO non riuscito.');
+    }
+
+    await this.assertReadableResponse(
+      response,
+      input.storageStatePath,
+      DCO_ROOT_PATH,
+    );
+
+    return {
+      status: response.status(),
+      path: DCO_ROOT_PATH,
+      contentType: response.headers()['content-type'] ?? '',
+    };
+  }
+
   async getJson<T = unknown>(input: {
     storageStatePath: string;
     path: string;
@@ -75,42 +123,21 @@ export class AdeDcoHttpClient implements OnApplicationShutdown {
     const path = validateAdeDcoReadPath(input.path);
     const context = await this.contextForSession(input.storageStatePath);
 
-    let response;
+    let response: APIResponse;
     try {
       response = await context.get(`${DCO_ORIGIN}${path}`, {
         timeout: input.timeoutMs,
         failOnStatusCode: false,
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json, text/plain, */*',
+          Referer: `${DCO_ORIGIN}${DCO_ROOT_PATH}`,
+        },
       });
     } catch (error) {
-      throw new AdeAutomationError(
-        error instanceof Error
-          ? `Lettura DCO non riuscita: ${error.message}`
-          : 'Lettura DCO non riuscita.',
-        'ADE_NAVIGATION_FAILED',
-        'NAVIGATION',
-        true,
-      );
+      throw this.navigationError(error, 'Lettura DCO non riuscita.');
     }
 
-    if (response.status() === 401 || response.status() === 403) {
-      await this.reset(input.storageStatePath);
-      throw new AdeAutomationError(
-        'Sessione Agenzia delle Entrate non valida per la lettura DCO.',
-        'ADE_SESSION_INVALID',
-        'AUTH_REQUIRED',
-        false,
-      );
-    }
-
-    if (!response.ok()) {
-      throw new AdeAutomationError(
-        `Lettura DCO fallita con HTTP ${response.status()}.`,
-        'ADE_NAVIGATION_FAILED',
-        'NAVIGATION',
-        true,
-      );
-    }
+    await this.assertReadableResponse(response, input.storageStatePath, path);
 
     const contentType = response.headers()['content-type'] ?? '';
     if (!contentType.toLowerCase().includes('json')) {
@@ -142,8 +169,108 @@ export class AdeDcoHttpClient implements OnApplicationShutdown {
     };
   }
 
+  async postDocumentJson(input: {
+    storageStatePath: string;
+    body: unknown;
+    timeoutMs: number;
+  }): Promise<AdeDcoHttpSubmitResult> {
+    const context = await this.contextForSession(input.storageStatePath);
+    let response: APIResponse;
+
+    try {
+      // Irreversible HTTP boundary: from the moment this POST is started, a
+      // network ambiguity must never be converted into an automatic retry.
+      response = await context.post(`${DCO_ORIGIN}${DCO_DOCUMENTS_PATH}`, {
+        timeout: input.timeoutMs,
+        failOnStatusCode: false,
+        headers: {
+          Accept: 'application/json, text/plain, */*',
+          'Content-Type': 'application/json',
+          Origin: DCO_ORIGIN,
+          Referer: `${DCO_ORIGIN}${DCO_ROOT_PATH}`,
+        },
+        data: input.body,
+      });
+    } catch (error) {
+      throw new AdeAutomationError(
+        error instanceof Error
+          ? `Esito POST DCO non verificabile: ${error.message}`
+          : 'Esito POST DCO non verificabile.',
+        'ADE_DOCUMENT_SUBMIT_UNKNOWN',
+        'SUBMIT_UNKNOWN',
+        false,
+        true,
+      );
+    }
+
+    return {
+      status: response.status(),
+      path: DCO_DOCUMENTS_PATH,
+      contentType: response.headers()['content-type'] ?? '',
+      body: await this.readOptionalJson(response),
+      submitAttempted: true,
+    };
+  }
+
   async onApplicationShutdown(): Promise<void> {
     await this.reset();
+  }
+
+  private async assertReadableResponse(
+    response: APIResponse,
+    storageStatePath: string,
+    path: string,
+  ): Promise<void> {
+    const status = response.status();
+    if (status === 401 || status === 403) {
+      await this.reset(storageStatePath);
+      throw new AdeAutomationError(
+        `Sessione Agenzia delle Entrate non valida per DCO (HTTP ${status}, path ${path}).`,
+        'ADE_SESSION_INVALID',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+    if (status >= 500 && status <= 599) {
+      throw new AdeAutomationError(
+        `Servizio DCO non disponibile (HTTP ${status}, path ${path}).`,
+        'ADE_UPSTREAM_UNAVAILABLE',
+        'NAVIGATION',
+        true,
+      );
+    }
+    if (!response.ok()) {
+      throw new AdeAutomationError(
+        `Lettura DCO fallita con HTTP ${status} (path ${path}).`,
+        'ADE_NAVIGATION_FAILED',
+        'NAVIGATION',
+        true,
+      );
+    }
+  }
+
+  private async readOptionalJson(response: APIResponse): Promise<unknown> {
+    let text: string;
+    try {
+      text = await response.text();
+    } catch {
+      return null;
+    }
+    if (!text.trim()) return null;
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return null;
+    }
+  }
+
+  private navigationError(error: unknown, fallback: string): AdeAutomationError {
+    return new AdeAutomationError(
+      error instanceof Error ? `${fallback} ${error.message}` : fallback,
+      'ADE_NAVIGATION_FAILED',
+      'NAVIGATION',
+      true,
+    );
   }
 
   private async contextForSession(
@@ -161,7 +288,7 @@ export class AdeDcoHttpClient implements OnApplicationShutdown {
     try {
       const context = await request.newContext({
         storageState: storageStatePath,
-        extraHTTPHeaders: { Accept: 'application/json' },
+        extraHTTPHeaders: { Accept: 'application/json, text/plain, */*' },
       });
       this.contexts.set(storageStatePath, { fingerprint, context });
       await this.evictOverflow(storageStatePath);
