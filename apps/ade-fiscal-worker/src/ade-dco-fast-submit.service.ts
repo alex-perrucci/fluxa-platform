@@ -6,6 +6,7 @@ import type {
   AdeDocumentItemInput,
   AdeDocumentPaymentInput,
 } from './ade-document-browser.service';
+import { AdeFastSubmitMetricsService } from './ade-fast-submit-metrics.service';
 
 const INFO_ME_PATH = '/common/testata/v1/info/me';
 const FISCAL_DATA_PATH = '/ser/api/documenti/v1/doc/documenti/dati/fiscali';
@@ -106,7 +107,11 @@ export function extractAdeDcoEvidence(raw: unknown): AdeDcoEvidence {
     stringValue(findField(raw, new Set(['progressivo', 'numeroProgressivo'])));
   const documentDate = normalizeDocumentDate(
     directPath(raw, ['documentoCommerciale', 'dataOra']) ??
-      findField(raw, new Set(['dataOra', 'dataDocumento'])),
+      directPath(raw, ['documentoCommerciale', 'dataDocumento']) ??
+      findField(
+        raw,
+        new Set(['dataOra', 'dataDocumento', 'dataEmissione', 'documentDate']),
+      ),
   );
   const grossTotalCents = decimalToCents(
     directPath(raw, ['documentoCommerciale', 'ammontareComplessivo']) ??
@@ -154,9 +159,44 @@ function submitRejected(message: string): AdeAutomationError {
 
 @Injectable()
 export class AdeDcoFastSubmitService {
-  constructor(private readonly http: AdeDcoHttpClient) {}
+  constructor(
+    private readonly http: AdeDcoHttpClient,
+    private readonly metrics: AdeFastSubmitMetricsService,
+  ) {}
 
   async submit(input: {
+    storageStatePath: string;
+    fiscalId: string;
+    items: AdeDocumentItemInput[];
+    payment: AdeDocumentPaymentInput;
+    expectedGrossTotalCents: number;
+    timeoutMs: number;
+  }): Promise<AdeDcoFastSubmitResult> {
+    const startedAt = Date.now();
+    try {
+      const result = await this.performSubmit(input);
+      this.metrics.record({
+        durationMs: Date.now() - startedAt,
+        outcome: 'SUCCESS',
+        confirmationEvidence: result.confirmationEvidence,
+      });
+      return result;
+    } catch (error) {
+      const outcome =
+        error instanceof AdeAutomationError && error.submitAttempted
+          ? error.code === 'ADE_DOCUMENT_SUBMIT_REJECTED'
+            ? 'REJECTED'
+            : 'UNKNOWN'
+          : 'FAILED_PRE_SUBMIT';
+      this.metrics.record({
+        durationMs: Date.now() - startedAt,
+        outcome,
+      });
+      throw error;
+    }
+  }
+
+  private async performSubmit(input: {
     storageStatePath: string;
     fiscalId: string;
     items: AdeDocumentItemInput[];
@@ -238,10 +278,12 @@ export class AdeDcoFastSubmitService {
     response: {
       status: number;
       body: unknown;
+      responseDate: string | null;
       submitAttempted: true;
     },
   ): Promise<AdeDcoFastSubmitResult> {
     const postEvidence = extractAdeDcoEvidence(response.body);
+    const serverDocumentDate = normalizeDocumentDate(response.responseDate);
     if (postEvidence.esito === false) {
       throw submitRejected(
         'AdE ha rifiutato esplicitamente il documento commerciale inviato via HTTP.',
@@ -253,14 +295,19 @@ export class AdeDcoFastSubmitService {
       Boolean(postEvidence.idtrx || postEvidence.progressivo);
 
     const reconciled = await this.tryReconcileLastDocument(input, baseline);
-    if (reconciled) return reconciled;
+    if (reconciled) {
+      return {
+        ...reconciled,
+        documentDate: reconciled.documentDate ?? serverDocumentDate,
+      };
+    }
 
     if (response.status >= 200 && response.status < 300 && strongPostEvidence) {
       return {
         confirmationEvidence: 'HTTP_RESPONSE',
         externalId: postEvidence.idtrx,
         documentNumber: postEvidence.progressivo,
-        documentDate: postEvidence.documentDate,
+        documentDate: postEvidence.documentDate ?? serverDocumentDate,
         submitAttempted: true,
       };
     }

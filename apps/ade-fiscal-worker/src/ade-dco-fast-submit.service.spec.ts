@@ -1,6 +1,7 @@
 import { AdeAutomationError } from './ade-automation-error';
 import { AdeDcoFastSubmitService } from './ade-dco-fast-submit.service';
 import { AdeDcoHttpClient } from './ade-dco-http.client';
+import { AdeFastSubmitMetricsService } from './ade-fast-submit-metrics.service';
 
 const FISCAL_DATA = {
   cedentePrestatore: {
@@ -89,6 +90,7 @@ function httpMock(options?: {
     : jest.fn().mockResolvedValue(
         options?.postResult ?? {
           status: 201,
+          responseDate: 'Thu, 03 Sep 2026 12:31:07 GMT',
           body: {
             esito: true,
             idtrx: 'post-transaction',
@@ -110,15 +112,20 @@ function httpMock(options?: {
   };
 }
 
+function service(client: AdeDcoHttpClient) {
+  return new AdeDcoFastSubmitService(client, new AdeFastSubmitMetricsService());
+}
+
 describe('AdeDcoFastSubmitService', () => {
-  it('confirms from a positive POST response when ultimo does not change', async () => {
+  it('confirms from a positive POST response and captures the AdE server date', async () => {
     const http = httpMock();
-    const result = await new AdeDcoFastSubmitService(http.client).submit(INPUT);
+    const result = await service(http.client).submit(INPUT);
 
     expect(result).toMatchObject({
       confirmationEvidence: 'HTTP_RESPONSE',
       externalId: 'post-transaction',
       documentNumber: '11',
+      documentDate: '2026-09-03T12:31:07.000Z',
       submitAttempted: true,
     });
     expect(http.postDocumentJson).toHaveBeenCalledTimes(1);
@@ -126,26 +133,36 @@ describe('AdeDcoFastSubmitService', () => {
 
   it('prefers a new matching ultimo document as reconciliation evidence', async () => {
     const http = httpMock({
-      postResult: { status: 201, body: null, submitAttempted: true },
+      postResult: {
+        status: 201,
+        body: null,
+        responseDate: 'Thu, 03 Sep 2026 12:31:07 GMT',
+        submitAttempted: true,
+      },
       after: NEW_DOCUMENT,
     });
-    const result = await new AdeDcoFastSubmitService(http.client).submit(INPUT);
+    const result = await service(http.client).submit(INPUT);
 
     expect(result).toMatchObject({
       confirmationEvidence: 'HTTP_RECONCILED',
       externalId: 'new-transaction',
       documentNumber: '11',
+      documentDate: '2026-09-03',
       submitAttempted: true,
     });
   });
 
   it('returns UNKNOWN after an ambiguous HTTP result and never sends a second POST', async () => {
     const http = httpMock({
-      postResult: { status: 202, body: {}, submitAttempted: true },
+      postResult: {
+        status: 202,
+        body: {},
+        responseDate: 'Thu, 03 Sep 2026 12:31:07 GMT',
+        submitAttempted: true,
+      },
     });
-    const service = new AdeDcoFastSubmitService(http.client);
 
-    await expect(service.submit(INPUT)).rejects.toMatchObject({
+    await expect(service(http.client).submit(INPUT)).rejects.toMatchObject({
       code: 'ADE_DOCUMENT_SUBMIT_UNKNOWN',
       retrySafe: false,
       submitAttempted: true,
@@ -157,13 +174,13 @@ describe('AdeDcoFastSubmitService', () => {
     const http = httpMock({
       postResult: {
         status: 400,
+        responseDate: 'Thu, 03 Sep 2026 12:31:07 GMT',
         body: { esito: false, errori: [{ codice: 'X' }] },
         submitAttempted: true,
       },
     });
-    const service = new AdeDcoFastSubmitService(http.client);
 
-    await expect(service.submit(INPUT)).rejects.toMatchObject({
+    await expect(service(http.client).submit(INPUT)).rejects.toMatchObject({
       code: 'ADE_DOCUMENT_SUBMIT_REJECTED',
       retrySafe: false,
       submitAttempted: true,
@@ -182,7 +199,7 @@ describe('AdeDcoFastSubmitService', () => {
       ),
       after: NEW_DOCUMENT,
     });
-    const result = await new AdeDcoFastSubmitService(http.client).submit(INPUT);
+    const result = await service(http.client).submit(INPUT);
 
     expect(result.confirmationEvidence).toBe('HTTP_RECONCILED');
     expect(result.externalId).toBe('new-transaction');
@@ -201,9 +218,8 @@ describe('AdeDcoFastSubmitService', () => {
         },
       },
     });
-    const service = new AdeDcoFastSubmitService(http.client);
 
-    await expect(service.submit(INPUT)).rejects.toMatchObject({
+    await expect(service(http.client).submit(INPUT)).rejects.toMatchObject({
       code: 'ADE_DCO_FAST_PATH_UNAVAILABLE',
       submitAttempted: false,
     });
