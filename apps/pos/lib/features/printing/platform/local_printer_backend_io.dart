@@ -123,7 +123,11 @@ class _WindowsLocalPrinterBackend implements LocalPrinterBackend {
   const _WindowsLocalPrinterBackend();
 
   static const _channel = MethodChannel('it.fluxa.fluxa_pos/printing');
+  static const _bluetoothSerialChannel = MethodChannel(
+    'it.fluxa.fluxa_pos/bluetooth_serial_printing',
+  );
   static const _pairedTimeout = Duration(seconds: 4);
+  static const _serialDiscoveryTimeout = Duration(seconds: 4);
   static const _wifiConnectTimeout = Duration(milliseconds: 180);
   static const _wifiPort = 9100;
   static const _scanBatchSize = 32;
@@ -138,8 +142,13 @@ class _WindowsLocalPrinterBackend implements LocalPrinterBackend {
     }
 
     final pairedFuture = _listPairedBluetoothPrinters();
+    final serialFuture = _listBluetoothSerialPrinters();
     final wifiFuture = _discoverWifiPrinters();
-    final results = await Future.wait<Object?>([pairedFuture, wifiFuture]);
+    final results = await Future.wait<Object?>([
+      pairedFuture,
+      serialFuture,
+      wifiFuture,
+    ]);
 
     final bluetoothByAddress = <String, String>{};
     _mergeBluetoothResults(
@@ -147,10 +156,23 @@ class _WindowsLocalPrinterBackend implements LocalPrinterBackend {
       results[0] as List<Object?>,
     );
 
+    final serialByPort = <String, String>{};
+    _mergeBluetoothSerialResults(
+      serialByPort,
+      results[1] as List<Object?>,
+    );
+
     final targets = <String>{
+      // Su Windows le porte COM Bluetooth sono preferibili al socket RFCOMM
+      // diretto: sono il percorso esposto dal driver SPP di Windows e rendono
+      // visibile all'operatore quale porta (es. COM6) verrà realmente usata.
+      for (final entry in serialByPort.entries)
+        buildBluetoothSerialPrinterTarget(port: entry.key, name: entry.value),
+      // Manteniamo il trasporto Bluetooth diretto esistente come fallback per
+      // dispositivi che non espongono una porta seriale virtuale.
       for (final entry in bluetoothByAddress.entries)
         buildBluetoothPrinterTarget(address: entry.key, name: entry.value),
-      ...results[1] as List<String>,
+      ...results[2] as List<String>,
     };
     return _sortedTargets(targets);
   }
@@ -162,7 +184,20 @@ class _WindowsLocalPrinterBackend implements LocalPrinterBackend {
               .timeout(_pairedTimeout) ??
           const <Object?>[];
     } on Object {
-      // Il Wi-Fi deve restare disponibile anche sui PC senza radio Bluetooth.
+      // Il Wi-Fi e le porte COM devono restare disponibili anche sui PC senza
+      // un canale Bluetooth RFCOMM utilizzabile direttamente.
+      return const <Object?>[];
+    }
+  }
+
+  Future<List<Object?>> _listBluetoothSerialPrinters() async {
+    try {
+      return await _bluetoothSerialChannel
+              .invokeListMethod<Object?>('listBluetoothSerialPrinters')
+              .timeout(_serialDiscoveryTimeout) ??
+          const <Object?>[];
+    } on Object {
+      // Il vecchio Bluetooth diretto e il Wi-Fi restano fallback indipendenti.
       return const <Object?>[];
     }
   }
@@ -244,6 +279,7 @@ class _WindowsLocalPrinterBackend implements LocalPrinterBackend {
     required bool supportsCut,
   }) => _printViaChannel(
     channel: _channel,
+    bluetoothSerialChannel: _bluetoothSerialChannel,
     queueName: queueName,
     text: text,
     copies: copies,
@@ -275,6 +311,7 @@ class _UnsupportedLocalPrinterBackend implements LocalPrinterBackend {
 
 Future<void> _printViaChannel({
   required MethodChannel channel,
+  MethodChannel? bluetoothSerialChannel,
   required String queueName,
   required String text,
   required int copies,
@@ -285,12 +322,31 @@ Future<void> _printViaChannel({
   }
 
   final parts = queueName.split('|');
-  final arguments = <String, Object?>{
+  final commonArguments = <String, Object?>{
     'text': text,
     'copies': copies,
     'supportsCut': supportsCut,
     'encoding': 'CP858',
   };
+
+  if (parts.length >= 3 && parts.first == 'bluetooth_serial') {
+    final port = parts[1].trim().toUpperCase();
+    if (!RegExp(r'^COM[1-9][0-9]*$').hasMatch(port)) {
+      throw const FormatException('Porta seriale Bluetooth non valida.');
+    }
+    if (bluetoothSerialChannel == null) {
+      throw UnsupportedError(
+        'La stampa Bluetooth seriale è disponibile soltanto su Windows.',
+      );
+    }
+    await bluetoothSerialChannel.invokeMethod<void>('printText', {
+      ...commonArguments,
+      'port': port,
+    });
+    return;
+  }
+
+  final arguments = <String, Object?>{...commonArguments};
   if (parts.length >= 3 && parts.first == 'bluetooth') {
     final address = parts[1].trim();
     if (address.isEmpty) {
@@ -327,6 +383,23 @@ void _mergeBluetoothResults(
       continue;
     }
     devicesByAddress[address.toUpperCase()] = name.isEmpty ? address : name;
+  }
+}
+
+void _mergeBluetoothSerialResults(
+  Map<String, String> devicesByPort,
+  List<Object?> values,
+) {
+  for (final value in values) {
+    if (value is! Map) {
+      continue;
+    }
+    final port = value['port']?.toString().trim().toUpperCase() ?? '';
+    final name = value['name']?.toString().trim() ?? '';
+    if (!RegExp(r'^COM[1-9][0-9]*$').hasMatch(port)) {
+      continue;
+    }
+    devicesByPort[port] = name.isEmpty ? 'Stampante Bluetooth' : name;
   }
 }
 
