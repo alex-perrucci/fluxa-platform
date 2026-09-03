@@ -12,6 +12,7 @@ import '../../features/catalog/data/catalog_snapshot_cache.dart';
 import '../../features/catalog/presentation/catalog_controller.dart';
 import '../../features/device/data/device_api.dart';
 import '../../features/fiscal/data/fiscal_api.dart';
+import '../../features/fiscal/data/fiscal_receipt_context_api.dart';
 import '../../features/fiscal/presentation/fiscal_controller.dart';
 import '../../features/health/data/health_api.dart';
 import '../../features/hospitality/data/hospitality_api.dart';
@@ -88,6 +89,9 @@ final refundsApiProvider = Provider<RefundsApi>(
 );
 final fiscalApiProvider = Provider<FiscalApi>(
   (ref) => FiscalApi(ref.watch(apiClientProvider).dio),
+);
+final fiscalReceiptContextApiProvider = Provider<FiscalReceiptContextApi>(
+  (ref) => FiscalReceiptContextApi(ref.watch(apiClientProvider).dio),
 );
 final healthApiProvider = Provider<HealthApi>(
   (ref) => HealthApi(ref.watch(apiClientProvider).dio),
