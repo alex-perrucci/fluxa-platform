@@ -5,6 +5,7 @@ import { AdeAuthProfileService } from './ade-auth-profile.service';
 import { AdeAuthService } from './ade-auth.service';
 import { AdeBrowserService } from './ade-browser.service';
 import { AdeCieCredentialsService } from './ade-cie-credentials.service';
+import { AdeDcoFastSubmitService } from './ade-dco-fast-submit.service';
 import { AdeDcoHttpClient } from './ade-dco-http.client';
 import { AdeDocumentBrowserService } from './ade-document-browser.service';
 import { AdeDocumentDryRunController } from './ade-document-dry-run.controller';
@@ -48,6 +49,7 @@ import { AdeWebFiscalService } from './ade-web-fiscal.service';
     AdeDocumentSubmitBrowserService,
     AdeDocumentOperationLockService,
     AdeDcoHttpClient,
+    AdeDcoFastSubmitService,
     AdeSessionService,
     AdeSelectorProfileService,
     AdeAuthProfileService,

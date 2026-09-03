@@ -17,8 +17,12 @@ interface AdeWorkerResponse {
   code?: string;
   message?: string;
   operationId?: string;
+  transport?: string;
   finalUrl?: string;
   confirmationEvidence?: string;
+  externalId?: string;
+  documentNumber?: string;
+  documentDate?: string;
   submitAttempted?: boolean;
   retrySafe?: boolean;
 }
@@ -33,6 +37,11 @@ function stringField(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number'
     ? String(value)
     : '';
+}
+
+function optionalStringField(value: unknown): string | undefined {
+  const normalized = stringField(value).trim();
+  return normalized || undefined;
 }
 
 function parseDecimalCents(value: unknown, field: string): number {
@@ -68,12 +77,16 @@ function timeoutMs(): number {
 function sanitizedWorkerResponse(raw: unknown): AdeWorkerResponse {
   const value = recordField(raw);
   return {
-    status: stringField(value.status) || undefined,
-    code: stringField(value.code) || undefined,
-    message: stringField(value.message) || undefined,
-    operationId: stringField(value.operationId) || undefined,
-    finalUrl: stringField(value.finalUrl) || undefined,
-    confirmationEvidence: stringField(value.confirmationEvidence) || undefined,
+    status: optionalStringField(value.status),
+    code: optionalStringField(value.code),
+    message: optionalStringField(value.message),
+    operationId: optionalStringField(value.operationId),
+    transport: optionalStringField(value.transport),
+    finalUrl: optionalStringField(value.finalUrl),
+    confirmationEvidence: optionalStringField(value.confirmationEvidence),
+    externalId: optionalStringField(value.externalId),
+    documentNumber: optionalStringField(value.documentNumber),
+    documentDate: optionalStringField(value.documentDate),
     submitAttempted:
       typeof value.submitAttempted === 'boolean'
         ? value.submitAttempted
@@ -135,8 +148,8 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
       });
     } catch (error) {
       // A transport failure is intrinsically ambiguous: the remote worker may
-      // have received the request and clicked Procedi before the connection was
-      // lost. Never convert this into a queue retry.
+      // have received the request and crossed either irreversible boundary.
+      // Never convert this into a queue retry.
       throw new FiscalProviderSafetyError(
         error instanceof Error
           ? `ADE worker transport result unknown: ${error.message}`
@@ -168,18 +181,22 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
       worker.operationId === input.documentId
     ) {
       const now = new Date().toISOString();
-      const externalId = `ADE-WEB:${input.documentId}`;
+      const realExternalId = worker.externalId;
+      const externalId = realExternalId ?? `ADE-WEB:${input.documentId}`;
       return {
         externalId,
         externalStatus: 'issued',
-        documentNumber: null,
-        documentDate: now,
+        documentNumber: worker.documentNumber ?? null,
+        documentDate: worker.documentDate ?? now,
         response: {
           provider: 'ADE_WEB',
           operationId: input.documentId,
-          externalIdKind: 'fluxa-correlation',
+          transport: worker.transport ?? 'BROWSER',
+          externalIdKind: realExternalId ? 'ade-idtrx' : 'fluxa-correlation',
           confirmationEvidence: worker.confirmationEvidence ?? null,
           finalUrl: worker.finalUrl ?? null,
+          documentNumber: worker.documentNumber ?? null,
+          documentDate: worker.documentDate ?? null,
           submitAttempted: true,
         },
       };
@@ -197,7 +214,7 @@ export class AdeWebFiscalProvider implements FiscalProviderAdapter {
         code,
         'UNKNOWN',
         recordField(worker),
-        `ADE-WEB:${input.documentId}`,
+        worker.externalId ?? `ADE-WEB:${input.documentId}`,
         'unknown',
       );
     }
