@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/network/backend_error.dart';
 import '../domain/fiscal_models.dart';
+import '../domain/fiscal_receipt_layout.dart';
 
 class FiscalReceiptPdfData {
   const FiscalReceiptPdfData({required this.bytes, required this.filename});
@@ -43,6 +44,20 @@ abstract interface class FiscalGateway {
     required int expectedVersion,
     required String reason,
   });
+}
+
+extension FiscalReceiptLayoutGateway on FiscalGateway {
+  Future<FiscalReceiptLayoutData> downloadReceiptLayout(String documentId) {
+    final gateway = this;
+    if (gateway is FiscalApi) {
+      return gateway.downloadReceiptLayout(documentId);
+    }
+    return Future.error(
+      UnsupportedError(
+        'Il gateway fiscale corrente non espone il layout termico.',
+      ),
+    );
+  }
 }
 
 class FiscalApi implements FiscalGateway {
@@ -101,8 +116,21 @@ class FiscalApi implements FiscalGateway {
           'scontrino-fiscale-$documentId.pdf';
       return FiscalReceiptPdfData(
         bytes: Uint8List.fromList(bytes),
-        filename: filename,
+        filename: '__fluxa_document_${documentId}__$filename',
       );
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
+  Future<FiscalReceiptLayoutData> downloadReceiptLayout(
+    String documentId,
+  ) async {
+    try {
+      final response = await _dio.get<Object?>(
+        'fiscal-documents/$documentId/receipt-layout',
+      );
+      return FiscalReceiptLayoutData.fromJson(_map(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
     }

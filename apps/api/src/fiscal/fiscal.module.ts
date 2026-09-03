@@ -9,6 +9,7 @@ import {
 } from './fiscal-profiles.controller';
 import { FiscalProfilesService } from './fiscal-profiles.service';
 import { FiscalQueueService } from './fiscal-queue.service';
+import { FiscalReceiptLayoutService } from './fiscal-receipt-layout.service';
 import { FiscalReceiptPdfService } from './fiscal-receipt-pdf.service';
 import { RefundFiscalVoidService } from './refund-fiscal-void.service';
 
@@ -24,6 +25,7 @@ import { RefundFiscalVoidService } from './refund-fiscal-void.service';
     FiscalProfilesService,
     FiscalDocumentsService,
     FiscalQueueService,
+    FiscalReceiptLayoutService,
     FiscalReceiptPdfService,
     RefundFiscalVoidService,
   ],

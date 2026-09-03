@@ -86,7 +86,7 @@ class _PrinterSetupScreenState extends ConsumerState<PrinterSetupScreen> {
                   const SizedBox(height: 6),
                   Text(
                     '${location.name} · crea qui la stampante logica e assegnala a questo dispositivo. '
-                    'Il collegamento Wi-Fi/Bluetooth e la pagina di test restano nella sezione Stampa.',
+                    'Scegli anche il formato carta 58/80 mm; il collegamento Wi-Fi/Bluetooth e la pagina di test restano nella sezione Stampa.',
                   ),
                   const SizedBox(height: 14),
                   FilledButton.icon(
@@ -134,6 +134,7 @@ class _PrinterSetupScreenState extends ConsumerState<PrinterSetupScreen> {
                 agentDeviceId: session.device.id,
                 notice: 'Stampante assegnata a questo POS.',
               ),
+              onFormat: () => _changePrinterFormat(printer),
               onToggle: () => _updatePrinter(
                 printer,
                 status: printer.status == PrinterStatus.active
@@ -172,15 +173,30 @@ class _PrinterSetupScreenState extends ConsumerState<PrinterSetupScreen> {
             code: values.code,
             name: values.name,
             purpose: values.purpose,
+            paperWidthMm: values.paperWidthMm,
           );
       await ref.read(printingControllerProvider).refresh();
     }, 'Stampante creata. Ora completa Wi-Fi/Bluetooth nella sezione Stampa.');
+  }
+
+  Future<void> _changePrinterFormat(PrinterDevice printer) async {
+    final width = await _showPaperWidthDialog(
+      context,
+      initialValue: printer.paperWidthMm <= 58 ? 58 : 80,
+    );
+    if (width == null) return;
+    await _updatePrinter(
+      printer,
+      paperWidthMm: width,
+      notice: 'Formato stampante impostato a $width mm.',
+    );
   }
 
   Future<void> _updatePrinter(
     PrinterDevice printer, {
     String? agentDeviceId,
     String? status,
+    int? paperWidthMm,
     required String notice,
   }) async {
     await _run(() async {
@@ -190,6 +206,7 @@ class _PrinterSetupScreenState extends ConsumerState<PrinterSetupScreen> {
             printer.id,
             agentDeviceId: agentDeviceId,
             status: status,
+            paperWidthMm: paperWidthMm,
           );
       await ref.read(printingControllerProvider).refresh();
     }, notice);
@@ -218,6 +235,7 @@ class _PrinterCard extends StatelessWidget {
     required this.currentDeviceId,
     required this.busy,
     required this.onAssign,
+    required this.onFormat,
     required this.onToggle,
   });
 
@@ -225,11 +243,13 @@ class _PrinterCard extends StatelessWidget {
   final String currentDeviceId;
   final bool busy;
   final VoidCallback onAssign;
+  final VoidCallback onFormat;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final assignedHere = printer.agentDeviceId == currentDeviceId;
+    final width = printer.paperWidthMm <= 58 ? 58 : 80;
     return Card(
       child: ListTile(
         leading: Icon(
@@ -239,7 +259,8 @@ class _PrinterCard extends StatelessWidget {
         ),
         title: Text('${printer.name} · ${printer.code}'),
         subtitle: Text(
-          '${printer.purpose.label} · ${printer.status.label} · '
+          '${printer.purpose.label} · $width mm · ${printer.charactersPerLine} car./riga · '
+          '${printer.status.label} · '
           '${assignedHere ? 'assegnata a questo POS' : printer.agentDeviceId == null ? 'non assegnata' : 'assegnata a un altro POS'}',
         ),
         trailing: Wrap(
@@ -250,6 +271,10 @@ class _PrinterCard extends StatelessWidget {
                 onPressed: busy ? null : onAssign,
                 child: const Text('Assegna qui'),
               ),
+            OutlinedButton(
+              onPressed: busy ? null : onFormat,
+              child: Text('$width mm'),
+            ),
             OutlinedButton(
               onPressed: busy ? null : onToggle,
               child: Text(
@@ -270,17 +295,20 @@ class _PrinterValues {
     required this.code,
     required this.name,
     required this.purpose,
+    required this.paperWidthMm,
   });
 
   final String code;
   final String name;
   final String purpose;
+  final int paperWidthMm;
 }
 
 Future<_PrinterValues?> _showPrinterDialog(BuildContext context) {
   var code = '';
   var name = '';
   var purpose = 'RECEIPT';
+  var paperWidthMm = 80;
   return showDialog<_PrinterValues>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
@@ -324,6 +352,21 @@ Future<_PrinterValues?> _showPrinterDialog(BuildContext context) {
                 onChanged: (value) =>
                     setDialogState(() => purpose = value ?? purpose),
               ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                value: paperWidthMm,
+                decoration: const InputDecoration(
+                  labelText: 'Formato carta',
+                  helperText: 'Fluxa adatta automaticamente il layout al formato scelto.',
+                ),
+                items: const [
+                  DropdownMenuItem(value: 58, child: Text('58 mm · 32 caratteri/riga')),
+                  DropdownMenuItem(value: 80, child: Text('80 mm · 48 caratteri/riga')),
+                ],
+                onChanged: (value) => setDialogState(
+                  () => paperWidthMm = value ?? paperWidthMm,
+                ),
+              ),
             ],
           ),
         ),
@@ -337,9 +380,48 @@ Future<_PrinterValues?> _showPrinterDialog(BuildContext context) {
                 ? null
                 : () => Navigator.pop(
                     dialogContext,
-                    _PrinterValues(code: code, name: name, purpose: purpose),
+                    _PrinterValues(
+                      code: code,
+                      name: name,
+                      purpose: purpose,
+                      paperWidthMm: paperWidthMm,
+                    ),
                   ),
             child: const Text('Crea'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<int?> _showPaperWidthDialog(
+  BuildContext context, {
+  required int initialValue,
+}) {
+  var width = initialValue;
+  return showDialog<int>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Formato carta'),
+        content: DropdownButtonFormField<int>(
+          value: width,
+          decoration: const InputDecoration(labelText: 'Larghezza termica'),
+          items: const [
+            DropdownMenuItem(value: 58, child: Text('58 mm · 32 caratteri/riga')),
+            DropdownMenuItem(value: 80, child: Text('80 mm · 48 caratteri/riga')),
+          ],
+          onChanged: (value) => setDialogState(() => width = value ?? width),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, width),
+            child: const Text('Salva'),
           ),
         ],
       ),

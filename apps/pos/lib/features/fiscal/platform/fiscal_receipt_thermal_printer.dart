@@ -1,27 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:printing/printing.dart';
 
 import '../../../core/network/backend_error.dart';
 import '../../printing/domain/printing_models.dart';
-import '../../printing/platform/esc_pos_raster_formatter.dart';
 import '../../printing/presentation/printing_controller.dart';
+import '../domain/fiscal_receipt_layout.dart';
+import 'fiscal_receipt_esc_pos_formatter.dart';
 
 class FiscalReceiptThermalPrinter {
   const FiscalReceiptThermalPrinter();
 
-  static const _channel = MethodChannel(
+  static const _networkChannel = MethodChannel(
     'it.fluxa.fluxa_pos/fiscal_receipt_printing',
   );
   static const _serialRawChannel = MethodChannel(
     'it.fluxa.fluxa_pos/bluetooth_serial_raw_printing',
   );
-  static const _rasterDpi = 203.0;
-  static const _maxPages = 8;
 
   Future<String> print({
     required PrintingController printing,
-    required Uint8List pdfBytes,
+    required FiscalReceiptLayoutData receipt,
   }) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) {
       throw const BackendError(
@@ -40,7 +38,7 @@ class FiscalReceiptThermalPrinter {
     if (candidates.isEmpty) {
       throw const BackendError(
         message:
-            'Nessuna stampante Ricevute è configurata su questo POS. Configurala in Stampa prima di stampare lo scontrino fiscale.',
+            'Nessuna stampante Ricevute è configurata su questo POS. Configurala in Stampa prima di stampare il documento fiscale.',
       );
     }
     if (candidates.length > 1) {
@@ -52,34 +50,10 @@ class FiscalReceiptThermalPrinter {
 
     final printer = candidates.single;
     final queueName = printing.queueFor(printer.id)!;
-    final pages = <EscPosRasterPage>[];
-
-    try {
-      await for (final page in Printing.raster(pdfBytes, dpi: _rasterDpi)) {
-        if (pages.length >= _maxPages) {
-          throw const BackendError(
-            message: 'Il PDF fiscale contiene troppe pagine per la termica.',
-          );
-        }
-        pages.add(
-          EscPosRasterPage(
-            width: page.width,
-            height: page.height,
-            rgba: page.pixels,
-          ),
-        );
-      }
-    } on BackendError {
-      rethrow;
-    } catch (_) {
-      throw const BackendError(
-        message: 'Impossibile convertire il PDF fiscale per la stampante.',
-      );
-    }
-
-    final payload = buildEscPosRasterDocument(
-      pages: pages,
+    final payload = buildFiscalReceiptEscPos(
+      receipt: receipt,
       paperWidthMm: printer.paperWidthMm,
+      charactersPerLine: printer.charactersPerLine,
       supportsCut: printer.supportsCut,
     );
 
@@ -88,7 +62,7 @@ class FiscalReceiptThermalPrinter {
     } catch (_) {
       throw BackendError(
         message:
-            'Stampa fiscale non riuscita su ${printer.name}. Controlla connessione e carta.',
+            'Stampa fiscale non riuscita su ${printer.name}. Controlla connessione, carta e formato 58/80 mm.',
       );
     }
 
@@ -97,11 +71,10 @@ class FiscalReceiptThermalPrinter {
 
   Future<void> _sendRaw(String queueName, Uint8List payload) async {
     final parts = queueName.split('|');
-
     if (parts.length >= 3 && parts.first == 'bluetooth_serial') {
       final port = parts[1].trim().toUpperCase();
       if (!RegExp(r'^COM\d+$').hasMatch(port)) {
-        throw const FormatException('Porta Bluetooth seriale non valida.');
+        throw const FormatException('Porta COM Bluetooth non valida.');
       }
       await _serialRawChannel.invokeMethod<void>('printRaw', {
         'port': port,
@@ -132,6 +105,6 @@ class FiscalReceiptThermalPrinter {
       throw const FormatException('Connessione stampante non valida.');
     }
 
-    await _channel.invokeMethod<void>('printRaw', arguments);
+    await _networkChannel.invokeMethod<void>('printRaw', arguments);
   }
 }
