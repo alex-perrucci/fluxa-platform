@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/network/backend_error.dart';
 import '../domain/fiscal_models.dart';
+import '../domain/fiscal_receipt_layout.dart';
 
 class FiscalReceiptPdfData {
   const FiscalReceiptPdfData({required this.bytes, required this.filename});
@@ -24,6 +25,8 @@ abstract interface class FiscalGateway {
   Future<FiscalDocument> getDocument(String documentId);
 
   Future<FiscalReceiptPdfData> downloadReceiptPdf(String documentId);
+
+  Future<FiscalReceiptLayoutData> downloadReceiptLayout(String documentId);
 
   Future<FiscalDocument> issue({
     required String orderId,
@@ -103,6 +106,20 @@ class FiscalApi implements FiscalGateway {
         bytes: Uint8List.fromList(bytes),
         filename: filename,
       );
+    } on DioException catch (error) {
+      throw BackendError.fromDioException(error);
+    }
+  }
+
+  @override
+  Future<FiscalReceiptLayoutData> downloadReceiptLayout(
+    String documentId,
+  ) async {
+    try {
+      final response = await _dio.get<Object?>(
+        'fiscal-documents/$documentId/receipt-layout',
+      );
+      return FiscalReceiptLayoutData.fromJson(_map(response.data));
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
     }
