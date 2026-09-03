@@ -42,7 +42,9 @@ export interface AdeDocumentSubmitResult {
   transport: 'BROWSER' | 'HTTP_FAST';
   finalUrl: string;
   confirmationBoundarySeen: boolean;
-  confirmationEvidence: AdeSubmitConfirmationEvidence | AdeFastSubmitConfirmationEvidence;
+  confirmationEvidence:
+    | AdeSubmitConfirmationEvidence
+    | AdeFastSubmitConfirmationEvidence;
   externalId: string | null;
   documentNumber: string | null;
   documentDate: string | null;
