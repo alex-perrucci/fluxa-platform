@@ -37,7 +37,9 @@ export function classifyAdeDcoNavigationFailure(
 
   const path = url.pathname.toLowerCase();
   if (path === DCO_NONAUTH_PATH.toLowerCase()) {
-    return sessionInvalid('Il portale DCO ha reindirizzato alla pagina non autenticata.');
+    return sessionInvalid(
+      'Il portale DCO ha reindirizzato alla pagina non autenticata.',
+    );
   }
 
   if (
@@ -66,7 +68,7 @@ export function isAdeDcoFailFastError(
 export class AdeDcoBootstrapGuard {
   private readonly failure: Promise<AdeAutomationError>;
   private resolveFailure!: (error: AdeAutomationError) => void;
-  private settled = false;
+  private failureError: AdeAutomationError | null = null;
 
   private readonly onResponse = (response: Response): void => {
     const error = classifyAdeDcoHttpFailure(response.url(), response.status());
@@ -88,13 +90,20 @@ export class AdeDcoBootstrapGuard {
   }
 
   async race<T>(operation: Promise<T>): Promise<T> {
+    this.throwIfFailed();
+
     const result = await Promise.race([
       operation.then((value) => ({ type: 'VALUE' as const, value })),
       this.failure.then((error) => ({ type: 'ERROR' as const, error })),
     ]);
 
     if (result.type === 'ERROR') throw result.error;
+    this.throwIfFailed();
     return result.value;
+  }
+
+  throwIfFailed(): void {
+    if (this.failureError) throw this.failureError;
   }
 
   stop(): void {
@@ -103,8 +112,8 @@ export class AdeDcoBootstrapGuard {
   }
 
   private signal(error: AdeAutomationError): void {
-    if (this.settled) return;
-    this.settled = true;
+    if (this.failureError) return;
+    this.failureError = error;
     this.resolveFailure(error);
   }
 }
