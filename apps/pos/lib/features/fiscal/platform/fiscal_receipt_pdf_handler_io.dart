@@ -98,10 +98,8 @@ String? _documentIdFromTaggedFilename(String value) {
   return match?.group(1);
 }
 
-String _publicFilename(String value) => value.replaceFirst(
-  RegExp(r'^__fluxa_document_[0-9a-fA-F-]{36}__'),
-  '',
-);
+String _publicFilename(String value) =>
+    value.replaceFirst(RegExp(r'^__fluxa_document_[0-9a-fA-F-]{36}__'), '');
 
 String _safeFilename(String value) {
   final sanitized = _publicFilename(value)
@@ -115,6 +113,8 @@ String _safeFilename(String value) {
 
 void _ensureWindows() {
   if (!Platform.isWindows) {
-    throw UnsupportedError('Documento fiscale supportato dal POS desktop Windows.');
+    throw UnsupportedError(
+      'Documento fiscale supportato dal POS desktop Windows.',
+    );
   }
 }
