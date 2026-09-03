@@ -28,7 +28,7 @@ Uint8List buildFiscalReceiptEscPos({
   required int charactersPerLine,
   required bool supportsCut,
 }) {
-  final width = charactersPerLine.clamp(24, 64);
+  final width = charactersPerLine.clamp(24, 64).toInt();
   final sections = _buildSections(document, header, width);
   final output = BytesBuilder(copy: false)..add(const [0x1B, 0x40]);
 
@@ -62,7 +62,7 @@ List<String> buildFiscalReceiptTextLines({
   required FiscalReceiptHeader header,
   required int charactersPerLine,
 }) {
-  final width = charactersPerLine.clamp(24, 64);
+  final width = charactersPerLine.clamp(24, 64).toInt();
   return _buildSections(document, header, width)
       .expand((section) => section.lines)
       .toList(growable: false);
@@ -284,7 +284,7 @@ List<String> _wrap(String value, int width) {
 String _fit(String value, int width) {
   if (value.length <= width) return value;
   if (width <= 1) return value.substring(0, width);
-  return '${value.substring(0, width - 1)}…';
+  return '${value.substring(0, width - 1)}~';
 }
 
 String _itemVatLabel(FiscalDocumentItem item) {
