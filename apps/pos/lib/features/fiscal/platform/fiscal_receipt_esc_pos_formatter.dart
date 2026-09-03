@@ -92,11 +92,7 @@ Uint8List buildFiscalReceiptEscPos({
   );
   command(const [0x1B, 0x45, 0x00]);
   line(
-    _labelValue(
-      'di cui IVA',
-      formatReceiptMoney(receipt.totalVatCents),
-      width,
-    ),
+    _labelValue('di cui IVA', formatReceiptMoney(receipt.totalVatCents), width),
   );
 
   if (receipt.vatSummaries.isNotEmpty) {
@@ -112,11 +108,7 @@ Uint8List buildFiscalReceiptEscPos({
       );
       if (paperWidthMm > 58) {
         line(
-          _labelValue(
-            '  Imponibile',
-            formatReceiptMoney(vat.netCents),
-            width,
-          ),
+          _labelValue('  Imponibile', formatReceiptMoney(vat.netCents), width),
         );
       }
     }
@@ -148,11 +140,7 @@ Uint8List buildFiscalReceiptEscPos({
   }
   command(const [0x1B, 0x45, 0x01]);
   line(
-    _labelValue(
-      'Importo pagato',
-      formatReceiptMoney(receipt.paidCents),
-      width,
-    ),
+    _labelValue('Importo pagato', formatReceiptMoney(receipt.paidCents), width),
   );
   command(const [0x1B, 0x45, 0x00]);
   line();
