@@ -92,8 +92,12 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          dart format --output=none --set-exit-if-changed . 2>&1 |
-            tee ci-logs/dart-format.log
+          dart format . 2>&1 | tee ci-logs/dart-format.log
+          if ! git diff --exit-code; then
+            echo 'Dart formatter produced the following diff:'
+            git diff
+            exit 1
+          fi
       - name: Analyze Flutter application
         shell: bash
         run: |
@@ -287,7 +291,4 @@ jobs:
         run: |
           if [ -f api.pid ]; then
             kill "$(cat api.pid)" || true
-          fi
-          if [ -f fiscal-worker.pid ]; then
-            kill "$(cat fiscal-worker.pid)" || true
           fi
