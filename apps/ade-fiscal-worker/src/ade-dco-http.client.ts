@@ -94,7 +94,8 @@ export class AdeDcoHttpClient implements OnApplicationShutdown {
         timeout: input.timeoutMs,
         failOnStatusCode: false,
         headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           Referer: `${DCO_ORIGIN}/instr/InstradamentofcWeb/home`,
         },
       });
@@ -264,7 +265,10 @@ export class AdeDcoHttpClient implements OnApplicationShutdown {
     }
   }
 
-  private navigationError(error: unknown, fallback: string): AdeAutomationError {
+  private navigationError(
+    error: unknown,
+    fallback: string,
+  ): AdeAutomationError {
     return new AdeAutomationError(
       error instanceof Error ? `${fallback} ${error.message}` : fallback,
       'ADE_NAVIGATION_FAILED',
