@@ -8,7 +8,6 @@ import {
 import {
   chromium,
   type Browser,
-  type BrowserContext,
   type Locator,
   type Page,
 } from 'playwright';
@@ -18,6 +17,13 @@ import type {
   AdeDocumentItemInput,
   AdeDocumentPaymentInput,
 } from './ade-document-browser.service';
+import { AdeReusableBrowserSessionPool } from './ade-reusable-browser-session-pool';
+import {
+  adeSessionMetricKey,
+  adeSessionPoolMax,
+  attachAdeProtocolDiagnostics,
+  measureAdeSubmitStage,
+} from './ade-submit-observability';
 
 const DCO_DIRECT_URL =
   'https://ivaservizi.agenziaentrate.gov.it/ser/documenticommercialionline/';
@@ -115,9 +121,9 @@ export class AdeDocumentSubmitBrowserService
 {
   private readonly logger = new Logger(AdeDocumentSubmitBrowserService.name);
   private browserPromise: Promise<Browser> | null = null;
-  private reusableContext: BrowserContext | null = null;
-  private reusablePage: Page | null = null;
-  private reusableSessionFingerprint: string | null = null;
+  private readonly sessionPool = new AdeReusableBrowserSessionPool(
+    adeSessionPoolMax(),
+  );
 
   onApplicationBootstrap(): void {
     void this.browser().catch(() => undefined);
@@ -126,129 +132,194 @@ export class AdeDocumentSubmitBrowserService
   async submit(
     input: AdeDocumentBrowserInput,
   ): Promise<AdeDocumentSubmitBrowserResult> {
-    const page = await this.pageForSession(input.storageStatePath);
+    const sessionKey = adeSessionMetricKey(input.storageStatePath);
+    const totalStartedAt = Date.now();
     let submitAttempted = false;
 
     try {
-      await this.openDocumentGenerator(page, input.entryUrl, input.timeoutMs);
-
-      for (let index = 0; index < input.items.length; index += 1) {
-        await this.fillItem(
-          page,
-          index + 1,
-          input.items[index],
-          input.timeoutMs,
-        );
-        await this.clickRequired(
-          page.getByRole('button', { name: 'Aggiungi riga', exact: false }),
-          input.timeoutMs,
-          `Impossibile aggiungere la riga ${index + 1} al documento commerciale.`,
-        );
-      }
-
-      await this.fillAndVerifyPayment(page, input.payment, input.timeoutMs);
-      await this.clickRequired(
-        page.getByRole('button', { name: 'Vai a Verifica dati', exact: false }),
-        input.timeoutMs,
-        'Passaggio a Verifica dati non disponibile.',
+      const page = await measureAdeSubmitStage(
+        this.logger,
+        sessionKey,
+        'session',
+        () => this.pageForSession(input.storageStatePath),
       );
-      await this.verifySummary(
-        page,
-        input.items,
-        input.expectedGrossTotalCents,
-        input.timeoutMs,
-      );
-      await this.advanceToConfirmation(page, input.payment, input.timeoutMs);
-      await this.clickRequired(
-        page.getByRole('button', { name: 'Conferma', exact: true }),
-        input.timeoutMs,
-        'Conferma preliminare del documento non disponibile.',
-      );
-
-      const proceed = page
-        .getByRole('button', { name: 'Procedi', exact: false })
-        .first();
-      const cancel = page
-        .getByRole('button', { name: 'Annulla', exact: false })
-        .first();
 
       try {
-        await proceed.waitFor({ state: 'visible', timeout: input.timeoutMs });
-        await cancel.waitFor({ state: 'visible', timeout: input.timeoutMs });
-      } catch {
-        throw new AdeAutomationError(
-          'Boundary finale Procedi/Annulla non trovato.',
-          'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND',
-          'SELECTOR_MISMATCH',
-          false,
-        );
-      }
-
-      const evidenceBefore = await this.successEvidence(page);
-      let downloadSeen = false;
-      const onDownload = () => {
-        downloadSeen = true;
-      };
-      page.on('download', onDownload);
-
-      try {
-        // Irreversible boundary. From this assignment onward every ambiguity is
-        // terminal UNKNOWN. The caller must never automatically retry it.
-        submitAttempted = true;
-        await proceed.click({ timeout: input.timeoutMs });
-
-        const confirmationEvidence = await this.waitForSuccessEvidence(
-          page,
-          proceed,
-          cancel,
-          evidenceBefore,
-          () => downloadSeen,
-          input.timeoutMs,
+        await measureAdeSubmitStage(this.logger, sessionKey, 'open_dco', () =>
+          this.openDocumentGenerator(page, input.entryUrl, input.timeoutMs),
         );
 
-        return {
-          finalUrl: safeUrl(page.url()),
-          confirmationBoundarySeen: true,
-          confirmationEvidence,
-          itemCount: input.items.length,
-          grossTotalCents: input.expectedGrossTotalCents,
-          paymentTotalCents:
-            input.payment.cashCents + input.payment.electronicCents,
-          submitAttempted: true,
+        await measureAdeSubmitStage(
+          this.logger,
+          sessionKey,
+          'fill_items',
+          async () => {
+            for (let index = 0; index < input.items.length; index += 1) {
+              await this.fillItem(
+                page,
+                index + 1,
+                input.items[index],
+                input.timeoutMs,
+              );
+              await this.clickRequired(
+                page.getByRole('button', {
+                  name: 'Aggiungi riga',
+                  exact: false,
+                }),
+                input.timeoutMs,
+                `Impossibile aggiungere la riga ${index + 1} al documento commerciale.`,
+              );
+            }
+          },
+        );
+
+        await measureAdeSubmitStage(this.logger, sessionKey, 'payment', () =>
+          this.fillAndVerifyPayment(page, input.payment, input.timeoutMs),
+        );
+
+        await measureAdeSubmitStage(
+          this.logger,
+          sessionKey,
+          'verify',
+          async () => {
+            await this.clickRequired(
+              page.getByRole('button', {
+                name: 'Vai a Verifica dati',
+                exact: false,
+              }),
+              input.timeoutMs,
+              'Passaggio a Verifica dati non disponibile.',
+            );
+            await this.verifySummary(
+              page,
+              input.items,
+              input.expectedGrossTotalCents,
+              input.timeoutMs,
+            );
+          },
+        );
+
+        const proceed = page
+          .getByRole('button', { name: 'Procedi', exact: false })
+          .first();
+        const cancel = page
+          .getByRole('button', { name: 'Annulla', exact: false })
+          .first();
+
+        await measureAdeSubmitStage(
+          this.logger,
+          sessionKey,
+          'confirmation',
+          async () => {
+            await this.advanceToConfirmation(
+              page,
+              input.payment,
+              input.timeoutMs,
+            );
+            await this.clickRequired(
+              page.getByRole('button', { name: 'Conferma', exact: true }),
+              input.timeoutMs,
+              'Conferma preliminare del documento non disponibile.',
+            );
+
+            try {
+              await proceed.waitFor({
+                state: 'visible',
+                timeout: input.timeoutMs,
+              });
+              await cancel.waitFor({
+                state: 'visible',
+                timeout: input.timeoutMs,
+              });
+            } catch {
+              throw new AdeAutomationError(
+                'Boundary finale Procedi/Annulla non trovato.',
+                'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND',
+                'SELECTOR_MISMATCH',
+                false,
+              );
+            }
+          },
+        );
+
+        const evidenceBefore = await this.successEvidence(page);
+        let downloadSeen = false;
+        const onDownload = () => {
+          downloadSeen = true;
         };
-      } catch (error) {
-        if (error instanceof AdeAutomationError && error.submitAttempted) {
-          throw error;
-        }
-        throw submitUnknown(
-          error instanceof Error
-            ? `Esito AdE non verificabile dopo Procedi: ${error.message}`
-            : 'Esito AdE non verificabile dopo Procedi.',
-        );
-      } finally {
-        page.off('download', onDownload);
-      }
-    } catch (error) {
-      if (submitAttempted) {
-        await this.resetReusableSession();
-        if (error instanceof AdeAutomationError && error.submitAttempted) {
-          throw error;
-        }
-        throw submitUnknown('Esito AdE non verificabile dopo Procedi.');
-      }
+        page.on('download', onDownload);
 
-      if (
-        error instanceof AdeAutomationError &&
-        (error.category === 'BROWSER' || error.category === 'NAVIGATION')
-      ) {
-        await this.resetReusableSession();
+        try {
+          // Irreversible boundary. From this assignment onward every ambiguity is
+          // terminal UNKNOWN. The caller must never automatically retry it.
+          submitAttempted = true;
+          await measureAdeSubmitStage(this.logger, sessionKey, 'submit', () =>
+            proceed.click({ timeout: input.timeoutMs }),
+          );
+
+          const confirmationEvidence = await measureAdeSubmitStage(
+            this.logger,
+            sessionKey,
+            'success_evidence',
+            () =>
+              this.waitForSuccessEvidence(
+                page,
+                proceed,
+                cancel,
+                evidenceBefore,
+                () => downloadSeen,
+                input.timeoutMs,
+              ),
+          );
+
+          return {
+            finalUrl: safeUrl(page.url()),
+            confirmationBoundarySeen: true,
+            confirmationEvidence,
+            itemCount: input.items.length,
+            grossTotalCents: input.expectedGrossTotalCents,
+            paymentTotalCents:
+              input.payment.cashCents + input.payment.electronicCents,
+            submitAttempted: true,
+          };
+        } catch (error) {
+          if (error instanceof AdeAutomationError && error.submitAttempted) {
+            throw error;
+          }
+          throw submitUnknown(
+            error instanceof Error
+              ? `Esito AdE non verificabile dopo Procedi: ${error.message}`
+              : 'Esito AdE non verificabile dopo Procedi.',
+          );
+        } finally {
+          page.off('download', onDownload);
+        }
+      } catch (error) {
+        if (submitAttempted) {
+          await this.sessionPool.reset(input.storageStatePath);
+          if (error instanceof AdeAutomationError && error.submitAttempted) {
+            throw error;
+          }
+          throw submitUnknown('Esito AdE non verificabile dopo Procedi.');
+        }
+
+        if (
+          error instanceof AdeAutomationError &&
+          (error.category === 'BROWSER' || error.category === 'NAVIGATION')
+        ) {
+          await this.sessionPool.reset(input.storageStatePath);
+        }
+        throw error;
       }
-      throw error;
+    } finally {
+      this.logger.log(
+        `ADE submit timing session=${sessionKey} stage=total durationMs=${Date.now() - totalStartedAt} itemCount=${input.items.length}`,
+      );
     }
   }
 
   async onApplicationShutdown(): Promise<void> {
-    await this.resetReusableSession();
+    await this.sessionPool.reset();
     const browserPromise = this.browserPromise;
     this.browserPromise = null;
     if (!browserPromise) return;
@@ -314,38 +385,24 @@ export class AdeDocumentSubmitBrowserService
 
   private async pageForSession(storageStatePath: string): Promise<Page> {
     const fingerprint = this.sessionFingerprint(storageStatePath);
-
-    if (
-      this.reusableContext &&
-      this.reusableSessionFingerprint === fingerprint
-    ) {
-      if (this.reusablePage && !this.reusablePage.isClosed()) {
-        return this.reusablePage;
-      }
-
-      try {
-        const page = await this.reusableContext.newPage();
-        this.reusablePage = page;
-        return page;
-      } catch {
-        await this.resetReusableSession();
-      }
-    } else if (this.reusableContext) {
-      await this.resetReusableSession();
-    }
-
     const browser = await this.browser();
+
     try {
-      const context = await browser.newContext({
-        storageState: storageStatePath,
+      return await this.sessionPool.getPage({
+        key: storageStatePath,
+        fingerprint,
+        create: async () => {
+          const context = await browser.newContext({
+            storageState: storageStatePath,
+          });
+          const page = await context.newPage();
+          return { context, page };
+        },
+        onPage: (page) => attachAdeProtocolDiagnostics(page, this.logger),
       });
-      const page = await context.newPage();
-      this.reusableContext = context;
-      this.reusablePage = page;
-      this.reusableSessionFingerprint = fingerprint;
-      return page;
-    } catch {
-      await this.resetReusableSession();
+    } catch (error) {
+      await this.sessionPool.reset(storageStatePath);
+      if (error instanceof AdeAutomationError) throw error;
       throw new AdeAutomationError(
         'Impossibile caricare la sessione browser Agenzia delle Entrate.',
         'ADE_SESSION_INVALID',
@@ -367,17 +424,6 @@ export class AdeDocumentSubmitBrowserService
         false,
       );
     }
-  }
-
-  private async resetReusableSession(): Promise<void> {
-    const page = this.reusablePage;
-    const context = this.reusableContext;
-    this.reusablePage = null;
-    this.reusableContext = null;
-    this.reusableSessionFingerprint = null;
-
-    await page?.close().catch(() => undefined);
-    await context?.close().catch(() => undefined);
   }
 
   private async openDocumentGenerator(
@@ -751,7 +797,7 @@ export class AdeDocumentSubmitBrowserService
 
     const browser = await this.browserPromise;
     if (!browser.isConnected()) {
-      await this.resetReusableSession();
+      await this.sessionPool.reset();
       this.browserPromise = null;
       return this.browser();
     }
