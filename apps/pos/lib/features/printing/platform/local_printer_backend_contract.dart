@@ -42,8 +42,8 @@ String localPrinterTargetLabel(String? value) {
   if (parts.length >= 3 && parts.first == 'bluetooth_serial') {
     final port = parts[1].trim().toUpperCase();
     final name = parts.sublist(2).join('|').trim();
-    final deviceName = name.isEmpty ? 'Stampante Bluetooth' : name;
-    return '$deviceName · Bluetooth seriale ($port)';
+    final deviceName = name.isEmpty ? 'Bluetooth' : name;
+    return '$deviceName · $port';
   }
   if (parts.length >= 3 && parts.first == 'bluetooth') {
     final name = parts.sublist(2).join('|').trim();
