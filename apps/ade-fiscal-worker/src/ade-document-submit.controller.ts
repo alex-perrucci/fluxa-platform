@@ -25,10 +25,12 @@ function statusFor(error: AdeAutomationError): HttpStatus {
     case 'ADE_DOCUMENT_FLOW_MISMATCH':
     case 'ADE_DOCUMENT_VERIFY_MISMATCH':
     case 'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND':
+    case 'ADE_DOCUMENT_SUBMIT_REJECTED':
       return HttpStatus.UNPROCESSABLE_ENTITY;
     case 'ADE_DOCUMENT_SUBMIT_UNKNOWN':
     case 'ADE_NAVIGATION_FAILED':
       return HttpStatus.BAD_GATEWAY;
+    case 'ADE_DCO_FAST_PATH_UNAVAILABLE':
     case 'ADE_UPSTREAM_UNAVAILABLE':
       return HttpStatus.SERVICE_UNAVAILABLE;
     default:
@@ -54,8 +56,12 @@ function publicMessage(error: AdeAutomationError): string {
     case 'ADE_DOCUMENT_VERIFY_MISMATCH':
     case 'ADE_DOCUMENT_CONFIRMATION_BOUNDARY_NOT_FOUND':
       return error.message;
+    case 'ADE_DOCUMENT_SUBMIT_REJECTED':
+      return 'AdE ha rifiutato il documento commerciale. Il worker non esegue retry automatici.';
     case 'ADE_DOCUMENT_SUBMIT_UNKNOWN':
-      return 'Procedi può essere stato attivato, ma l’esito fiscale non è verificabile automaticamente.';
+      return 'Il submit fiscale può essere stato inviato, ma l’esito non è verificabile automaticamente.';
+    case 'ADE_DCO_FAST_PATH_UNAVAILABLE':
+      return 'Fast path DCO non utilizzabile per questo documento.';
     case 'ADE_CONFIGURATION_INVALID':
       return 'Configurazione AdE incompleta o non valida.';
     case 'ADE_BROWSER_UNAVAILABLE':
