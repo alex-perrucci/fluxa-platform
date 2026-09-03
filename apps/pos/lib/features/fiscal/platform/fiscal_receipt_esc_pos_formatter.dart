@@ -19,8 +19,9 @@ Uint8List buildFiscalReceiptEscPos({
   void line([String value = '']) => text('${_fit(value, width)}\n');
   void centered(String value) {
     for (final part in _wrap(value, width)) {
-      final left = math.max(0, (width - part.length) ~/ 2);
-      line('${List.filled(left, ' ').join()}$part');
+      // ESC/POS alignment (ESC a 1) handles centering on the printer.
+      // Do not prepend spaces here: doing both shifts the text to the right.
+      line(part);
     }
   }
 
@@ -271,8 +272,7 @@ const Map<int, int> _pc850 = {
   0x00F9: 0x97,
   0x00D6: 0x99,
   0x00DC: 0x9A,
-  0x00A3: 0x9C,
-  0x00E1: 0xA0,
+  0x00A3: 0xA0,
   0x00ED: 0xA1,
   0x00F3: 0xA2,
   0x00FA: 0xA3,
