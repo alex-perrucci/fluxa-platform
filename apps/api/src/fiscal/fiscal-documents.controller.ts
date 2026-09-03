@@ -21,6 +21,7 @@ import {
 } from './dto/fiscal-mutation.dto';
 import { IssueFiscalDocumentDto } from './dto/issue-fiscal-document.dto';
 import { FiscalDocumentsService } from './fiscal-documents.service';
+import { FiscalReceiptLayoutService } from './fiscal-receipt-layout.service';
 import { FiscalReceiptPdfService } from './fiscal-receipt-pdf.service';
 import { RefundFiscalVoidService } from './refund-fiscal-void.service';
 
@@ -28,6 +29,7 @@ import { RefundFiscalVoidService } from './refund-fiscal-void.service';
 export class FiscalDocumentsController {
   constructor(
     private readonly documents: FiscalDocumentsService,
+    private readonly receiptLayout: FiscalReceiptLayoutService,
     private readonly receiptPdf: FiscalReceiptPdfService,
     private readonly refundVoids: RefundFiscalVoidService,
   ) {}
@@ -62,6 +64,22 @@ export class FiscalDocumentsController {
     @Param('documentId', ParseUUIDPipe) documentId: string,
   ) {
     return this.documents.get(auth, documentId);
+  }
+
+  @Roles(
+    'OWNER',
+    'ADMIN',
+    'MANAGER',
+    'CASHIER',
+    'ACCOUNTANT',
+    'SUPPORT_READONLY',
+  )
+  @Get('fiscal-documents/:documentId/receipt-layout')
+  receiptLayoutData(
+    @CurrentAuth() auth: AuthContext,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+  ) {
+    return this.receiptLayout.get(auth, documentId);
   }
 
   @Roles(
