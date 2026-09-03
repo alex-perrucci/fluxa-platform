@@ -57,7 +57,7 @@ Uint8List buildFiscalReceiptEscPos({
     '${_padLeft('IVA', vatWidth)} '
     '${_padLeft('PREZZO', amountWidth)}',
   );
-  line('-' * width);
+  line(_repeat('-', width));
 
   for (final item in receipt.items) {
     final description = '${item.displayQuantity} ${item.description}'.trim();
@@ -81,7 +81,7 @@ Uint8List buildFiscalReceiptEscPos({
     }
   }
 
-  line('-' * width);
+  line(_repeat('-', width));
   command(const [0x1B, 0x45, 0x01]);
   line(
     _labelValue(
@@ -245,6 +245,8 @@ String _padLeft(String value, int width) {
       : value.substring(value.length - width);
   return fitted.padLeft(width);
 }
+
+String _repeat(String value, int count) => List.filled(count, value).join();
 
 Uint8List _encodePc850(String value) {
   final result = <int>[];
