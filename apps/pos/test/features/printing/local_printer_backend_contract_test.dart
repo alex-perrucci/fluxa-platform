@@ -11,10 +11,7 @@ void main() {
     expect(target, 'bluetooth_serial|COM6|BlueTooth Printer');
     expect(isBluetoothPrinterTarget(target), isTrue);
     expect(isBluetoothSerialPrinterTarget(target), isTrue);
-    expect(
-      localPrinterTargetLabel(target),
-      'BlueTooth Printer · Bluetooth seriale (COM6)',
-    );
+    expect(localPrinterTargetLabel(target), 'BlueTooth Printer · COM6');
   });
 
   test('keeps classic Bluetooth and Wi-Fi target compatibility', () {
