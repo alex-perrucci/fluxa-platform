@@ -1,3 +1,4 @@
+import { AdeAutomationError } from './ade-automation-error';
 import { mapAdeDcoSalePayload } from './ade-dco-payload.mapper';
 
 const FISCAL_DATA = {
@@ -22,6 +23,16 @@ const FISCAL_DATA = {
     multiAttivita: [],
   },
 };
+
+function captureError(action: () => unknown): AdeAutomationError {
+  try {
+    action();
+  } catch (error) {
+    if (error instanceof AdeAutomationError) return error;
+    throw error;
+  }
+  throw new Error('Expected AdeAutomationError');
+}
 
 describe('mapAdeDcoSalePayload', () => {
   it('maps a gross 10% VAT sale to the DCW10 decimal schema deterministically', () => {
@@ -72,7 +83,7 @@ describe('mapAdeDcoSalePayload', () => {
   });
 
   it('refuses seller data that belongs to a different incaricante', () => {
-    expect(() =>
+    const error = captureError(() =>
       mapAdeDcoSalePayload({
         fiscalId: '03053300343',
         fiscalData: FISCAL_DATA,
@@ -87,16 +98,16 @@ describe('mapAdeDcoSalePayload', () => {
         payment: { cashCents: 100, electronicCents: 0 },
         expectedGrossTotalCents: 100,
       }),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'ADE_DCO_FAST_PATH_UNAVAILABLE',
-        submitAttempted: false,
-      }),
     );
+
+    expect(error).toMatchObject({
+      code: 'ADE_DCO_FAST_PATH_UNAVAILABLE',
+      submitAttempted: false,
+    });
   });
 
   it('does not guess a multi-activity fiscal choice', () => {
-    expect(() =>
+    const error = captureError(() =>
       mapAdeDcoSalePayload({
         fiscalId: '03154790343',
         fiscalData: {
@@ -116,11 +127,11 @@ describe('mapAdeDcoSalePayload', () => {
         payment: { cashCents: 100, electronicCents: 0 },
         expectedGrossTotalCents: 100,
       }),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'ADE_DCO_FAST_PATH_UNAVAILABLE',
-        submitAttempted: false,
-      }),
     );
+
+    expect(error).toMatchObject({
+      code: 'ADE_DCO_FAST_PATH_UNAVAILABLE',
+      submitAttempted: false,
+    });
   });
 });
