@@ -19,8 +19,9 @@ Uint8List buildFiscalReceiptEscPos({
   void line([String value = '']) => text('${_fit(value, width)}\n');
   void centered(String value) {
     for (final part in _wrap(value, width)) {
-      final left = math.max(0, (width - part.length) ~/ 2);
-      line('${List.filled(left, ' ').join()}$part');
+      // ESC/POS alignment (ESC a 1) handles centering on the printer.
+      // Do not prepend spaces here: doing both shifts the text to the right.
+      line(part);
     }
   }
 
