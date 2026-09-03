@@ -5,12 +5,7 @@ import {
   OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
-import {
-  chromium,
-  type Browser,
-  type Locator,
-  type Page,
-} from 'playwright';
+import { chromium, type Browser, type Locator, type Page } from 'playwright';
 import { AdeAutomationError } from './ade-automation-error';
 import type {
   AdeDocumentBrowserInput,
