@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Logger } from '@nestjs/common';
+import type { Logger } from '@nestjs/common';
 import type { Page, Request } from 'playwright';
 
 const DEFAULT_SESSION_POOL_MAX = 8;
@@ -27,7 +27,10 @@ export function adeSessionPoolMax(): number {
 }
 
 export function adeSessionMetricKey(storageStatePath: string): string {
-  return createHash('sha256').update(storageStatePath).digest('hex').slice(0, 12);
+  return createHash('sha256')
+    .update(storageStatePath)
+    .digest('hex')
+    .slice(0, 12);
 }
 
 export async function measureAdeSubmitStage<T>(
@@ -46,10 +49,7 @@ export async function measureAdeSubmitStage<T>(
   }
 }
 
-export function attachAdeProtocolDiagnostics(
-  page: Page,
-  logger: Logger,
-): void {
+export function attachAdeProtocolDiagnostics(page: Page, logger: Logger): void {
   if (!adeProtocolDiagnosticsEnabled() || instrumentedPages.has(page)) return;
   instrumentedPages.add(page);
 
@@ -109,10 +109,12 @@ function requestJsonSchema(request: Request): string {
 
 function describeJsonShape(value: unknown): string {
   if (Array.isArray(value)) {
-    return value.length === 0 ? 'array[]' : `array[${describeJsonShape(value[0])}]`;
+    return value.length === 0
+      ? 'array[]'
+      : `array[${describeJsonShape(value[0])}]`;
   }
   if (value && typeof value === 'object') {
-    const keys = Object.keys(value as Record<string, unknown>).sort();
+    const keys = Object.keys(value).sort();
     return `object{${keys.join(',')}}`;
   }
   if (value === null) return 'null';
