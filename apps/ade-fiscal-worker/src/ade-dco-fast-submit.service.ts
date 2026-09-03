@@ -8,13 +8,10 @@ import type {
 } from './ade-document-browser.service';
 
 const INFO_ME_PATH = '/common/testata/v1/info/me';
-const FISCAL_DATA_PATH =
-  '/ser/api/documenti/v1/doc/documenti/dati/fiscali';
+const FISCAL_DATA_PATH = '/ser/api/documenti/v1/doc/documenti/dati/fiscali';
 const LAST_DOCUMENT_PATH = '/ser/api/documenti/v1/doc/documenti/ultimo/';
 
-export type AdeFastSubmitConfirmationEvidence =
-  | 'HTTP_RESPONSE'
-  | 'HTTP_RECONCILED';
+export type AdeFastSubmitConfirmationEvidence = 'HTTP_RESPONSE' | 'HTTP_RECONCILED';
 
 export interface AdeDcoFastSubmitResult {
   confirmationEvidence: AdeFastSubmitConfirmationEvidence;
@@ -105,9 +102,7 @@ export function extractAdeDcoEvidence(raw: unknown): AdeDcoEvidence {
     stringValue(
       directPath(raw, ['documentoCommerciale', 'numeroProgressivo']),
     ) ??
-    stringValue(
-      findField(raw, new Set(['progressivo', 'numeroProgressivo'])),
-    );
+    stringValue(findField(raw, new Set(['progressivo', 'numeroProgressivo'])));
   const documentDate = normalizeDocumentDate(
     directPath(raw, ['documentoCommerciale', 'dataOra']) ??
       findField(raw, new Set(['dataOra', 'dataDocumento'])),
@@ -296,11 +291,7 @@ export class AdeDcoFastSubmitService {
       });
       const after = extractAdeDcoEvidence(latest.body);
       if (
-        !reconcilesNewDocument(
-          baseline,
-          after,
-          input.expectedGrossTotalCents,
-        )
+        !reconcilesNewDocument(baseline, after, input.expectedGrossTotalCents)
       ) {
         return null;
       }
