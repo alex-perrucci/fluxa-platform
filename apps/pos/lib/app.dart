@@ -61,6 +61,7 @@ class _FluxaAppState extends ConsumerState<FluxaApp> {
       final controller = ref.read(printingControllerProvider);
       if (location == null || session == null) {
         configureFiscalReceiptPrinter(null);
+        configureFiscalDocumentPrinter(null);
         controller.clearContext();
       } else {
         await controller.bindContext(
@@ -73,6 +74,16 @@ class _FluxaAppState extends ConsumerState<FluxaApp> {
             pdfBytes: bytes,
           ),
         );
+        configureFiscalDocumentPrinter((document) async {
+          final header = await ref
+              .read(fiscalReceiptContextApiProvider)
+              .getHeader(document.locationId);
+          return _fiscalReceiptPrinter.printDocument(
+            printing: controller,
+            document: document,
+            header: header,
+          );
+        });
       }
     });
   }
