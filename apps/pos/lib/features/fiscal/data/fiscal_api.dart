@@ -116,7 +116,7 @@ class FiscalApi implements FiscalGateway {
           'scontrino-fiscale-$documentId.pdf';
       return FiscalReceiptPdfData(
         bytes: Uint8List.fromList(bytes),
-        filename: filename,
+        filename: '__fluxa_document_${documentId}__$filename',
       );
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
