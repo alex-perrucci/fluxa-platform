@@ -16,7 +16,6 @@ function statusFor(error: AdeAutomationError): HttpStatus {
     case 'ADE_DOCUMENT_INPUT_INVALID':
       return HttpStatus.BAD_REQUEST;
     case 'ADE_DOCUMENT_SUBMIT_BUSY':
-      return HttpStatus.CONFLICT;
     case 'ADE_DOCUMENT_SUBMIT_DUPLICATE_OPERATION':
       return HttpStatus.CONFLICT;
     case 'ADE_SUBMIT_DISABLED':
@@ -30,6 +29,8 @@ function statusFor(error: AdeAutomationError): HttpStatus {
     case 'ADE_DOCUMENT_SUBMIT_UNKNOWN':
     case 'ADE_NAVIGATION_FAILED':
       return HttpStatus.BAD_GATEWAY;
+    case 'ADE_UPSTREAM_UNAVAILABLE':
+      return HttpStatus.SERVICE_UNAVAILABLE;
     default:
       return HttpStatus.SERVICE_UNAVAILABLE;
   }
@@ -61,6 +62,8 @@ function publicMessage(error: AdeAutomationError): string {
       return 'Browser automation non disponibile.';
     case 'ADE_NAVIGATION_FAILED':
       return 'Navigazione AdE non riuscita.';
+    case 'ADE_UPSTREAM_UNAVAILABLE':
+      return 'Servizio Documento Commerciale AdE temporaneamente non disponibile.';
     default:
       return 'Submit documento AdE non riuscito.';
   }

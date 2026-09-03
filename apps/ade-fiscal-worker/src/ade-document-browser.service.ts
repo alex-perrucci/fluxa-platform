@@ -12,6 +12,10 @@ import {
   type Page,
 } from 'playwright';
 import { AdeAutomationError } from './ade-automation-error';
+import {
+  AdeDcoBootstrapGuard,
+  isAdeDcoFailFastError,
+} from './ade-dco-bootstrap-guard';
 
 const DCO_DIRECT_URL =
   'https://ivaservizi.agenziaentrate.gov.it/ser/documenticommercialionline/';
@@ -192,7 +196,9 @@ export class AdeDocumentBrowserService
     } catch (error) {
       if (
         error instanceof AdeAutomationError &&
-        (error.category === 'BROWSER' || error.category === 'NAVIGATION')
+        (error.category === 'BROWSER' ||
+          (error.category === 'NAVIGATION' &&
+            error.code !== 'ADE_UPSTREAM_UNAVAILABLE'))
       ) {
         await this.resetReusableSession();
       }
@@ -296,36 +302,65 @@ export class AdeDocumentBrowserService
         exact: false,
       })
       .first();
+    const guard = new AdeDcoBootstrapGuard(page);
 
-    // Fast path: an authenticated session can enter DCO directly, avoiding the
-    // Instradamento home and the extra "Documento Commerciale on line" click.
     try {
-      await this.goto(page, DCO_DIRECT_URL, timeoutMs);
-      await generate.waitFor({
-        state: 'visible',
-        timeout: Math.min(timeoutMs, DIRECT_DCO_DISCOVERY_TIMEOUT_MS),
-      });
-      await generate.click();
-      return;
-    } catch {
-      // Keep the proven home flow as fallback. In particular, an expired
-      // session still reaches the exact DCO-entry error used by auto-refresh.
-    }
+      // Fast path: an authenticated session can enter DCO directly, avoiding the
+      // Instradamento home and the extra "Documento Commerciale on line" click.
+      try {
+        await guard.race(this.goto(page, DCO_DIRECT_URL, timeoutMs));
+        await this.clickWithDcoGuard(
+          generate,
+          guard,
+          Math.min(timeoutMs, DIRECT_DCO_DISCOVERY_TIMEOUT_MS),
+          'Generazione documento commerciale non disponibile.',
+        );
+        return;
+      } catch (error) {
+        if (isAdeDcoFailFastError(error)) throw error;
+        // Keep the proven home flow only for ordinary selector/direct-entry
+        // mismatches. Auth/upstream failures never pay that fallback timeout.
+      }
 
-    await this.goto(page, entryUrl, timeoutMs);
-    await this.clickRequired(
-      page.getByRole('link', {
-        name: 'Documento Commerciale on',
-        exact: false,
-      }),
-      timeoutMs,
-      'Documento Commerciale on line non disponibile.',
-    );
-    await this.clickRequired(
-      generate,
-      timeoutMs,
-      'Generazione documento commerciale non disponibile.',
-    );
+      await guard.race(this.goto(page, entryUrl, timeoutMs));
+      await this.clickWithDcoGuard(
+        page.getByRole('link', {
+          name: 'Documento Commerciale on',
+          exact: false,
+        }),
+        guard,
+        timeoutMs,
+        'Documento Commerciale on line non disponibile.',
+      );
+      await this.clickWithDcoGuard(
+        generate,
+        guard,
+        timeoutMs,
+        'Generazione documento commerciale non disponibile.',
+      );
+    } finally {
+      guard.stop();
+    }
+  }
+
+  private async clickWithDcoGuard(
+    locator: Locator,
+    guard: AdeDcoBootstrapGuard,
+    timeoutMs: number,
+    message: string,
+  ): Promise<void> {
+    try {
+      const target = locator.first();
+      await guard.race(
+        target.waitFor({ state: 'visible', timeout: timeoutMs }),
+      );
+      guard.throwIfFailed();
+      await target.click();
+      guard.throwIfFailed();
+    } catch (error) {
+      if (isAdeDcoFailFastError(error)) throw error;
+      throw documentFlowError(message);
+    }
   }
 
   private async fillItem(

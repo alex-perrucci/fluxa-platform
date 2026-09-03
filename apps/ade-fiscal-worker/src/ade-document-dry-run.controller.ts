@@ -27,6 +27,8 @@ function statusFor(error: AdeAutomationError): HttpStatus {
       return HttpStatus.UNPROCESSABLE_ENTITY;
     case 'ADE_NAVIGATION_FAILED':
       return HttpStatus.BAD_GATEWAY;
+    case 'ADE_UPSTREAM_UNAVAILABLE':
+      return HttpStatus.SERVICE_UNAVAILABLE;
     default:
       return HttpStatus.SERVICE_UNAVAILABLE;
   }
@@ -54,6 +56,8 @@ function publicMessage(error: AdeAutomationError): string {
       return 'Browser automation non disponibile.';
     case 'ADE_NAVIGATION_FAILED':
       return 'Navigazione AdE non riuscita.';
+    case 'ADE_UPSTREAM_UNAVAILABLE':
+      return 'Servizio Documento Commerciale AdE temporaneamente non disponibile.';
     default:
       return 'Document dry-run AdE non riuscito.';
   }
