@@ -288,3 +288,6 @@ jobs:
           if [ -f api.pid ]; then
             kill "$(cat api.pid)" || true
           fi
+          if [ -f fiscal-worker.pid ]; then
+            kill "$(cat fiscal-worker.pid)" || true
+          fi
