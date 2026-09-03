@@ -6,6 +6,8 @@ import '../../../core/network/backend_error.dart';
 import '../../printing/domain/printing_models.dart';
 import '../../printing/platform/esc_pos_raster_formatter.dart';
 import '../../printing/presentation/printing_controller.dart';
+import '../domain/fiscal_models.dart';
+import 'fiscal_receipt_esc_pos_formatter.dart';
 
 class FiscalReceiptThermalPrinter {
   const FiscalReceiptThermalPrinter();
@@ -23,34 +25,8 @@ class FiscalReceiptThermalPrinter {
     required PrintingController printing,
     required Uint8List pdfBytes,
   }) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) {
-      throw const BackendError(
-        message: 'La stampa fiscale diretta è disponibile sul POS Windows.',
-      );
-    }
-
-    final candidates = printing.assignedPrinters
-        .where(
-          (printer) =>
-              printer.purpose == PrinterPurpose.receipt &&
-              (printing.queueFor(printer.id)?.isNotEmpty ?? false),
-        )
-        .toList(growable: false);
-
-    if (candidates.isEmpty) {
-      throw const BackendError(
-        message:
-            'Nessuna stampante Ricevute è configurata su questo POS. Configurala in Stampa prima di stampare lo scontrino fiscale.',
-      );
-    }
-    if (candidates.length > 1) {
-      throw const BackendError(
-        message:
-            'Sono configurate più stampanti Ricevute su questo POS. Lasciane una sola per la stampa fiscale diretta.',
-      );
-    }
-
-    final printer = candidates.single;
+    _ensureWindows();
+    final printer = _receiptPrinter(printing);
     final queueName = printing.queueFor(printer.id)!;
     final pages = <EscPosRasterPage>[];
 
@@ -82,7 +58,78 @@ class FiscalReceiptThermalPrinter {
       paperWidthMm: printer.paperWidthMm,
       supportsCut: printer.supportsCut,
     );
+    await _printPayload(printer, queueName, payload);
+    return printer.name;
+  }
 
+  Future<String> printDocument({
+    required PrintingController printing,
+    required FiscalDocument document,
+    required FiscalReceiptHeader header,
+  }) async {
+    _ensureWindows();
+    if (document.status != FiscalDocumentStatus.issued &&
+        document.status != FiscalDocumentStatus.voided) {
+      throw const BackendError(
+        message: 'Il documento fiscale non è ancora emesso.',
+      );
+    }
+    if (document.items.isEmpty && document.type == FiscalDocumentType.sale) {
+      throw const BackendError(
+        message: 'Il documento fiscale non contiene le righe da stampare.',
+      );
+    }
+
+    final printer = _receiptPrinter(printing);
+    final queueName = printing.queueFor(printer.id)!;
+    final charactersPerLine = printer.paperWidthMm <= 58 ? 32 : 48;
+    final payload = buildFiscalReceiptEscPos(
+      document: document,
+      header: header,
+      charactersPerLine: charactersPerLine,
+      supportsCut: printer.supportsCut,
+    );
+    await _printPayload(printer, queueName, payload);
+    return printer.name;
+  }
+
+  void _ensureWindows() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) {
+      throw const BackendError(
+        message: 'La stampa fiscale diretta è disponibile sul POS Windows.',
+      );
+    }
+  }
+
+  PrinterDevice _receiptPrinter(PrintingController printing) {
+    final candidates = printing.assignedPrinters
+        .where(
+          (printer) =>
+              printer.purpose == PrinterPurpose.receipt &&
+              (printing.queueFor(printer.id)?.isNotEmpty ?? false),
+        )
+        .toList(growable: false);
+
+    if (candidates.isEmpty) {
+      throw const BackendError(
+        message:
+            'Nessuna stampante Ricevute è configurata su questo POS. Configurala in Stampa prima di stampare lo scontrino fiscale.',
+      );
+    }
+    if (candidates.length > 1) {
+      throw const BackendError(
+        message:
+            'Sono configurate più stampanti Ricevute su questo POS. Lasciane una sola per la stampa fiscale diretta.',
+      );
+    }
+    return candidates.single;
+  }
+
+  Future<void> _printPayload(
+    PrinterDevice printer,
+    String queueName,
+    Uint8List payload,
+  ) async {
     try {
       await _sendRaw(queueName, payload);
     } catch (_) {
@@ -91,8 +138,6 @@ class FiscalReceiptThermalPrinter {
             'Stampa fiscale non riuscita su ${printer.name}. Controlla connessione e carta.',
       );
     }
-
-    return printer.name;
   }
 
   Future<void> _sendRaw(String queueName, Uint8List payload) async {
