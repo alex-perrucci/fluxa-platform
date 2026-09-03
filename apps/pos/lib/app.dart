@@ -61,11 +61,15 @@ class _FluxaAppState extends ConsumerState<FluxaApp> {
       final controller = ref.read(printingControllerProvider);
       if (location == null || session == null) {
         configureFiscalReceiptPrinter(null);
+        configureFiscalReceiptLayoutLoader(null);
         controller.clearContext();
       } else {
         await controller.bindContext(
           locationId: location.id,
           deviceId: session.device.id,
+        );
+        configureFiscalReceiptLayoutLoader(
+          ref.read(fiscalApiProvider).downloadReceiptLayout,
         );
         configureFiscalReceiptPrinter(
           (receipt) => _fiscalReceiptPrinter.print(
