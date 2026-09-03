@@ -13,7 +13,9 @@ class PrinterSetupApi {
     required String code,
     required String name,
     required String purpose,
+    required int paperWidthMm,
   }) async {
+    final normalizedWidth = _normalizePaperWidth(paperWidthMm);
     try {
       await _dio.post<Object?>(
         'printers',
@@ -24,8 +26,8 @@ class PrinterSetupApi {
           'name': name.trim(),
           'purpose': purpose,
           'driver': 'ESC_POS_TEXT',
-          'paperWidthMm': 80,
-          'charactersPerLine': 48,
+          'paperWidthMm': normalizedWidth,
+          'charactersPerLine': _charactersPerLine(normalizedWidth),
           'supportsCut': true,
           'supportsDrawer': false,
         },
@@ -41,7 +43,12 @@ class PrinterSetupApi {
     String? name,
     String? purpose,
     String? status,
+    int? paperWidthMm,
+    bool? supportsCut,
   }) async {
+    final normalizedWidth = paperWidthMm == null
+        ? null
+        : _normalizePaperWidth(paperWidthMm);
     try {
       await _dio.patch<Object?>(
         'printers/$printerId',
@@ -50,10 +57,19 @@ class PrinterSetupApi {
           'name': ?name?.trim(),
           'purpose': ?purpose,
           'status': ?status,
+          'paperWidthMm': ?normalizedWidth,
+          'charactersPerLine': normalizedWidth == null
+              ? null
+              : _charactersPerLine(normalizedWidth),
+          'supportsCut': ?supportsCut,
         },
       );
     } on DioException catch (error) {
       throw BackendError.fromDioException(error);
     }
   }
+
+  int _normalizePaperWidth(int value) => value <= 58 ? 58 : 80;
+
+  int _charactersPerLine(int paperWidthMm) => paperWidthMm <= 58 ? 32 : 48;
 }
