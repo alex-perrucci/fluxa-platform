@@ -3,6 +3,8 @@
 
 #include <flutter/binary_messenger.h>
 
+#include <memory>
+
 void RegisterBluetoothSerialRawPrintingChannel(
     flutter::BinaryMessenger* messenger);
 
