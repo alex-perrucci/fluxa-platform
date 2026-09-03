@@ -38,12 +38,12 @@ class FiscalReceiptLayoutData {
         unpaidCents: _integer(json, 'unpaidCents'),
         totalVatCents: _integer(json, 'totalVatCents'),
         issuer: FiscalReceiptIssuer.fromJson(_map(json['issuer'])),
-        items: _maps(json['items'])
-            .map(FiscalReceiptItem.fromJson)
-            .toList(growable: false),
-        vatSummaries: _maps(json['vatSummaries'])
-            .map(FiscalReceiptVatSummary.fromJson)
-            .toList(growable: false),
+        items: _maps(
+          json['items'],
+        ).map(FiscalReceiptItem.fromJson).toList(growable: false),
+        vatSummaries: _maps(
+          json['vatSummaries'],
+        ).map(FiscalReceiptVatSummary.fromJson).toList(growable: false),
       );
 
   final String documentId;
@@ -149,10 +149,10 @@ class FiscalReceiptItem {
     if (quantityScale <= 0) return quantityAmount.toString();
     final divisor = _pow10(quantityScale);
     final whole = quantityAmount ~/ divisor;
-    final fraction = (quantityAmount % divisor)
-        .abs()
-        .toString()
-        .padLeft(quantityScale, '0');
+    final fraction = (quantityAmount % divisor).abs().toString().padLeft(
+      quantityScale,
+      '0',
+    );
     return '$whole,$fraction';
   }
 
