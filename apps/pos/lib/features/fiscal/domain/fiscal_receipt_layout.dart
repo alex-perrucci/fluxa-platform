@@ -209,7 +209,9 @@ String _rate(int basisPoints) {
 
 int _pow10(int exponent) {
   var value = 1;
-  for (var i = 0; i < exponent; i += 1) value *= 10;
+  for (var i = 0; i < exponent; i += 1) {
+    value *= 10;
+  }
   return value;
 }
 
