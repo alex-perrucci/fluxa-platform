@@ -26,8 +26,6 @@ abstract interface class FiscalGateway {
 
   Future<FiscalReceiptPdfData> downloadReceiptPdf(String documentId);
 
-  Future<FiscalReceiptLayoutData> downloadReceiptLayout(String documentId);
-
   Future<FiscalDocument> issue({
     required String orderId,
     required String clientRequestId,
@@ -46,6 +44,20 @@ abstract interface class FiscalGateway {
     required int expectedVersion,
     required String reason,
   });
+}
+
+extension FiscalReceiptLayoutGateway on FiscalGateway {
+  Future<FiscalReceiptLayoutData> downloadReceiptLayout(String documentId) {
+    final gateway = this;
+    if (gateway is FiscalApi) {
+      return gateway.downloadReceiptLayout(documentId);
+    }
+    return Future.error(
+      UnsupportedError(
+        'Il gateway fiscale corrente non espone il layout termico.',
+      ),
+    );
+  }
 }
 
 class FiscalApi implements FiscalGateway {
@@ -111,7 +123,6 @@ class FiscalApi implements FiscalGateway {
     }
   }
 
-  @override
   Future<FiscalReceiptLayoutData> downloadReceiptLayout(
     String documentId,
   ) async {
