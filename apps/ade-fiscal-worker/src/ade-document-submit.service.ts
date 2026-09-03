@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { AdeAutomationError } from './ade-automation-error';
 import { AdeAuthService } from './ade-auth.service';
+import { AdeAutomationError } from './ade-automation-error';
+import {
+  AdeDcoFastSubmitService,
+  type AdeFastSubmitConfirmationEvidence,
+} from './ade-dco-fast-submit.service';
 import type {
   AdeDocumentItemInput,
   AdeDocumentPaymentInput,
@@ -21,6 +25,8 @@ const MAX_UNIT_PRICE_CENTS = 100_000_000;
 const MAX_OPERATION_ID_LENGTH = 128;
 const DCO_ENTRY_UNAVAILABLE_MESSAGE =
   'Documento Commerciale on line non disponibile.';
+const DCO_DIRECT_URL =
+  'https://ivaservizi.agenziaentrate.gov.it/ser/documenticommercialionline/';
 
 interface NormalizedSubmitInput {
   operationId: string;
@@ -33,9 +39,15 @@ interface NormalizedSubmitInput {
 export interface AdeDocumentSubmitResult {
   status: 'DOCUMENT_SUBMITTED_CONFIRMED';
   operationId: string;
+  transport: 'BROWSER' | 'HTTP_FAST';
   finalUrl: string;
-  confirmationBoundarySeen: true;
-  confirmationEvidence: AdeSubmitConfirmationEvidence;
+  confirmationBoundarySeen: boolean;
+  confirmationEvidence:
+    | AdeSubmitConfirmationEvidence
+    | AdeFastSubmitConfirmationEvidence;
+  externalId: string | null;
+  documentNumber: string | null;
+  documentDate: string | null;
   itemCount: number;
   grossTotalCents: number;
   paymentTotalCents: number;
@@ -169,6 +181,14 @@ function shouldRefreshSession(error: unknown): boolean {
   );
 }
 
+function canFallbackFromFastPath(error: unknown): boolean {
+  return (
+    error instanceof AdeAutomationError &&
+    !error.submitAttempted &&
+    error.code === 'ADE_DCO_FAST_PATH_UNAVAILABLE'
+  );
+}
+
 @Injectable()
 export class AdeDocumentSubmitService {
   private readonly attemptedOperationIds = new Set<string>();
@@ -177,6 +197,7 @@ export class AdeDocumentSubmitService {
     private readonly config: AdeRuntimeConfigService,
     private readonly session: AdeSessionService,
     private readonly browser: AdeDocumentSubmitBrowserService,
+    private readonly fastSubmit: AdeDcoFastSubmitService,
     private readonly auth: AdeAuthService,
     private readonly operationLock: AdeDocumentOperationLockService,
   ) {}
@@ -225,10 +246,11 @@ export class AdeDocumentSubmitService {
 
     try {
       try {
-        return await this.runBrowser(
+        return await this.runConfiguredTransport(
           entryUrl.toString(),
           input,
           config.navigationTimeoutMs,
+          config.httpFastSubmitEnabled,
         );
       } catch (error) {
         if (error instanceof AdeAutomationError && error.submitAttempted) {
@@ -238,14 +260,35 @@ export class AdeDocumentSubmitService {
         if (!shouldRefreshSession(error)) throw error;
 
         // Exactly one pre-submit auth refresh is allowed. CieID MFA remains an
-        // official manual approval; no refresh/retry is ever attempted after
-        // the irreversible Procedi boundary.
+        // official manual approval. No auth refresh, browser fallback or second
+        // POST is ever attempted after the irreversible HTTP/Procedi boundary.
         await this.auth.refresh(input.fiscalId);
-        return await this.runBrowser(
-          entryUrl.toString(),
-          input,
-          config.navigationTimeoutMs,
-        );
+
+        try {
+          return await this.runConfiguredTransport(
+            entryUrl.toString(),
+            input,
+            config.navigationTimeoutMs,
+            config.httpFastSubmitEnabled,
+          );
+        } catch (retryError) {
+          // If a freshly authenticated storage-state still cannot authenticate
+          // the internal HTTP surface, browser fallback is safe because no POST
+          // has started yet. This also protects us from undocumented API drift.
+          if (
+            config.httpFastSubmitEnabled &&
+            retryError instanceof AdeAutomationError &&
+            retryError.code === 'ADE_SESSION_INVALID' &&
+            !retryError.submitAttempted
+          ) {
+            return await this.runBrowser(
+              entryUrl.toString(),
+              input,
+              config.navigationTimeoutMs,
+            );
+          }
+          throw retryError;
+        }
       }
     } catch (error) {
       if (error instanceof AdeAutomationError && error.submitAttempted) {
@@ -257,14 +300,63 @@ export class AdeDocumentSubmitService {
     }
   }
 
+  private async runConfiguredTransport(
+    entryUrl: string,
+    input: NormalizedSubmitInput,
+    timeoutMs: number,
+    httpFastSubmitEnabled: boolean,
+  ): Promise<AdeDocumentSubmitResult> {
+    if (!httpFastSubmitEnabled) {
+      return this.runBrowser(entryUrl, input, timeoutMs);
+    }
+
+    try {
+      return await this.runHttpFast(input, timeoutMs);
+    } catch (error) {
+      if (!canFallbackFromFastPath(error)) throw error;
+      return this.runBrowser(entryUrl, input, timeoutMs);
+    }
+  }
+
+  private async runHttpFast(
+    input: NormalizedSubmitInput,
+    timeoutMs: number,
+  ): Promise<AdeDocumentSubmitResult> {
+    const storageStatePath = this.session.storageStatePathForUse(input.fiscalId);
+    const result = await this.fastSubmit.submit({
+      storageStatePath,
+      fiscalId: input.fiscalId,
+      items: input.items,
+      payment: input.payment,
+      expectedGrossTotalCents: input.grossTotalCents,
+      timeoutMs,
+    });
+
+    this.rememberAttempt(input.operationId);
+    return {
+      status: 'DOCUMENT_SUBMITTED_CONFIRMED',
+      operationId: input.operationId,
+      transport: 'HTTP_FAST',
+      finalUrl: DCO_DIRECT_URL,
+      confirmationBoundarySeen: false,
+      confirmationEvidence: result.confirmationEvidence,
+      externalId: result.externalId,
+      documentNumber: result.documentNumber,
+      documentDate: result.documentDate,
+      itemCount: input.items.length,
+      grossTotalCents: input.grossTotalCents,
+      paymentTotalCents: input.payment.cashCents + input.payment.electronicCents,
+      submitAttempted: true,
+      canSubmit: false,
+    };
+  }
+
   private async runBrowser(
     entryUrl: string,
     input: NormalizedSubmitInput,
     timeoutMs: number,
   ): Promise<AdeDocumentSubmitResult> {
-    const storageStatePath = this.session.storageStatePathForUse(
-      input.fiscalId,
-    );
+    const storageStatePath = this.session.storageStatePathForUse(input.fiscalId);
     const result = await this.browser.submit({
       entryUrl,
       storageStatePath,
@@ -278,9 +370,13 @@ export class AdeDocumentSubmitService {
     return {
       status: 'DOCUMENT_SUBMITTED_CONFIRMED',
       operationId: input.operationId,
+      transport: 'BROWSER',
       finalUrl: result.finalUrl,
       confirmationBoundarySeen: result.confirmationBoundarySeen,
       confirmationEvidence: result.confirmationEvidence,
+      externalId: null,
+      documentNumber: null,
+      documentDate: null,
       itemCount: result.itemCount,
       grossTotalCents: result.grossTotalCents,
       paymentTotalCents: result.paymentTotalCents,
