@@ -43,8 +43,7 @@ export interface AdeDocumentSubmitResult {
   finalUrl: string;
   confirmationBoundarySeen: boolean;
   confirmationEvidence:
-    | AdeSubmitConfirmationEvidence
-    | AdeFastSubmitConfirmationEvidence;
+    AdeSubmitConfirmationEvidence | AdeFastSubmitConfirmationEvidence;
   externalId: string | null;
   documentNumber: string | null;
   documentDate: string | null;
