@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import type { AuthContext } from '../auth/auth.types';
 import { FiscalDocumentsService } from './fiscal-documents.service';
 import { FiscalReceiptPdfService } from './fiscal-receipt-pdf.service';
@@ -56,12 +57,16 @@ describe('FiscalReceiptPdfService ADE_WEB', () => {
     expect(result.filename).toBe('scontrino-fiscale-DCW2026-3339-6020.pdf');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-    const [url, init] = fetchSpy.mock.calls[0] ?? [];
-    const parsed = new URL(String(url));
-    expect(parsed.origin).toBe('http://ade-fiscal-worker:3010');
-    expect(parsed.pathname).toBe('/internal/document/artifact');
-    expect(parsed.searchParams.get('fiscalId')).toBe('03053300343');
-    expect(parsed.searchParams.get('externalId')).toBe('233367613');
+    const call = fetchSpy.mock.calls[0];
+    expect(call).toBeDefined();
+    const url = call?.[0];
+    const init = call?.[1];
+    expect(url).toBeInstanceOf(URL);
+    if (!(url instanceof URL)) throw new Error('Expected worker URL instance.');
+    expect(url.origin).toBe('http://ade-fiscal-worker:3010');
+    expect(url.pathname).toBe('/internal/document/artifact');
+    expect(url.searchParams.get('fiscalId')).toBe('03053300343');
+    expect(url.searchParams.get('externalId')).toBe('233367613');
     expect(init?.headers).toMatchObject({
       Accept: 'application/pdf',
       'x-fluxa-internal-token': 'x'.repeat(32),
@@ -71,17 +76,24 @@ describe('FiscalReceiptPdfService ADE_WEB', () => {
   it('refuses a synthetic ADE_WEB correlation instead of querying AdE', async () => {
     process.env.ADE_WORKER_INTERNAL_TOKEN = 'x'.repeat(32);
 
-    const get = jest.fn().mockResolvedValue(
-      document({ externalId: 'ADE-WEB:doc-1' }),
-    );
+    const get = jest
+      .fn()
+      .mockResolvedValue(document({ externalId: 'ADE-WEB:doc-1' }));
     const fetchSpy = jest.spyOn(global, 'fetch');
     const service = new FiscalReceiptPdfService({
       get,
     } as unknown as FiscalDocumentsService);
 
-    await expect(service.download(AUTH, 'doc-1')).rejects.toMatchObject({
-      response: expect.objectContaining({ code: 'ADE_RECEIPT_PDF_ID_INVALID' }),
-    });
+    try {
+      await service.download(AUTH, 'doc-1');
+      throw new Error('Expected ADE PDF validation to fail.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConflictException);
+      if (!(error instanceof ConflictException)) throw error;
+      expect(error.getResponse()).toMatchObject({
+        code: 'ADE_RECEIPT_PDF_ID_INVALID',
+      });
+    }
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
