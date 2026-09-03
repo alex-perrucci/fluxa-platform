@@ -2,15 +2,17 @@ import type { BrowserContext, Page } from 'playwright';
 import { AdeReusableBrowserSessionPool } from './ade-reusable-browser-session-pool';
 
 function fakeSession() {
+  const pageClose = jest.fn().mockResolvedValue(undefined);
+  const contextClose = jest.fn().mockResolvedValue(undefined);
   const page = {
     isClosed: jest.fn().mockReturnValue(false),
-    close: jest.fn().mockResolvedValue(undefined),
+    close: pageClose,
   } as unknown as Page;
   const context = {
     newPage: jest.fn(),
-    close: jest.fn().mockResolvedValue(undefined),
+    close: contextClose,
   } as unknown as BrowserContext;
-  return { context, page };
+  return { context, page, pageClose, contextClose };
 }
 
 describe('AdeReusableBrowserSessionPool', () => {
@@ -48,9 +50,9 @@ describe('AdeReusableBrowserSessionPool', () => {
       create: jest.fn().mockResolvedValue(second),
     });
 
-    expect(first.page.close).toHaveBeenCalledTimes(1);
-    expect(first.context.close).toHaveBeenCalledTimes(1);
-    expect(other.page.close).not.toHaveBeenCalled();
+    expect(first.pageClose).toHaveBeenCalledTimes(1);
+    expect(first.contextClose).toHaveBeenCalledTimes(1);
+    expect(other.pageClose).not.toHaveBeenCalled();
     expect(pool.size).toBe(2);
   });
 
@@ -81,8 +83,8 @@ describe('AdeReusableBrowserSessionPool', () => {
       create: jest.fn().mockResolvedValue(third),
     });
 
-    expect(second.page.close).toHaveBeenCalledTimes(1);
-    expect(first.page.close).not.toHaveBeenCalled();
+    expect(second.pageClose).toHaveBeenCalledTimes(1);
+    expect(first.pageClose).not.toHaveBeenCalled();
     expect(pool.size).toBe(2);
   });
 });
