@@ -485,7 +485,9 @@ export class AdeDocumentSubmitBrowserService
   ): Promise<void> {
     try {
       const target = locator.first();
-      await guard.race(target.waitFor({ state: 'visible', timeout: timeoutMs }));
+      await guard.race(
+        target.waitFor({ state: 'visible', timeout: timeoutMs }),
+      );
       guard.throwIfFailed();
       await target.click();
       guard.throwIfFailed();
