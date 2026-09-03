@@ -113,10 +113,7 @@ function httpMock(options?: {
 }
 
 function service(client: AdeDcoHttpClient) {
-  return new AdeDcoFastSubmitService(
-    client,
-    new AdeFastSubmitMetricsService(),
-  );
+  return new AdeDcoFastSubmitService(client, new AdeFastSubmitMetricsService());
 }
 
 describe('AdeDcoFastSubmitService', () => {
