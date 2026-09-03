@@ -68,8 +68,7 @@ class PrinterSetupApi {
   }
 }
 
-int charactersPerLineForPaper(int paperWidthMm) =>
-    paperWidthMm <= 58 ? 32 : 48;
+int charactersPerLineForPaper(int paperWidthMm) => paperWidthMm <= 58 ? 32 : 48;
 
 int _normalizePaperWidth(int paperWidthMm) {
   if (paperWidthMm == 58 || paperWidthMm == 80) return paperWidthMm;
