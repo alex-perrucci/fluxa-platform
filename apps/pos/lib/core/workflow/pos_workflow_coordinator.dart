@@ -408,18 +408,23 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   }
 
   Future<void> _printOfficialReceipt(FiscalDocument document) async {
-    final providerHasOfficialPdf =
+    final supportedProvider =
         document.provider == FiscalProvider.openapiSmartReceipts ||
         document.provider == FiscalProvider.adeWeb;
-    if (!providerHasOfficialPdf ||
+    if (!supportedProvider ||
         !fiscalReceiptPdfActionsSupported ||
         !_printingDocuments.add(document.id)) {
       return;
     }
 
     try {
-      final pdf = await _fiscalGateway.downloadReceiptPdf(document.id);
-      await printFiscalReceiptPdf(pdf.bytes, pdf.filename);
+      if (document.provider == FiscalProvider.adeWeb) {
+        final fullDocument = await _fiscalGateway.getDocument(document.id);
+        await printFiscalReceiptDocument(fullDocument);
+      } else {
+        final pdf = await _fiscalGateway.downloadReceiptPdf(document.id);
+        await printFiscalReceiptPdf(pdf.bytes, pdf.filename);
+      }
     } catch (_) {
       _setAttention(
         document.provider == FiscalProvider.adeWeb
