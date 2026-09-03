@@ -8,6 +8,7 @@ const DCO_ORIGIN = 'https://ivaservizi.agenziaentrate.gov.it';
 const DCO_ROOT_PATH = '/ser/documenticommercialionline/';
 const DCO_DOCUMENTS_PATH = '/ser/api/documenti/v1/doc/documenti/';
 const ALLOWED_READ_PREFIXES = ['/ser/api/', '/common/'] as const;
+const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 
 interface ReusableApiContext {
   fingerprint: string;
@@ -31,8 +32,15 @@ export interface AdeDcoHttpSubmitResult {
   status: number;
   path: typeof DCO_DOCUMENTS_PATH;
   contentType: string;
+  responseDate: string | null;
   body: unknown;
   submitAttempted: true;
+}
+
+export interface AdeDcoOfficialArtifactResult {
+  status: number;
+  contentType: string;
+  bytes: Buffer;
 }
 
 export function validateAdeDcoReadPath(rawPath: string): string {
@@ -76,6 +84,19 @@ export function validateAdeDcoReadPath(rawPath: string): string {
   }
 
   return `${url.pathname}${url.search}`;
+}
+
+function validateArtifactId(raw: string): string {
+  const value = raw.trim();
+  if (!/^\d{1,32}$/.test(value)) {
+    throw new AdeAutomationError(
+      'Identificativo documento AdE non valido.',
+      'ADE_ARTIFACT_INPUT_INVALID',
+      'CONFIGURATION',
+      false,
+    );
+  }
+  return value;
 }
 
 @Injectable()
@@ -208,8 +229,101 @@ export class AdeDcoHttpClient implements OnApplicationShutdown {
       status: response.status(),
       path: DCO_DOCUMENTS_PATH,
       contentType: response.headers()['content-type'] ?? '',
+      responseDate: response.headers().date ?? null,
       body: await this.readOptionalJson(response),
       submitAttempted: true,
+    };
+  }
+
+  async getOfficialArtifact(input: {
+    storageStatePath: string;
+    externalId: string;
+    timeoutMs: number;
+  }): Promise<AdeDcoOfficialArtifactResult> {
+    const externalId = validateArtifactId(input.externalId);
+    const path = `${DCO_DOCUMENTS_PATH}${externalId}/stampa/`;
+    const context = await this.contextForSession(input.storageStatePath);
+
+    let response: APIResponse;
+    try {
+      response = await context.get(`${DCO_ORIGIN}${path}`, {
+        timeout: input.timeoutMs,
+        failOnStatusCode: false,
+        headers: {
+          Accept: 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.8',
+          Referer: `${DCO_ORIGIN}${DCO_ROOT_PATH}`,
+        },
+      });
+    } catch (error) {
+      throw this.navigationError(
+        error,
+        'Recupero documento commerciale AdE non riuscito.',
+      );
+    }
+
+    const status = response.status();
+    if (status === 401 || status === 403) {
+      await this.reset(input.storageStatePath);
+      throw new AdeAutomationError(
+        `Sessione Agenzia delle Entrate non valida per il documento ufficiale (HTTP ${status}).`,
+        'ADE_SESSION_INVALID',
+        'AUTH_REQUIRED',
+        false,
+      );
+    }
+    if (status === 404) {
+      throw new AdeAutomationError(
+        'Documento commerciale ufficiale non trovato su AdE.',
+        'ADE_ARTIFACT_NOT_FOUND',
+        'NAVIGATION',
+        false,
+      );
+    }
+    if (status >= 500 && status <= 599) {
+      throw new AdeAutomationError(
+        `Servizio DCO non disponibile durante il recupero del documento (HTTP ${status}).`,
+        'ADE_UPSTREAM_UNAVAILABLE',
+        'NAVIGATION',
+        true,
+      );
+    }
+    if (!response.ok()) {
+      throw new AdeAutomationError(
+        `Recupero documento commerciale ufficiale fallito con HTTP ${status}.`,
+        'ADE_ARTIFACT_UNAVAILABLE',
+        'NAVIGATION',
+        true,
+      );
+    }
+
+    const declaredLength = Number(response.headers()['content-length'] ?? 0);
+    if (declaredLength > MAX_ARTIFACT_BYTES) {
+      throw new AdeAutomationError(
+        'Documento commerciale ufficiale troppo grande.',
+        'ADE_ARTIFACT_INVALID',
+        'NAVIGATION',
+        false,
+      );
+    }
+
+    const bytes = Buffer.from(await response.body());
+    if (
+      bytes.length === 0 ||
+      bytes.length > MAX_ARTIFACT_BYTES ||
+      bytes.subarray(0, 5).toString('ascii') !== '%PDF-'
+    ) {
+      throw new AdeAutomationError(
+        'AdE non ha restituito un PDF ufficiale valido.',
+        'ADE_ARTIFACT_INVALID',
+        'NAVIGATION',
+        false,
+      );
+    }
+
+    return {
+      status,
+      contentType: response.headers()['content-type'] ?? 'application/pdf',
+      bytes,
     };
   }
 
