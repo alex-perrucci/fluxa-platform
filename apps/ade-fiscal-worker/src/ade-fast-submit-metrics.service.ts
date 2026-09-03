@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 
 const METRICS_WINDOW_SIZE = 200;
 
-export type AdeFastSubmitMetricOutcome = 'SUCCESS' | 'REJECTED' | 'UNKNOWN' | 'FAILED_PRE_SUBMIT';
+export type AdeFastSubmitMetricOutcome =
+  | 'SUCCESS'
+  | 'REJECTED'
+  | 'UNKNOWN'
+  | 'FAILED_PRE_SUBMIT';
 
 export interface AdeFastSubmitMetricsSnapshot {
   sampleCount: number;
