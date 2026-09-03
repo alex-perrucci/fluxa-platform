@@ -166,16 +166,6 @@ class PosWorkflowCoordinator extends ChangeNotifier {
         return;
       }
 
-      final completedCheckoutId =
-          checkoutId ?? _completedCheckoutIdForOrder(orderId);
-      if (completedCheckoutId != null) {
-        await _enqueueAutomaticPaymentReceipt(completedCheckoutId);
-      } else {
-        _setAttention(
-          'Pagamento completato, ma il checkout concluso non è disponibile per la stampa automatica. La ristampa manuale resta disponibile.',
-        );
-      }
-
       if (order.header.serviceMode == OrderServiceMode.table) {
         await _closeTableWhenPossible(locationId, orderId);
       }
@@ -184,13 +174,32 @@ class PosWorkflowCoordinator extends ChangeNotifier {
         orderId: orderId,
       );
 
+      final usesOfficialAdeReceipt =
+          _fiscal.runtime?.provider == FiscalProvider.adeWeb;
+      if (!usesOfficialAdeReceipt) {
+        final completedCheckoutId =
+            checkoutId ?? _completedCheckoutIdForOrder(orderId);
+        if (completedCheckoutId != null) {
+          await _enqueueAutomaticPaymentReceipt(completedCheckoutId);
+        } else {
+          _setAttention(
+            'Pagamento completato, ma il checkout concluso non è disponibile per la stampa automatica. La ristampa manuale resta disponibile.',
+          );
+        }
+      }
+
       if (document != null) {
         unawaited(_finishFiscalReceiptInBackground(locationId, orderId));
       }
 
       unawaited(_refreshAfterSale(locationId));
       if (_status != PosWorkflowStatus.attention) {
-        _setStatus(PosWorkflowStatus.ready, 'Vendita completata.');
+        _setStatus(
+          PosWorkflowStatus.ready,
+          usesOfficialAdeReceipt
+              ? 'Vendita completata. Stampa del documento fiscale AdE in corso.'
+              : 'Vendita completata.',
+        );
       }
     } catch (_) {
       _setAttention(
@@ -399,7 +408,10 @@ class PosWorkflowCoordinator extends ChangeNotifier {
   }
 
   Future<void> _printOfficialReceipt(FiscalDocument document) async {
-    if (document.provider != FiscalProvider.openapiSmartReceipts ||
+    final providerHasOfficialPdf =
+        document.provider == FiscalProvider.openapiSmartReceipts ||
+        document.provider == FiscalProvider.adeWeb;
+    if (!providerHasOfficialPdf ||
         !fiscalReceiptPdfActionsSupported ||
         !_printingDocuments.add(document.id)) {
       return;
@@ -410,7 +422,9 @@ class PosWorkflowCoordinator extends ChangeNotifier {
       await printFiscalReceiptPdf(pdf.bytes, pdf.filename);
     } catch (_) {
       _setAttention(
-        'Scontrino fiscale emesso, ma la stampa automatica non è riuscita.',
+        document.provider == FiscalProvider.adeWeb
+            ? 'Documento fiscale AdE emesso, ma la stampa automatica non è riuscita.'
+            : 'Scontrino fiscale emesso, ma la stampa automatica non è riuscita.',
       );
     } finally {
       _printingDocuments.remove(document.id);
