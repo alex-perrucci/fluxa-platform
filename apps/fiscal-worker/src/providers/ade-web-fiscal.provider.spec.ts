@@ -80,12 +80,13 @@ describe('AdeWebFiscalProvider', () => {
     });
   });
 
-  it('returns issued only after the worker confirms post-submit evidence', async () => {
+  it('keeps the Fluxa correlation for confirmed browser submissions', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({
           status: 'DOCUMENT_SUBMITTED_CONFIRMED',
           operationId: documentId,
+          transport: 'BROWSER',
           confirmationEvidence: 'PDF_ACTION',
           finalUrl:
             'https://ivaservizi.agenziaentrate.gov.it/ser/documenticommercialionline/',
@@ -98,8 +99,46 @@ describe('AdeWebFiscalProvider', () => {
     const result = await new AdeWebFiscalProvider().execute(input());
     expect(result.externalStatus).toBe('issued');
     expect(result.externalId).toBe(`ADE-WEB:${documentId}`);
+    expect(result.documentNumber).toBeNull();
     expect(result.response).toMatchObject({
+      transport: 'BROWSER',
+      externalIdKind: 'fluxa-correlation',
       confirmationEvidence: 'PDF_ACTION',
+      submitAttempted: true,
+    });
+  });
+
+  it('persists real idtrx, progressivo and date from a reconciled HTTP fast submit', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'DOCUMENT_SUBMITTED_CONFIRMED',
+          operationId: documentId,
+          transport: 'HTTP_FAST',
+          confirmationEvidence: 'HTTP_RECONCILED',
+          externalId: 'ade-idtrx-123',
+          documentNumber: '00000123',
+          documentDate: '2026-09-03',
+          submitAttempted: true,
+        }),
+        { status: 201, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const result = await new AdeWebFiscalProvider().execute(input());
+
+    expect(result).toMatchObject({
+      externalId: 'ade-idtrx-123',
+      externalStatus: 'issued',
+      documentNumber: '00000123',
+      documentDate: '2026-09-03',
+    });
+    expect(result.response).toMatchObject({
+      transport: 'HTTP_FAST',
+      externalIdKind: 'ade-idtrx',
+      confirmationEvidence: 'HTTP_RECONCILED',
+      documentNumber: '00000123',
+      documentDate: '2026-09-03',
       submitAttempted: true,
     });
   });
@@ -129,7 +168,7 @@ describe('AdeWebFiscalProvider', () => {
     });
   });
 
-  it('turns a post-Procedi worker error into terminal UNKNOWN', async () => {
+  it('turns a post-submit worker ambiguity into terminal UNKNOWN', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({
