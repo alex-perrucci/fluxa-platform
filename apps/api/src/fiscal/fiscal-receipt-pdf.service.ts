@@ -217,7 +217,10 @@ export class FiscalReceiptPdfService {
     return this.validPdf(response, 'OpenAPI');
   }
 
-  private async validPdf(response: Response, provider: string): Promise<Buffer> {
+  private async validPdf(
+    response: Response,
+    provider: string,
+  ): Promise<Buffer> {
     const declaredLength = Number(response.headers.get('content-length') ?? 0);
     if (declaredLength > MAX_PDF_BYTES) {
       throw new BadGatewayException({
