@@ -151,6 +151,63 @@ describe('AdeDocumentSubmitService', () => {
     expect(result.status).toBe('DOCUMENT_SUBMITTED_CONFIRMED');
   });
 
+  it('refreshes a fail-fast invalid session exactly once before submit', async () => {
+    const submit = jest
+      .fn()
+      .mockRejectedValueOnce(
+        new AdeAutomationError(
+          'Bootstrap DCO non autorizzato.',
+          'ADE_SESSION_INVALID',
+          'AUTH_REQUIRED',
+          false,
+        ),
+      )
+      .mockResolvedValueOnce(BROWSER_SUCCESS);
+    const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
+    const refresh = jest.fn().mockResolvedValue({
+      status: 'SESSION_READY',
+      finalUrl: 'https://example.invalid/ade',
+      sessionSaved: true,
+    });
+    const auth = { refresh } as unknown as AdeAuthService;
+
+    const result = await serviceWithDependencies({ browser, auth }).run(
+      DOCUMENT_INPUT,
+    );
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledWith(DOCUMENT_INPUT.fiscalId);
+    expect(submit).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe('DOCUMENT_SUBMITTED_CONFIRMED');
+  });
+
+  it('does not refresh or retry when the DCO upstream is unavailable', async () => {
+    const submit = jest
+      .fn()
+      .mockRejectedValue(
+        new AdeAutomationError(
+          'Servizio DCO non disponibile.',
+          'ADE_UPSTREAM_UNAVAILABLE',
+          'NAVIGATION',
+          true,
+        ),
+      );
+    const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
+    const refresh = jest.fn();
+    const auth = { refresh } as unknown as AdeAuthService;
+
+    await expect(
+      serviceWithDependencies({ browser, auth }).run(DOCUMENT_INPUT),
+    ).rejects.toMatchObject({
+      code: 'ADE_UPSTREAM_UNAVAILABLE',
+      retrySafe: true,
+      submitAttempted: false,
+    });
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
   it('never refreshes or retries an ambiguous error after Procedi', async () => {
     const submit = jest
       .fn()
