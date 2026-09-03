@@ -1,5 +1,6 @@
 import { AdeAuthService } from './ade-auth.service';
 import { AdeAutomationError } from './ade-automation-error';
+import { AdeDocumentOperationLockService } from './ade-document-operation-lock.service';
 import { AdeDocumentSubmitBrowserService } from './ade-document-submit-browser.service';
 import { AdeDocumentSubmitService } from './ade-document-submit.service';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
@@ -33,6 +34,7 @@ function serviceWithDependencies(options: {
   browser: AdeDocumentSubmitBrowserService;
   auth?: AdeAuthService;
   session?: AdeSessionService;
+  operationLock?: AdeDocumentOperationLockService;
   submitEnabled?: boolean;
 }): AdeDocumentSubmitService {
   const config = {
@@ -58,8 +60,16 @@ function serviceWithDependencies(options: {
           sessionSaved: true as const,
         }),
     } as unknown as AdeAuthService);
+  const operationLock =
+    options.operationLock ?? new AdeDocumentOperationLockService();
 
-  return new AdeDocumentSubmitService(config, session, options.browser, auth);
+  return new AdeDocumentSubmitService(
+    config,
+    session,
+    options.browser,
+    auth,
+    operationLock,
+  );
 }
 
 describe('AdeDocumentSubmitService', () => {
@@ -92,6 +102,23 @@ describe('AdeDocumentSubmitService', () => {
     expect(storageStatePathForUse).toHaveBeenCalledWith(
       DOCUMENT_INPUT.fiscalId,
     );
+  });
+
+  it('acquires the operation lock with the fiscal id', async () => {
+    const submit = jest.fn().mockResolvedValue(BROWSER_SUCCESS);
+    const browser = { submit } as unknown as AdeDocumentSubmitBrowserService;
+    const release = jest.fn();
+    const tryAcquire = jest.fn().mockReturnValue(release);
+    const operationLock = {
+      tryAcquire,
+    } as unknown as AdeDocumentOperationLockService;
+
+    await serviceWithDependencies({ browser, operationLock }).run(
+      DOCUMENT_INPUT,
+    );
+
+    expect(tryAcquire).toHaveBeenCalledWith(DOCUMENT_INPUT.fiscalId);
+    expect(release).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes one expired session only before Procedi for the same fiscal id', async () => {
