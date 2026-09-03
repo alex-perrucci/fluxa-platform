@@ -42,9 +42,7 @@ export interface AdeDocumentSubmitResult {
   transport: 'BROWSER' | 'HTTP_FAST';
   finalUrl: string;
   confirmationBoundarySeen: boolean;
-  confirmationEvidence:
-    | AdeSubmitConfirmationEvidence
-    | AdeFastSubmitConfirmationEvidence;
+  confirmationEvidence: AdeSubmitConfirmationEvidence | AdeFastSubmitConfirmationEvidence;
   externalId: string | null;
   documentNumber: string | null;
   documentDate: string | null;
@@ -185,7 +183,8 @@ function canFallbackFromFastPath(error: unknown): boolean {
   return (
     error instanceof AdeAutomationError &&
     !error.submitAttempted &&
-    error.code === 'ADE_DCO_FAST_PATH_UNAVAILABLE'
+    (error.code === 'ADE_DCO_FAST_PATH_UNAVAILABLE' ||
+      error.code === 'ADE_NAVIGATION_FAILED')
   );
 }
 
@@ -322,7 +321,9 @@ export class AdeDocumentSubmitService {
     input: NormalizedSubmitInput,
     timeoutMs: number,
   ): Promise<AdeDocumentSubmitResult> {
-    const storageStatePath = this.session.storageStatePathForUse(input.fiscalId);
+    const storageStatePath = this.session.storageStatePathForUse(
+      input.fiscalId,
+    );
     const result = await this.fastSubmit.submit({
       storageStatePath,
       fiscalId: input.fiscalId,
@@ -345,7 +346,8 @@ export class AdeDocumentSubmitService {
       documentDate: result.documentDate,
       itemCount: input.items.length,
       grossTotalCents: input.grossTotalCents,
-      paymentTotalCents: input.payment.cashCents + input.payment.electronicCents,
+      paymentTotalCents:
+        input.payment.cashCents + input.payment.electronicCents,
       submitAttempted: true,
       canSubmit: false,
     };
@@ -356,7 +358,9 @@ export class AdeDocumentSubmitService {
     input: NormalizedSubmitInput,
     timeoutMs: number,
   ): Promise<AdeDocumentSubmitResult> {
-    const storageStatePath = this.session.storageStatePathForUse(input.fiscalId);
+    const storageStatePath = this.session.storageStatePathForUse(
+      input.fiscalId,
+    );
     const result = await this.browser.submit({
       entryUrl,
       storageStatePath,
