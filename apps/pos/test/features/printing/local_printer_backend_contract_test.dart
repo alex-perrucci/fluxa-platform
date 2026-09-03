@@ -11,10 +11,16 @@ void main() {
     expect(target, 'bluetooth_serial|COM6|BlueTooth Printer');
     expect(isBluetoothPrinterTarget(target), isTrue);
     expect(isBluetoothSerialPrinterTarget(target), isTrue);
-    expect(
-      localPrinterTargetLabel(target),
-      'BlueTooth Printer · Bluetooth seriale (COM6)',
+    expect(localPrinterTargetLabel(target), 'BlueTooth Printer · COM6');
+  });
+
+  test('collapses generic Windows Bluetooth serial names', () {
+    final target = buildBluetoothSerialPrinterTarget(
+      port: 'COM6',
+      name: 'Collegamento standard seriale su Bluetooth (COM6)',
     );
+
+    expect(localPrinterTargetLabel(target), 'Bluetooth · COM6');
   });
 
   test('keeps classic Bluetooth and Wi-Fi target compatibility', () {
