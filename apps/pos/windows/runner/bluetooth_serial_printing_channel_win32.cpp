@@ -1,6 +1,7 @@
 #include "bluetooth_serial_printing_channel_win32.h"
 
 #include <windows.h>
+#include <devguid.h>
 #include <setupapi.h>
 
 #include <flutter/method_channel.h>
@@ -73,9 +74,10 @@ std::wstring ReadDeviceInstanceId(HDEVINFO devices, SP_DEVINFO_DATA* info) {
   }
   wchar_t buffer[1024]{};
   DWORD required_size = 0;
-  if (!SetupDiGetDeviceInstanceIdW(devices, info, buffer,
-                                   static_cast<DWORD>(std::size(buffer)),
-                                   &required_size)) {
+  if (!SetupDiGetDeviceInstanceIdW(
+          devices, info, buffer,
+          static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0])),
+          &required_size)) {
     return {};
   }
   return std::wstring(buffer);
@@ -544,9 +546,9 @@ void RegisterBluetoothSerialPrintingChannel(flutter::BinaryMessenger* messenger)
     return;
   }
 
-  auto channel = std::make_unique<flutter::MethodChannel<>>(
+  flutter::MethodChannel<> channel(
       messenger, kChannelName, &flutter::StandardMethodCodec::GetInstance());
-  channel->SetMethodCallHandler(
+  channel.SetMethodCallHandler(
       [](const flutter::MethodCall<>& call,
          std::unique_ptr<flutter::MethodResult<>> result) {
         if (call.method_name() == "listBluetoothSerialPrinters") {
@@ -571,5 +573,4 @@ void RegisterBluetoothSerialPrintingChannel(flutter::BinaryMessenger* messenger)
 
         result->NotImplemented();
       });
-  channel.release();
 }
