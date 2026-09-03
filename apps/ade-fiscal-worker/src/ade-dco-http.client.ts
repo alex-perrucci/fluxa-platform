@@ -21,7 +21,11 @@ export interface AdeDcoHttpReadResult<T = unknown> {
 
 export function validateAdeDcoReadPath(rawPath: string): string {
   const value = rawPath.trim();
-  if (!value.startsWith('/') || value.startsWith('//') || value.includes('://')) {
+  if (
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes('://')
+  ) {
     throw new AdeAutomationError(
       'Percorso DCO read-only non valido.',
       'ADE_CONFIGURATION_INVALID',
