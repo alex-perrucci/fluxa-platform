@@ -13,6 +13,9 @@ class FiscalReceiptThermalPrinter {
   static const _channel = MethodChannel(
     'it.fluxa.fluxa_pos/fiscal_receipt_printing',
   );
+  static const _serialRawChannel = MethodChannel(
+    'it.fluxa.fluxa_pos/bluetooth_serial_raw_printing',
+  );
   static const _rasterDpi = 203.0;
   static const _maxPages = 8;
 
@@ -94,8 +97,21 @@ class FiscalReceiptThermalPrinter {
 
   Future<void> _sendRaw(String queueName, Uint8List payload) async {
     final parts = queueName.split('|');
-    final arguments = <String, Object?>{'bytes': payload, 'copies': 1};
 
+    if (parts.length >= 3 && parts.first == 'bluetooth_serial') {
+      final port = parts[1].trim().toUpperCase();
+      if (!RegExp(r'^COM\d+$').hasMatch(port)) {
+        throw const FormatException('Porta Bluetooth seriale non valida.');
+      }
+      await _serialRawChannel.invokeMethod<void>('printRaw', {
+        'port': port,
+        'bytes': payload,
+        'copies': 1,
+      });
+      return;
+    }
+
+    final arguments = <String, Object?>{'bytes': payload, 'copies': 1};
     if (parts.length >= 3 && parts.first == 'bluetooth') {
       final address = parts[1].trim();
       if (address.isEmpty) {
