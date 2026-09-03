@@ -92,12 +92,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          dart format . 2>&1 | tee ci-logs/dart-format.log
-          if ! git diff --exit-code; then
-            echo 'Dart formatter produced the following diff:'
-            git diff
-            exit 1
-          fi
+          dart format --output=none --set-exit-if-changed . 2>&1 |
+            tee ci-logs/dart-format.log
       - name: Analyze Flutter application
         shell: bash
         run: |
