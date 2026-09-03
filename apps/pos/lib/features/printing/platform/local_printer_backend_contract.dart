@@ -12,7 +12,11 @@ abstract interface class LocalPrinterBackend {
 }
 
 bool isBluetoothPrinterTarget(String? value) =>
-    value != null && value.startsWith('bluetooth|');
+    value != null &&
+    (value.startsWith('bluetooth|') || value.startsWith('bluetooth_serial|'));
+
+bool isBluetoothSerialPrinterTarget(String? value) =>
+    value != null && value.startsWith('bluetooth_serial|');
 
 bool isWifiPrinterTarget(String? value) =>
     value != null && value.startsWith('wifi|');
@@ -22,6 +26,11 @@ String buildBluetoothPrinterTarget({
   required String name,
 }) => 'bluetooth|${address.trim()}|${name.trim()}';
 
+String buildBluetoothSerialPrinterTarget({
+  required String port,
+  required String name,
+}) => 'bluetooth_serial|${port.trim().toUpperCase()}|${name.trim()}';
+
 String buildWifiPrinterTarget({required String host, required int port}) =>
     'wifi|${host.trim()}|$port';
 
@@ -30,6 +39,12 @@ String localPrinterTargetLabel(String? value) {
     return 'Non configurata';
   }
   final parts = value.split('|');
+  if (parts.length >= 3 && parts.first == 'bluetooth_serial') {
+    final port = parts[1].trim().toUpperCase();
+    final name = parts.sublist(2).join('|').trim();
+    final deviceName = name.isEmpty ? 'Stampante Bluetooth' : name;
+    return '$deviceName · Bluetooth seriale ($port)';
+  }
   if (parts.length >= 3 && parts.first == 'bluetooth') {
     final name = parts.sublist(2).join('|').trim();
     return name.isEmpty ? 'Bluetooth ${parts[1]}' : '$name · Bluetooth';
