@@ -12,8 +12,7 @@ const FISCAL_DATA_PATH = '/ser/api/documenti/v1/doc/documenti/dati/fiscali';
 const LAST_DOCUMENT_PATH = '/ser/api/documenti/v1/doc/documenti/ultimo/';
 
 export type AdeFastSubmitConfirmationEvidence =
-  | 'HTTP_RESPONSE'
-  | 'HTTP_RECONCILED';
+  'HTTP_RESPONSE' | 'HTTP_RECONCILED';
 
 export interface AdeDcoFastSubmitResult {
   confirmationEvidence: AdeFastSubmitConfirmationEvidence;
