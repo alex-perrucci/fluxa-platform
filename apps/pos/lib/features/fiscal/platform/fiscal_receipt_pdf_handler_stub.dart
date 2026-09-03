@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
+import '../domain/fiscal_receipt_layout.dart';
+
 bool get fiscalReceiptPdfActionsSupported => false;
 
 typedef FiscalReceiptPrinter =
-    Future<String> Function(Uint8List bytes, String filename);
+    Future<String> Function(FiscalReceiptLayoutData receipt);
 
 void configureFiscalReceiptPrinter(FiscalReceiptPrinter? printer) {}
 
@@ -17,9 +19,9 @@ Future<String> saveFiscalReceiptPdf(Uint8List bytes, String filename) =>
       UnsupportedError('PDF fiscale non supportato su questa piattaforma.'),
     );
 
-Future<String> printFiscalReceiptPdf(Uint8List bytes, String filename) =>
+Future<String> printFiscalReceiptLayout(FiscalReceiptLayoutData receipt) =>
     Future.error(
       UnsupportedError(
-        'Stampa PDF fiscale non supportata su questa piattaforma.',
+        'Stampa del documento fiscale non supportata su questa piattaforma.',
       ),
     );
