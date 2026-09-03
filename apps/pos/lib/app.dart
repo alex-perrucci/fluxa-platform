@@ -68,9 +68,9 @@ class _FluxaAppState extends ConsumerState<FluxaApp> {
           deviceId: session.device.id,
         );
         configureFiscalReceiptPrinter(
-          (bytes, filename) => _fiscalReceiptPrinter.print(
+          (receipt) => _fiscalReceiptPrinter.print(
             printing: controller,
-            pdfBytes: bytes,
+            receipt: receipt,
           ),
         );
       }
