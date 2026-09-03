@@ -41,9 +41,8 @@ String localPrinterTargetLabel(String? value) {
   final parts = value.split('|');
   if (parts.length >= 3 && parts.first == 'bluetooth_serial') {
     final port = parts[1].trim().toUpperCase();
-    final name = parts.sublist(2).join('|').trim();
-    final deviceName = name.isEmpty ? 'Stampante Bluetooth' : name;
-    return '$deviceName · Bluetooth seriale ($port)';
+    final name = _compactBluetoothSerialName(parts.sublist(2).join('|'), port);
+    return name == null ? 'Bluetooth · $port' : '$name · $port';
   }
   if (parts.length >= 3 && parts.first == 'bluetooth') {
     final name = parts.sublist(2).join('|').trim();
@@ -53,4 +52,25 @@ String localPrinterTargetLabel(String? value) {
     return '${parts[1]}:${parts[2]} · Wi-Fi';
   }
   return 'Configurazione non valida';
+}
+
+String? _compactBluetoothSerialName(String rawName, String port) {
+  var name = rawName.trim();
+  if (name.isEmpty) return null;
+  name = name.replaceAll(
+    RegExp('\\s*\\(${RegExp.escape(port)}\\)\\s*\$', caseSensitive: false),
+    '',
+  );
+  final lower = name.toLowerCase();
+  const genericNames = [
+    'collegamento standard seriale su bluetooth',
+    'standard serial over bluetooth link',
+    'bluetooth serial port',
+    'serial over bluetooth',
+  ];
+  if (genericNames.any(lower.contains)) return null;
+  if (name.length > 28) {
+    return '${name.substring(0, 25).trimRight()}…';
+  }
+  return name;
 }
