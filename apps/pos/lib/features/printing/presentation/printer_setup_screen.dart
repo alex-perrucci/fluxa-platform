@@ -134,6 +134,7 @@ class _PrinterSetupScreenState extends ConsumerState<PrinterSetupScreen> {
                 agentDeviceId: session.device.id,
                 notice: 'Stampante assegnata a questo POS.',
               ),
+              onConfigure: () => _configurePrinter(printer),
               onToggle: () => _updatePrinter(
                 printer,
                 status: printer.status == PrinterStatus.active
@@ -172,9 +173,25 @@ class _PrinterSetupScreenState extends ConsumerState<PrinterSetupScreen> {
             code: values.code,
             name: values.name,
             purpose: values.purpose,
+            paperWidthMm: values.paperWidthMm,
           );
       await ref.read(printingControllerProvider).refresh();
     }, 'Stampante creata. Ora completa Wi-Fi/Bluetooth nella sezione Stampa.');
+  }
+
+  Future<void> _configurePrinter(PrinterDevice printer) async {
+    final values = await _showPrinterConfigurationDialog(context, printer);
+    if (values == null) return;
+    await _run(() async {
+      await ref
+          .read(printerSetupApiProvider)
+          .update(
+            printer.id,
+            paperWidthMm: values.paperWidthMm,
+            supportsCut: values.supportsCut,
+          );
+      await ref.read(printingControllerProvider).refresh();
+    }, 'Formato stampante aggiornato a ${values.paperWidthMm} mm.');
   }
 
   Future<void> _updatePrinter(
@@ -218,6 +235,7 @@ class _PrinterCard extends StatelessWidget {
     required this.currentDeviceId,
     required this.busy,
     required this.onAssign,
+    required this.onConfigure,
     required this.onToggle,
   });
 
@@ -225,11 +243,13 @@ class _PrinterCard extends StatelessWidget {
   final String currentDeviceId;
   final bool busy;
   final VoidCallback onAssign;
+  final VoidCallback onConfigure;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final assignedHere = printer.agentDeviceId == currentDeviceId;
+    final configuredWidth = printer.paperWidthMm <= 58 ? 58 : 80;
     return Card(
       child: ListTile(
         leading: Icon(
@@ -239,12 +259,18 @@ class _PrinterCard extends StatelessWidget {
         ),
         title: Text('${printer.name} · ${printer.code}'),
         subtitle: Text(
-          '${printer.purpose.label} · ${printer.status.label} · '
+          '${printer.purpose.label} · $configuredWidth mm · ${printer.charactersPerLine} caratteri · '
+          '${printer.status.label} · '
           '${assignedHere ? 'assegnata a questo POS' : printer.agentDeviceId == null ? 'non assegnata' : 'assegnata a un altro POS'}',
         ),
         trailing: Wrap(
           spacing: 6,
           children: [
+            OutlinedButton.icon(
+              onPressed: busy ? null : onConfigure,
+              icon: const Icon(Icons.straighten),
+              label: const Text('Formato'),
+            ),
             if (!assignedHere)
               OutlinedButton(
                 onPressed: busy ? null : onAssign,
@@ -270,17 +296,30 @@ class _PrinterValues {
     required this.code,
     required this.name,
     required this.purpose,
+    required this.paperWidthMm,
   });
 
   final String code;
   final String name;
   final String purpose;
+  final int paperWidthMm;
+}
+
+class _PrinterConfigurationValues {
+  const _PrinterConfigurationValues({
+    required this.paperWidthMm,
+    required this.supportsCut,
+  });
+
+  final int paperWidthMm;
+  final bool supportsCut;
 }
 
 Future<_PrinterValues?> _showPrinterDialog(BuildContext context) {
   var code = '';
   var name = '';
   var purpose = 'RECEIPT';
+  var paperWidthMm = 80;
   return showDialog<_PrinterValues>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
@@ -324,6 +363,21 @@ Future<_PrinterValues?> _showPrinterDialog(BuildContext context) {
                 onChanged: (value) =>
                     setDialogState(() => purpose = value ?? purpose),
               ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                value: paperWidthMm,
+                decoration: const InputDecoration(
+                  labelText: 'Larghezza carta',
+                  helperText: 'Fluxa adatta automaticamente il layout fiscale.',
+                ),
+                items: const [
+                  DropdownMenuItem(value: 58, child: Text('58 mm')),
+                  DropdownMenuItem(value: 80, child: Text('80 mm')),
+                ],
+                onChanged: (value) => setDialogState(
+                  () => paperWidthMm = value ?? paperWidthMm,
+                ),
+              ),
             ],
           ),
         ),
@@ -337,9 +391,76 @@ Future<_PrinterValues?> _showPrinterDialog(BuildContext context) {
                 ? null
                 : () => Navigator.pop(
                     dialogContext,
-                    _PrinterValues(code: code, name: name, purpose: purpose),
+                    _PrinterValues(
+                      code: code,
+                      name: name,
+                      purpose: purpose,
+                      paperWidthMm: paperWidthMm,
+                    ),
                   ),
             child: const Text('Crea'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<_PrinterConfigurationValues?> _showPrinterConfigurationDialog(
+  BuildContext context,
+  PrinterDevice printer,
+) {
+  var paperWidthMm = printer.paperWidthMm <= 58 ? 58 : 80;
+  var supportsCut = printer.supportsCut;
+  return showDialog<_PrinterConfigurationValues>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text('Formato · ${printer.name}'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<int>(
+                value: paperWidthMm,
+                decoration: const InputDecoration(
+                  labelText: 'Larghezza carta',
+                  helperText: '58 mm = 32 caratteri · 80 mm = 48 caratteri',
+                ),
+                items: const [
+                  DropdownMenuItem(value: 58, child: Text('58 mm')),
+                  DropdownMenuItem(value: 80, child: Text('80 mm')),
+                ],
+                onChanged: (value) => setDialogState(
+                  () => paperWidthMm = value ?? paperWidthMm,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Taglierina automatica'),
+                value: supportsCut,
+                onChanged: (value) =>
+                    setDialogState(() => supportsCut = value),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _PrinterConfigurationValues(
+                paperWidthMm: paperWidthMm,
+                supportsCut: supportsCut,
+              ),
+            ),
+            child: const Text('Salva'),
           ),
         ],
       ),
