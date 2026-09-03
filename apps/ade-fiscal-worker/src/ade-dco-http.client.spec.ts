@@ -3,9 +3,9 @@ import { validateAdeDcoReadPath } from './ade-dco-http.client';
 
 describe('validateAdeDcoReadPath', () => {
   it('accepts only read paths inside the known AdE DCO namespaces', () => {
-    expect(validateAdeDcoReadPath('/ser/api/documenti/v1/example?limit=1')).toBe(
-      '/ser/api/documenti/v1/example?limit=1',
-    );
+    expect(
+      validateAdeDcoReadPath('/ser/api/documenti/v1/example?limit=1'),
+    ).toBe('/ser/api/documenti/v1/example?limit=1');
     expect(validateAdeDcoReadPath('/common/example/v1/me')).toBe(
       '/common/example/v1/me',
     );
