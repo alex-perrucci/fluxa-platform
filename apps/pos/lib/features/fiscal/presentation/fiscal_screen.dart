@@ -498,7 +498,8 @@ class _FiscalDocumentDetail extends StatelessWidget {
   bool get _officialPdfAvailable =>
       downloadReceiptPdf != null &&
       fiscalReceiptPdfActionsSupported &&
-      document.provider == FiscalProvider.openapiSmartReceipts &&
+      (document.provider == FiscalProvider.openapiSmartReceipts ||
+          document.provider == FiscalProvider.adeWeb) &&
       document.externalId != null &&
       (document.status == FiscalDocumentStatus.issued ||
           document.status == FiscalDocumentStatus.voided);
@@ -551,7 +552,11 @@ class _FiscalDocumentDetail extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 4),
-        const Text('PDF originale recuperato da OpenAPI.'),
+        Text(
+          document.provider == FiscalProvider.adeWeb
+              ? 'PDF originale recuperato da Agenzia delle Entrate.'
+              : 'PDF originale recuperato da OpenAPI.',
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
