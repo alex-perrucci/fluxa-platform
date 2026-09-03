@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../domain/fiscal_receipt_layout.dart';
+
 bool get fiscalReceiptPdfActionsSupported => Platform.isWindows;
 
 typedef FiscalReceiptPrinter =
-    Future<String> Function(Uint8List bytes, String filename);
+    Future<String> Function(FiscalReceiptLayoutData receipt);
 
 FiscalReceiptPrinter? _configuredReceiptPrinter;
 
@@ -39,7 +41,7 @@ Future<String> saveFiscalReceiptPdf(Uint8List bytes, String filename) async {
   return file.path;
 }
 
-Future<String> printFiscalReceiptPdf(Uint8List bytes, String filename) async {
+Future<String> printFiscalReceiptLayout(FiscalReceiptLayoutData receipt) async {
   _ensureWindows();
   final printer = _configuredReceiptPrinter;
   if (printer == null) {
@@ -47,7 +49,7 @@ Future<String> printFiscalReceiptPdf(Uint8List bytes, String filename) async {
       'Stampante scontrini Fluxa non ancora inizializzata.',
     );
   }
-  return printer(bytes, filename);
+  return printer(receipt);
 }
 
 Future<File> _writeTemp(Uint8List bytes, String filename) async {
@@ -76,6 +78,6 @@ String _safeFilename(String value) {
 
 void _ensureWindows() {
   if (!Platform.isWindows) {
-    throw UnsupportedError('PDF fiscale supportato dal POS desktop Windows.');
+    throw UnsupportedError('Documento fiscale supportato dal POS desktop Windows.');
   }
 }
