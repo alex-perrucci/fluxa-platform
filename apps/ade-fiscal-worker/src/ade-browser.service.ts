@@ -162,17 +162,15 @@ export class AdeBrowserService implements OnApplicationShutdown {
     try {
       const page = await context.newPage();
 
-      await this.goto(
-        page,
-        input.authEntryUrl,
-        input.navigationTimeoutMs,
-      );
+      await this.goto(page, input.authEntryUrl, input.navigationTimeoutMs);
 
       try {
-        const tab = page.getByRole('tab', {
-          name: 'Fisconline/Entratel',
-          exact: false,
-        }).first();
+        const tab = page
+          .getByRole('tab', {
+            name: 'Fisconline/Entratel',
+            exact: false,
+          })
+          .first();
 
         await tab.waitFor({
           state: 'visible',
@@ -214,9 +212,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
       );
 
       try {
-        const submit = page
-          .locator('#tab-4 button[type="submit"]')
-          .first();
+        const submit = page.locator('#tab-4 button[type="submit"]').first();
 
         await submit.waitFor({
           state: 'visible',
