@@ -200,9 +200,8 @@ export class AdeDocumentDryRunService {
       } catch (error) {
         if (!shouldRefreshSession(error)) throw error;
 
-        // A session refresh can require the official CieID push. The MFA
-        // approval remains manual; this only starts one refresh attempt and
-        // retries the document flow once after a successful SESSION_READY.
+        // Refresh the AdE session automatically and retry the
+        // document flow once after a successful SESSION_READY.
         await this.auth.refresh();
 
         return await this.runBrowser(

@@ -207,8 +207,9 @@ services:
       ADE_STORAGE_STATE_DIR: /run/fluxa-ade-session
       ADE_SELECTOR_PROFILE_PATH: /run/fluxa-ade/selectors.json
       ADE_AUTH_PROFILE_PATH: /run/fluxa-ade/auth-profile.json
-      ADE_CIE_USERNAME_FILE: /run/fluxa-ade-secrets/cie-username
-      ADE_CIE_PASSWORD_FILE: /run/fluxa-ade-secrets/cie-password
+      ADE_FISCONLINE_USERNAME_FILE: /run/fluxa-ade-secrets/fisconline-username
+      ADE_FISCONLINE_PASSWORD_FILE: /run/fluxa-ade-secrets/fisconline-password
+      ADE_FISCONLINE_PIN_FILE: /run/fluxa-ade-secrets/fisconline-pin
       ADE_NAVIGATION_TIMEOUT_MS: ${ADE_NAVIGATION_TIMEOUT_MS:-20000}
       ADE_MFA_TIMEOUT_MS: ${ADE_MFA_TIMEOUT_MS:-180000}
     volumes:

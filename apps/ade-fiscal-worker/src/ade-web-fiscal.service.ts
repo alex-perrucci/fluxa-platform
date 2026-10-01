@@ -5,7 +5,7 @@ import {
   AdeBrowserService,
   type AdeBrowserStatus,
 } from './ade-browser.service';
-import { AdeCieCredentialsService } from './ade-cie-credentials.service';
+import { AdeFisconlineCredentialsService } from './ade-fisconline-credentials.service';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 import {
   AdeSelectorProfileService,
@@ -42,7 +42,7 @@ export class AdeWebFiscalService {
     private readonly session: AdeSessionService,
     private readonly selectors: AdeSelectorProfileService,
     private readonly authProfileService: AdeAuthProfileService,
-    private readonly cieCredentialsService: AdeCieCredentialsService,
+    private readonly fisconlineCredentialsService: AdeFisconlineCredentialsService,
     private readonly auth: AdeAuthService,
   ) {}
 
@@ -52,7 +52,7 @@ export class AdeWebFiscalService {
     const adeSession = this.session.readiness().status;
     const selectorProfile = this.selectors.readiness();
     const authProfile = this.authProfileService.readiness();
-    const cieCredentials = this.cieCredentialsService.readiness();
+    const cieCredentials = this.fisconlineCredentialsService.readiness();
     const entryUrl = config.entryUrl
       ? this.config.validatedEntryUrl()
         ? 'configured'

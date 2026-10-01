@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AdeAutomationError } from './ade-automation-error';
 import { AdeAuthProfileService } from './ade-auth-profile.service';
 import { AdeBrowserService } from './ade-browser.service';
-import { AdeCieCredentialsService } from './ade-cie-credentials.service';
+import { AdeFisconlineCredentialsService } from './ade-fisconline-credentials.service';
 import { AdeRuntimeConfigService } from './ade-runtime-config.service';
 import { AdeSessionService } from './ade-session.service';
 
@@ -26,7 +26,7 @@ export class AdeAuthService {
   constructor(
     private readonly config: AdeRuntimeConfigService,
     private readonly browser: AdeBrowserService,
-    private readonly credentials: AdeCieCredentialsService,
+    private readonly credentials: AdeFisconlineCredentialsService,
     private readonly profile: AdeAuthProfileService,
     private readonly session: AdeSessionService,
   ) {}
@@ -42,7 +42,7 @@ export class AdeAuthService {
   }> {
     if (this.inFlight) {
       throw new AdeAutomationError(
-        'Autenticazione CIE già in corso.',
+        'Autenticazione AdE già in corso.',
         'ADE_CIE_AUTH_BUSY',
         'AUTH_REQUIRED',
         false,
@@ -83,16 +83,15 @@ export class AdeAuthService {
       const storageStatePath =
         this.session.storageStatePathForWrite(targetIncaricanteCf);
 
-      const result = await this.browser.authenticateWithCie({
+      const result = await this.browser.authenticateWithFisconline({
         authEntryUrl: authUrl.toString(),
         username: credentials.username,
         password: credentials.password,
+        pin: credentials.pin,
         incaricanteCf: targetIncaricanteCf,
         profile,
         storageStatePath,
         navigationTimeoutMs: config.navigationTimeoutMs,
-        mfaTimeoutMs: config.mfaTimeoutMs,
-        onWaitingMfa: () => this.setStatus('WAITING_MFA'),
       });
 
       this.setStatus('SESSION_READY');
