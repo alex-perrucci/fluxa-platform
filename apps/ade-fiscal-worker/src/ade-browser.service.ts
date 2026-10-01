@@ -146,6 +146,135 @@ export class AdeBrowserService implements OnApplicationShutdown {
     }
   }
 
+  async authenticateWithFisconline(input: {
+    authEntryUrl: string;
+    username: string;
+    password: string;
+    pin: string;
+    incaricanteCf: string;
+    profile: AdeAuthProfile;
+    storageStatePath: string;
+    navigationTimeoutMs: number;
+  }): Promise<AdeCieAuthResult> {
+    const browser = await this.browser();
+    const context = await browser.newContext();
+
+    try {
+      const page = await context.newPage();
+
+      await this.goto(page, input.authEntryUrl, input.navigationTimeoutMs);
+
+      try {
+        const tab = page
+          .getByRole('tab', {
+            name: 'Fisconline/Entratel',
+            exact: false,
+          })
+          .first();
+
+        await tab.waitFor({
+          state: 'visible',
+          timeout: input.navigationTimeoutMs,
+        });
+
+        await tab.click();
+      } catch {
+        throw new AdeAutomationError(
+          'Accesso Fisconline/Entratel non disponibile.',
+          'ADE_PORTAL_FLOW_MISMATCH',
+          'SELECTOR_MISMATCH',
+          false,
+        );
+      }
+
+      await this.fillRequired(
+        page,
+        '#username-fo-ent',
+        input.username,
+        input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
+      );
+
+      await this.fillRequired(
+        page,
+        '#password-fo-ent-1',
+        input.password,
+        input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
+      );
+
+      await this.fillRequired(
+        page,
+        '#pin-fo-ent',
+        input.pin,
+        input.navigationTimeoutMs,
+        'ADE_PORTAL_FLOW_MISMATCH',
+      );
+
+      try {
+        const submit = page.locator('#tab-4 button[type="submit"]').first();
+
+        await submit.waitFor({
+          state: 'visible',
+          timeout: input.navigationTimeoutMs,
+        });
+
+        await submit.click();
+      } catch {
+        throw new AdeAutomationError(
+          'Pulsante Accedi Fisconline non disponibile.',
+          'ADE_PORTAL_FLOW_MISMATCH',
+          'SELECTOR_MISMATCH',
+          false,
+        );
+      }
+
+      // switchToIncaricante() attende già che il redirect
+      // post-login sia realmente completato.
+      await this.switchToIncaricante(
+        page,
+        input.profile,
+        input.incaricanteCf,
+        input.navigationTimeoutMs,
+      );
+
+      await this.openFattureService(
+        page,
+        input.profile,
+        input.navigationTimeoutMs,
+      );
+
+      await this.completeServiceWorkProfile(
+        page,
+        input.profile,
+        input.incaricanteCf,
+        input.navigationTimeoutMs,
+      );
+
+      if (input.profile.finalMarker) {
+        await this.waitForSelector(
+          page,
+          input.profile.finalMarker,
+          input.navigationTimeoutMs,
+          'ADE_PORTAL_FLOW_MISMATCH',
+        );
+      } else {
+        await page.waitForTimeout(750);
+      }
+
+      await context.storageState({
+        path: input.storageStatePath,
+      });
+
+      return {
+        finalUrl: safeUrl(page.url()),
+        sessionSaved: true,
+      };
+    } finally {
+      await context.close().catch(() => undefined);
+    }
+  }
+
   async navigateReadOnly(input: {
     entryUrl: string;
     storageStatePath: string;
@@ -531,7 +660,7 @@ export class AdeBrowserService implements OnApplicationShutdown {
       await locator.fill(value);
     } catch {
       throw new AdeAutomationError(
-        'Campo richiesto nel flusso CIE non trovato.',
+        'Campo richiesto nel flusso AdE non trovato.',
         code,
         'SELECTOR_MISMATCH',
         false,
